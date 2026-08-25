@@ -16,21 +16,8 @@ public:
     static int nullWindowSize;
     static int checkExtension;
     static int checkExtensionNonPV;
-    static int hashSize;
     static int SafetyMargin;
     static int reductiondepth;
-
-    // Memory Share
-    static double EvalDictionaryitemSize;
-    static double PawnDictionaryitemSize;
-    static double ExchangeDictionaryitemSize;
-
-    static double EvalDictionarySharePercent;
-    static double PawnDictionarySharePercent;
-
-    static int EvalDictionaryShare;
-    static int PawnDictionaryShare;
-    static int ExchangeDictionaryShare;
 
     // Const
     static int futilityMargin;

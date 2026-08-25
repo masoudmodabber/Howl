@@ -229,22 +229,19 @@ Board *BoardMaker::MakeInitialBoard(std::string position)
     if (counter < position.length())
     {
         LastFourMoves *lastMoves = UCI::MakeMoves(position.substr(counter + 1, position.length() - counter - 1), *thisBoard);
-        UCI::move1 = lastMoves->Move1;
-        UCI::move2 = lastMoves->Move2;
-        UCI::move3 = lastMoves->Move3;
-        UCI::move4 = lastMoves->Move4;
-        delete lastMoves;
-        lastMoves = nullptr;
+        UCI::ReplaceMoveHistory(lastMoves);
     }
     else
     {
         Move *move = new Move();
-        UCI::move1 = MoveLogic::MoveCopy(move);
-        UCI::move2 = MoveLogic::MoveCopy(move);
-        UCI::move3 = MoveLogic::MoveCopy(move);
-        UCI::move4 = MoveLogic::MoveCopy(move);
+        LastFourMoves *replacementHistory = new LastFourMoves();
+        replacementHistory->Move1 = MoveLogic::MoveCopy(move);
+        replacementHistory->Move2 = MoveLogic::MoveCopy(move);
+        replacementHistory->Move3 = MoveLogic::MoveCopy(move);
+        replacementHistory->Move4 = MoveLogic::MoveCopy(move);
         delete move;
         move = nullptr;
+        UCI::ReplaceMoveHistory(replacementHistory);
     }
     return thisBoard;
 }

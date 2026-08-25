@@ -66,3 +66,13 @@ long PawnCache::getMaxMemoryUsage() const {
 void PawnCache::setMaxMemoryUsage(long value) {
     maxMemoryUsage = value;
 }
+
+std::size_t PawnCache::size() const {
+    std::size_t entryCount = 0;
+    for (const auto& sideCaches : caches) {
+        for (const auto& phaseCache : sideCaches) {
+            entryCount += phaseCache.size();
+        }
+    }
+    return entryCount;
+}

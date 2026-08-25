@@ -3,6 +3,7 @@
 
 #include <map>
 #include <chrono>
+#include <cstddef>
 #include <optional>
 
 class ChessCache {
@@ -12,6 +13,7 @@ public:
     long maxMemoryUsage = 1024*1024*10;
     long getMaxMemoryUsage();
     void setMaxMemoryUsage(long value);
+    std::size_t size() const;
     void addToCache(long key, int value);
     std::optional<int> getFromCache(long key);
 
