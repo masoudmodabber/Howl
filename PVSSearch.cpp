@@ -213,7 +213,22 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                         tempPVNode = true;
                     }
                     int LMRDepth = 0;
-                    if (!tempPVNode && depth >= 3)
+                    bool exempt = false;
+                    if (move->promotionPiece > 0)
+                    {
+                        exempt = true;
+                    }
+                    else if (move->endPiece > 0)
+                    {
+                        static const int pieceValLookup[8] = {0, 100, 320, 330, 500, 900, 20000, 0};
+                        int movingPieceType = board4.mainBoard[move->endPlace] % 8;
+                        int capturedPieceType = move->endPiece % 8;
+                        if (pieceValLookup[capturedPieceType] >= pieceValLookup[movingPieceType])
+                        {
+                            exempt = true;
+                        }
+                    }
+                    if (!tempPVNode && !exempt && depth >= 3)
                     {
                         LMRDepth = 1;
                     }
@@ -242,10 +257,6 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                         delete MPValue;
                         MPValue = PVS(tempPVNode, -beta, -alpha, depth - 1, *move, move2, move3, prevMove, board4, MAtESearch, true, depthGone + 1, previousMoveWasCheck, nullWindowSearch);
                         value = -MPValue->value;
-                        if (value != -160000)
-                        {
-                            availMoves++;
-                        }
                         if (value < -159800)
                         {
                             value++;
@@ -551,7 +562,22 @@ void PVSSearch::IGG(bool isPVNode, int alpha, int beta, int depth, Move &prevMov
                                 tempPVNode = true;
                             }
                             int LMRDepth = 0;
-                            if (!tempPVNode && depth >= 3)
+                            bool exempt = false;
+                            if (move->promotionPiece > 0)
+                            {
+                                exempt = true;
+                            }
+                            else if (move->endPiece > 0)
+                            {
+                                static const int pieceValLookup[8] = {0, 100, 320, 330, 500, 900, 20000, 0};
+                                int movingPieceType = board4.mainBoard[move->endPlace] % 8;
+                                int capturedPieceType = move->endPiece % 8;
+                                if (pieceValLookup[capturedPieceType] >= pieceValLookup[movingPieceType])
+                                {
+                                    exempt = true;
+                                }
+                            }
+                            if (!tempPVNode && !exempt && depth >= 3)
                             {
                                 LMRDepth = 1;
                             }
@@ -580,10 +606,6 @@ void PVSSearch::IGG(bool isPVNode, int alpha, int beta, int depth, Move &prevMov
                                 delete MPValue;
                                 MPValue = PVSSearch::PVS(tempPVNode, -beta, -alpha, depth - 1, *move, move2, move3, prevMove, board4, MAtESearch, isNullMoveAllowed, depthGone + 1, lastCheck, nullWindowSearch);
                                 value = -MPValue->value;
-                                if (value != -160000)
-                                {
-                                    availMovesIr++;
-                                }
                                 if (value < -159800)
                                 {
                                     value++;

@@ -49,9 +49,9 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
     MoveList moveList;
     Move* SelectedMove = nullptr;
     Board* boardCopy;
-    int extention = Option::checkExtension;
+    int extention = Option::checkExtensionNonPV;
     if (isPVNode) {
-        extention = Option::checkExtensionNonPV;
+        extention = Option::checkExtension;
     }
     
     MovePrintValue* retValue = new MovePrintValue();
@@ -108,13 +108,6 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         checkChecked = true;
         nextLastCheck = lastCheck - 1;
     } else if (kick) {
-        // Delta Pruning
-        if (prevMove.endPiece % 8 == 1 && depthGone - depthQuisStarted > extention) {
-            retValue->value = EvaluationLogic::Evaluate(board4) - 50;
-            delete MPValue;
-            MPValue = nullptr;
-            return retValue;
-        }
         delete retValue;
         retValue = nullptr;
         delete MPValue;
@@ -181,9 +174,19 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
             qSearchTestStatistics.rootLegalMoves++;
         }
 #endif
+        bool moveGivesCheck = BoardLogic::UnderAttack(
+            board4,
+            board4.pieces[(1 - turn) * 8 + 6].front(),
+            !board4.sideToMove);
+
         int pieceValueTemp = pieceValue100[move->endPiece];
-        if (!currentSideInCheck && Option::SafetyMargin + standPot + pieceValueTemp <= alpha) {
-            move->value = Option::SafetyMargin + standPot + pieceValueTemp - 1;
+        int promotionGain = (move->promotionPiece > 0)
+            ? (pieceValue100[move->promotionPiece] - pieceValue100[1])
+            : 0;
+
+        if (!currentSideInCheck && !moveGivesCheck &&
+            Option::SafetyMargin + standPot + pieceValueTemp + promotionGain <= alpha) {
+            move->value = Option::SafetyMargin + standPot + pieceValueTemp + promotionGain - 1;
             if (move->value > bestMoveValue) {
                 bestMoveValue = move->value;
                 SelectedMove = move;
