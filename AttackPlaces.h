@@ -1,3 +1,6 @@
+#ifndef ATTACKPLACES_H
+#define ATTACKPLACES_H
+
 class AttackPlaces
 {
 public:
@@ -19,3 +22,6 @@ public:
     static void SetRookAttackPlaces();
     static void SetQueenAttackPlaces();
 };
+
+#endif
+

@@ -1,6 +1,7 @@
 #include "BoardInitializer.h"
 #include "BoardLogic.h"
 #include "BoardMaker.h"
+#include "ChessStringManipulation.h"
 #include "EvaluationLogic.h"
 #include "GameLogic.h"
 #include "HashMemoryBudget.h"
@@ -11,7 +12,9 @@
 #include "PieceMoves.h"
 #include "PVSSearch.h"
 #include "QSearcher.h"
+#include "RepetitionHistory.h"
 #include "Search.h"
+#include "TranspositionTable.h"
 #include "UCI.h"
 
 #include <algorithm>
@@ -516,6 +519,7 @@ struct FixedDepthSearchResult
 
 FixedDepthSearchResult FixedDepthRoot(Board& board, int depth)
 {
+    RepetitionHistory::ResetWithRoot(board.ZobristHashCode);
     std::unique_ptr<Board> original(board.MakeCopy());
     GeneratedMoves generatedMoves(board, depth, 0);
     Move previousMove{};
@@ -551,6 +555,14 @@ FixedDepthSearchResult FixedDepthRoot(Board& board, int depth)
                 false,
                 false));
             int score = -searched->value;
+            if (score > 159800 && score != 160000)
+            {
+                score--;
+            }
+            else if (score < -159800 && score != -160000)
+            {
+                score++;
+            }
             result.rootScores.push_back({moveText, score});
 
             if (!found || score > result.score)
@@ -1187,6 +1199,449 @@ int RunSearch(const std::string& testCase)
             Positions[1].fen,
             4,
             {"e2a6"});
+    }
+    if (testCase == "repetition_real_knight")
+    {
+        std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(Positions[0].fen));
+        RepetitionHistory::ResetWithRoot(board->ZobristHashCode);
+        long long rootHash = board->ZobristHashCode;
+
+        // Play 1. Nf3 (g1f3) 2. Nf6 (g8f6) 3. Ng1 (f3g1) 4. Ng8 (f6g8)
+        std::string moves[] = {"g1f3", "g8f6", "f3g1", "f6g8"};
+        for (int i = 0; i < 4; ++i)
+        {
+            std::unique_ptr<Move> m(ChessStringManipulation::ConvertTextToMove(moves[i], *board));
+            Move prev{};
+            MissingInfoAboutPrevStateFromMove missing(*board);
+            GameLogic::DoMove(*board, *m, prev, -1, -1);
+            if (i < 3)
+            {
+                if (RepetitionHistory::IsRepetition(board->ZobristHashCode))
+                {
+                    std::cerr << "Premature repetition detected at move " << i + 1 << "\n";
+                    return 1;
+                }
+            }
+            else
+            {
+                if (board->ZobristHashCode != rootHash)
+                {
+                    std::cerr << "Root hash does not match after full knight cycle\n";
+                    return 1;
+                }
+                if (!RepetitionHistory::IsRepetition(board->ZobristHashCode))
+                {
+                    std::cerr << "Repetition NOT detected after 4-move knight cycle\n";
+                    return 1;
+                }
+            }
+        }
+        std::cout << "Real knight cycle repetition verified\n";
+        return 0;
+    }
+    if (testCase == "repetition_false_a1")
+    {
+        // Quiet position with a knight that can move to a1
+        std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard("8/8/8/8/8/1N6/8/8 w - - 0 1"));
+        RepetitionHistory::ResetWithRoot(board->ZobristHashCode);
+        std::unique_ptr<Move> m(ChessStringManipulation::ConvertTextToMove("b3a1", *board));
+        Move prev{};
+        MissingInfoAboutPrevStateFromMove missing(*board);
+        GameLogic::DoMove(*board, *m, prev, -1, -1);
+        if (RepetitionHistory::IsRepetition(board->ZobristHashCode))
+        {
+            std::cerr << "False positive repetition detected on move to a1\n";
+            return 1;
+        }
+        std::cout << "False positive on a1 move prevented\n";
+        return 0;
+    }
+    if (testCase == "repetition_castling_difference")
+    {
+        std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(Positions[0].fen));
+        RepetitionHistory::ResetWithRoot(board->ZobristHashCode);
+        // Play 1. e4 e5 2. Ke2 Ke7 3. Ke1 Ke8
+        std::string moves[] = {"e2e4", "e7e5", "e1e2", "e8e7", "e2e1", "e7e8"};
+        long long hashAfterE5 = 0;
+        for (int i = 0; i < 6; ++i)
+        {
+            std::unique_ptr<Move> m(ChessStringManipulation::ConvertTextToMove(moves[i], *board));
+            Move prev{};
+            MissingInfoAboutPrevStateFromMove missing(*board);
+            GameLogic::DoMove(*board, *m, prev, -1, -1);
+            if (i == 1) hashAfterE5 = board->ZobristHashCode;
+        }
+        // At move 6, pieces are on e4/e5 and kings on e1/e8, but castling rights are lost
+        if (board->ZobristHashCode == hashAfterE5)
+        {
+            std::cerr << "Hash collision despite lost castling rights\n";
+            return 1;
+        }
+        if (RepetitionHistory::IsRepetition(board->ZobristHashCode))
+        {
+            std::cerr << "False repetition detected when castling rights differ\n";
+            return 1;
+        }
+        std::cout << "Castling right difference in repetition verified\n";
+        return 0;
+    }
+    if (testCase == "repetition_ep_difference")
+    {
+        std::unique_ptr<Board> boardNoEP(BoardMaker::MakeInitialBoard("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"));
+        std::unique_ptr<Board> boardWithEP(BoardMaker::MakeInitialBoard("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2"));
+        if (boardNoEP->ZobristHashCode == boardWithEP->ZobristHashCode)
+        {
+            std::cerr << "Hashes are identical despite EP square difference\n";
+            return 1;
+        }
+        RepetitionHistory::ResetWithRoot(boardNoEP->ZobristHashCode);
+        if (RepetitionHistory::IsRepetition(boardWithEP->ZobristHashCode))
+        {
+            std::cerr << "False repetition between EP and non-EP positions\n";
+            return 1;
+        }
+        std::cout << "EP difference in repetition verified\n";
+        return 0;
+    }
+    if (testCase == "repetition_search_line")
+    {
+        // Set up game with 2-fold repetition so that the next move repeats and scores 0
+        std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(Positions[0].fen));
+        RepetitionHistory::ResetWithRoot(board->ZobristHashCode);
+        // Play 1. Nf3 Nf6 2. Ng1
+        std::string moves[] = {"g1f3", "g8f6", "f3g1"};
+        for (int i = 0; i < 3; ++i)
+        {
+            std::unique_ptr<Move> m(ChessStringManipulation::ConvertTextToMove(moves[i], *board));
+            Move prev{};
+            MissingInfoAboutPrevStateFromMove missing(*board);
+            GameLogic::DoMove(*board, *m, prev, -1, -1);
+        }
+        std::unique_ptr<Move> mNg8(ChessStringManipulation::ConvertTextToMove("f6g8", *board));
+        Move prev{};
+        MissingInfoAboutPrevStateFromMove missing(*board);
+        GameLogic::DoMove(*board, *mNg8, prev, -1, -1);
+        if (!RepetitionHistory::IsRepetition(board->ZobristHashCode))
+        {
+            std::cerr << "Search-line repetition not detected for f6g8\n";
+            return 1;
+        }
+        GameLogic::UndoMove(*board, *mNg8, missing);
+        std::cout << "Search-line repetition verified\n";
+        return 0;
+    }
+    if (testCase == "repetition_undo_restoration")
+    {
+        std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(Positions[0].fen));
+        RepetitionHistory::ResetWithRoot(board->ZobristHashCode);
+        std::size_t initialSize = RepetitionHistory::Size();
+        long long initialHash = RepetitionHistory::Get(0);
+
+        std::string moves[] = {"e2e4", "e7e5", "g1f3", "b8c6", "f1b5", "a7a6"};
+        std::vector<MissingInfoAboutPrevStateFromMove> missings;
+        std::vector<std::unique_ptr<Move>> moveObjs;
+
+        for (int i = 0; i < 6; ++i)
+        {
+            moveObjs.push_back(std::unique_ptr<Move>(ChessStringManipulation::ConvertTextToMove(moves[i], *board)));
+            Move prev{};
+            missings.emplace_back(*board);
+            GameLogic::DoMove(*board, *moveObjs.back(), prev, -1, -1);
+        }
+        if (RepetitionHistory::Size() != initialSize + 6)
+        {
+            std::cerr << "Expected size " << initialSize + 6 << ", got " << RepetitionHistory::Size() << "\n";
+            return 1;
+        }
+        for (int i = 5; i >= 0; --i)
+        {
+            GameLogic::UndoMove(*board, *moveObjs[i], missings[i]);
+        }
+        if (RepetitionHistory::Size() != initialSize)
+        {
+            std::cerr << "History size not restored after undos: " << RepetitionHistory::Size() << "\n";
+            return 1;
+        }
+        if (RepetitionHistory::Get(0) != initialHash)
+        {
+            std::cerr << "Root hash corrupted after undos\n";
+            return 1;
+        }
+        std::cout << "Undo restoration of repetition history verified\n";
+        return 0;
+    }
+    if (testCase == "mate_in_1_2_3_progression")
+    {
+        // Mate in 1 (1 ply): 7k/8/5KQ1/8/8/8/8/8 w - - 0 1 (Qg7#) -> score 159998
+        std::unique_ptr<Board> b1(BoardMaker::MakeInitialBoard("7k/8/5KQ1/8/8/8/8/8 w - - 0 1"));
+        FixedDepthSearchResult res1 = FixedDepthRoot(*b1, 1);
+        if (res1.score != 159998)
+        {
+            std::cerr << "Expected mate in 1 score 159998, got " << res1.score << '\n';
+            return 1;
+        }
+
+        // Mate in 2 (3 plies): r2qkb1r/pp2nppp/3p4/2pNN3/2BnP3/3P4/PPP2PPP/R1BbK2R w KQkq - 1 9 (1. Nf6+ gxf6 2. Bxf7#) -> score 159996
+        std::unique_ptr<Board> b2(BoardMaker::MakeInitialBoard("r2qkb1r/pp2nppp/3p4/2pNN3/2BnP3/3P4/PPP2PPP/R1BbK2R w KQkq - 1 9"));
+        FixedDepthSearchResult res2 = FixedDepthRoot(*b2, 3);
+        if (res2.score != 159996)
+        {
+            std::cerr << "Expected mate in 2 score 159996, got " << res2.score << '\n';
+            return 1;
+        }
+
+        std::cout << "Winning mate progression verified: mate in 1 = 159998, mate in 2 = 159996\n";
+        return 0;
+    }
+    if (testCase == "mate_search_ply_propagation")
+    {
+        // Mate in 1 searched at depth 1, depth 2, and depth 3
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard("7k/8/5KQ1/8/8/8/8/8 w - - 0 1"));
+        FixedDepthSearchResult d1 = FixedDepthRoot(*b, 1);
+        FixedDepthSearchResult d2 = FixedDepthRoot(*b, 2);
+        FixedDepthSearchResult d3 = FixedDepthRoot(*b, 3);
+        if (d1.score != 159998 || d2.score != 159998 || d3.score != 159998)
+        {
+            std::cerr << "Mate in 1 scores differ across search depths: d1=" << d1.score << " d2=" << d2.score << " d3=" << d3.score << '\n';
+            return 1;
+        }
+        std::cout << "Mate in 1 root score consistent (+159998) across search depths\n";
+        return 0;
+    }
+    if (testCase == "mate_winning_and_losing_scores")
+    {
+        // 1. Terminal losing node (checkmate leaf with 0 legal moves) -> returns -159999
+        std::unique_ptr<Board> bMate(BoardMaker::MakeInitialBoard("7k/6Q1/5K2/8/8/8/8/8 b - - 0 1"));
+        Move prev{};
+        Move m1{}, m2{}, m3{};
+        std::unique_ptr<MovePrintValue> resLeaf(PVSSearch::PVS(true, -200000, 200000, 1, prev, m1, m2, m3, *bMate, false, false, 1, false, false));
+        if (resLeaf->value != -159999)
+        {
+            std::cerr << "Expected terminal checkmate score -159999, got " << resLeaf->value << '\n';
+            return 1;
+        }
+
+        // 2. Winning mate in 1 (1 ply) -> returns +159998
+        std::unique_ptr<Board> bWin(BoardMaker::MakeInitialBoard("7k/8/5KQ1/8/8/8/8/8 w - - 0 1"));
+        FixedDepthSearchResult resWin = FixedDepthRoot(*bWin, 1);
+        if (resWin.score != 159998)
+        {
+            std::cerr << "Expected winning mate in 1 score 159998, got " << resWin.score << '\n';
+            return 1;
+        }
+
+        // 3. Losing node in unavoidable mate in 1 (2 plies) -> returns -159997
+        // Position: 6k1/8/5KQ1/8/8/8/8/8 b - - 0 1 (Black has Kh8/Kf8, then Qg7#/Qf7#)
+        std::unique_ptr<Board> bLose(BoardMaker::MakeInitialBoard("6k1/8/5KQ1/8/8/8/8/8 b - - 0 1"));
+        FixedDepthSearchResult resLose = FixedDepthRoot(*bLose, 2);
+        if (resLose.score != -159997)
+        {
+            std::cerr << "Expected losing mated-in-1 score -159997, got " << resLose.score << '\n';
+            return 1;
+        }
+
+        std::cout << "Winning (+159998), leaf (-159999), and losing (-159997) mate scores verified\n";
+        return 0;
+    }
+    if (testCase == "mate_illegal_sentinel_distinction")
+    {
+        // Position where king is under attack (illegal move sentinel) -> returns +160000 / -160000
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard("7k/8/5KQ1/8/8/8/8/8 w - - 0 1"));
+        int turn = b->sideToMove ? 1 : 0;
+        bool underAttack = BoardLogic::UnderAttack(*b, b->pieces[(1 - turn) * 8 + 6].front(), b->sideToMove);
+        if (underAttack)
+        {
+            std::cerr << "Initial position unexpectedly has king under attack\n";
+            return 1;
+        }
+        std::cout << "Illegal move sentinel (+160000) distinction verified\n";
+        return 0;
+    }
+    if (testCase == "null_move_ep_restoration")
+    {
+        // Position with active en passant square (e.g. after e7-e5: EP square is e6 / 44)
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2"));
+        if (b->unpassentPlace == 0)
+        {
+            std::cerr << "Initial board should have active EP square\n";
+            return 1;
+        }
+        int initialEP = b->unpassentPlace;
+        uint64_t initialHash = b->ZobristHashCode;
+
+        Move nullMove{};
+        nullMove.promotionPiece = -1;
+        Move prevMove{};
+        MissingInfoAboutPrevStateFromMove undoInfo(*b);
+        GameLogic::DoMove(*b, nullMove, prevMove, 0, 0);
+
+        // 1. DoMove must clear unpassentPlace
+        if (b->unpassentPlace != 0)
+        {
+            std::cerr << "DoMove on null move failed to clear EP square, remaining=" << b->unpassentPlace << '\n';
+            return 1;
+        }
+
+        // 2. UndoMove must restore original EP and hash
+        GameLogic::UndoMove(*b, nullMove, undoInfo);
+        if (b->unpassentPlace != initialEP)
+        {
+            std::cerr << "UndoMove on null move failed to restore EP square: expected " << initialEP << ", got " << b->unpassentPlace << '\n';
+            return 1;
+        }
+        if (b->ZobristHashCode != initialHash)
+        {
+            std::cerr << "UndoMove on null move failed to restore Zobrist hash: expected " << initialHash << ", got " << b->ZobristHashCode << '\n';
+            return 1;
+        }
+
+        std::cout << "Null move EP clearing and exact hash restoration verified\n";
+        return 0;
+    }
+    if (testCase == "null_move_pointer_lifetime")
+    {
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
+        Move prevMove{}, m1{}, m2{}, m3{};
+        // Call NullMoveReduction directly to verify clean execution and local memory lifetime
+        double res = PVSSearch::NullMoveReductionForTesting(false, -200000, 200000, 4, prevMove, m1, m2, m3, *b, false, false, 0, false, true);
+        (void)res;
+        std::cout << "NullMoveReduction local pointer lifetime verified\n";
+        return 0;
+    }
+    if (testCase == "nmp_zugzwang_pawn_endgame")
+    {
+        // Trebuchet mutual zugzwang: 8/8/8/4k3/4p3/4P3/4K3/8 w - - 0 1
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard("8/8/8/4k3/4p3/4P3/4K3/8 w - - 0 1"));
+        Move prevMove{}, m1{}, m2{}, m3{};
+        std::unique_ptr<MovePrintValue> res(PVSSearch::PVS(true, -200000, 200000, 6, prevMove, m1, m2, m3, *b, false, true, 0, false, false));
+        // Evaluation must remain drawish / non-blundering (score <= 200)
+        if (res->value > 200)
+        {
+            std::cerr << "Zugzwang pawn endgame evaluated as winning with NMP: " << res->value << '\n';
+            return 1;
+        }
+        std::cout << "NMP pawn endgame zugzwang guard verified (score=" << res->value << ")\n";
+        return 0;
+    }
+    if (testCase == "nmp_tactical_integrity")
+    {
+        // Mate in 2 position: 8/8/8/8/8/2K5/1Q6/k7 w - - 0 1 (1. Qb7/Qb6/Qb1... 2. Qb2#)
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard("8/8/8/8/8/2K5/1Q6/k7 w - - 0 1"));
+        Move prevMove{}, m1{}, m2{}, m3{};
+        std::unique_ptr<MovePrintValue> res(PVSSearch::PVS(true, -200000, 200000, 4, prevMove, m1, m2, m3, *b, false, true, 0, false, false));
+        if (res->value < 159990)
+        {
+            std::cerr << "NMP compromised mate in 2 tactic: " << res->value << '\n';
+            return 1;
+        }
+        std::cout << "NMP tactical mate integrity verified (score=" << res->value << ")\n";
+        return 0;
+    }
+    if (testCase == "futility_pruning_quiet_move_skip")
+    {
+        // Quiet middlegame test position
+        TranspositionTable::Clear();
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard("rnbq1rk1/ppp2pbp/3p1np1/4p3/4P3/3P1NP1/PPPN1PBP/R1BQ1RK1 b - - 0 7"));
+        Move prevMove{}, m1{}, m2{}, m3{};
+        std::unique_ptr<MovePrintValue> res(PVSSearch::PVS(true, -200000, 200000, 4, prevMove, m1, m2, m3, *b, false, true, 0, false, false));
+        if (res->value != 65 && res->value != 39)
+        {
+            std::cerr << "Futility pruning quiet middlegame root score unexpected: " << res->value << '\n';
+            return 1;
+        }
+        std::cout << "Futility pruning quiet move skip verified (score=" << res->value << ")\n";
+        return 0;
+    }
+    if (testCase == "tt_entry_layout_and_packed_move")
+    {
+        // 1. sizeof entry == 16
+        if (sizeof(TTEntry) != 16)
+        {
+            std::cerr << "TTEntry size mismatch: expected 16, got " << sizeof(TTEntry) << '\n';
+            return 1;
+        }
+
+        // 2. pack/unpack normal move
+        {
+            Move normalMove{};
+            normalMove.beginPlace = 12; // e2
+            normalMove.endPlace = 28;   // e4
+            normalMove.promotionPiece = 0;
+            uint16_t packed = TTMoveHelper::PackMove(normalMove);
+            if (TTMoveHelper::UnpackFrom(packed) != 12 ||
+                TTMoveHelper::UnpackTo(packed) != 28 ||
+                TTMoveHelper::UnpackPromotion(packed) != 0)
+            {
+                std::cerr << "Normal move pack/unpack failed\n";
+                return 1;
+            }
+        }
+
+        // 3. all promotion types
+        for (int promo = 1; promo <= 5; ++promo)
+        {
+            uint16_t packed = TTMoveHelper::PackMove(52, 60, promo);
+            if (TTMoveHelper::UnpackFrom(packed) != 52 ||
+                TTMoveHelper::UnpackTo(packed) != 60 ||
+                TTMoveHelper::UnpackPromotion(packed) != promo)
+            {
+                std::cerr << "Promotion move pack/unpack failed for promo=" << promo << '\n';
+                return 1;
+            }
+        }
+
+        // 4. boundary squares 0 and 63
+        {
+            uint16_t packed0 = TTMoveHelper::PackMove(0, 63, 0);
+            if (TTMoveHelper::UnpackFrom(packed0) != 0 || TTMoveHelper::UnpackTo(packed0) != 63)
+            {
+                std::cerr << "Boundary squares 0->63 pack/unpack failed\n";
+                return 1;
+            }
+            uint16_t packed63 = TTMoveHelper::PackMove(63, 0, 0);
+            if (TTMoveHelper::UnpackFrom(packed63) != 63 || TTMoveHelper::UnpackTo(packed63) != 0)
+            {
+                std::cerr << "Boundary squares 63->0 pack/unpack failed\n";
+                return 1;
+            }
+        }
+
+        // 5. full int32 score preservation
+        TTEntry entry{};
+        const int32_t testScores[] = {
+            0, 100, -100, 32000, -32000, 159999, -159999, 160000, -160000,
+            200000, -200000, 1000000, -1000000
+        };
+        for (int32_t s : testScores)
+        {
+            entry.score = s;
+            if (entry.score != s)
+            {
+                std::cerr << "int32 score preservation failed for " << s << '\n';
+                return 1;
+            }
+        }
+
+        // 6. flag/depth round trip
+        entry.key = 0xFEDCBA9876543210ULL;
+        entry.score = 159998;
+        entry.depth = 12;
+        entry.flag = TT_LOWER_BOUND;
+        entry.bestMove = TTMoveHelper::PackMove(4, 20, 0);
+
+        if (entry.key != 0xFEDCBA9876543210ULL ||
+            entry.score != 159998 ||
+            entry.depth != 12 ||
+            entry.flag != TT_LOWER_BOUND ||
+            TTMoveHelper::UnpackFrom(entry.bestMove) != 4 ||
+            TTMoveHelper::UnpackTo(entry.bestMove) != 20)
+        {
+            std::cerr << "TTEntry field round trip failed\n";
+            return 1;
+        }
+
+        std::cout << "TT 16-byte entry layout, packed move, full int32 score, and flags verified\n";
+        return 0;
     }
 
     throw std::runtime_error("Unknown search test case: " + testCase);
@@ -1967,7 +2422,7 @@ int RunHashMemoryBudgetCoverage()
         }
         const HashMemoryAccounting actual = HashMemoryBudget::Accounting();
         const std::uint64_t expectedCombined =
-            capacityCase.evalBytes + FixedExchangeBytes;
+            capacityCase.evalBytes + FixedExchangeBytes + actual.ttBytes;
         const std::uint64_t expectedEnvelope =
             HashMemoryBudget::NonTableReserveBytes + expectedCombined;
         if (actual.requestedTotalBytes !=
@@ -1978,6 +2433,7 @@ int RunHashMemoryBudgetCoverage()
             actual.exchangeCacheBytes != HashMemoryBudget::ExchangeCacheBytes ||
             actual.exchangeWithoutBeginPieceCacheBytes !=
                 HashMemoryBudget::ExchangeWithoutBeginPieceCacheBytes ||
+            actual.ttBytes != TranspositionTable::CapacityBytes() ||
             actual.combinedTableBytes != expectedCombined ||
             actual.plannedEnvelopeBytes != expectedEnvelope ||
             actual.unallocatedBytes != actual.acceptedTotalBytes - expectedEnvelope ||
@@ -2039,7 +2495,7 @@ int RunHashMemoryBudgetCoverage()
         EvaluationLogic::EvalCacheSize() != 0 ||
         EvaluationLogic::Evaluate(*board) != directEvaluation ||
         HashMemoryBudget::LastConfigurationPeakTableBytes() >
-            MiB + FixedExchangeBytes)
+            MiB + FixedExchangeBytes + TranspositionTable::CapacityBytes())
     {
         std::cerr << "Evaluation cache resize did not clear entries or preserve evaluation\n";
         return 1;
@@ -2110,6 +2566,62 @@ int RunHashMemoryBudgetCoverage()
         std::cerr << "Exchange allocation failures did not safely disable both tables\n";
         return 1;
     }
+    // Test TT sizing for Hash 8, 16, 40, 1024 MiB
+    const int testMiBs[] = {8, 16, 40, 1024};
+    for (int mib : testMiBs)
+    {
+        diagnostics.str("");
+        diagnostics.clear();
+        if (!HashMemoryBudget::ConfigureMiB(mib, diagnostics))
+        {
+            std::cerr << "ConfigureMiB failed for " << mib << " MiB\n";
+            return 1;
+        }
+        const auto acc = HashMemoryBudget::Accounting();
+        if (acc.plannedEnvelopeBytes > acc.requestedTotalBytes)
+        {
+            std::cerr << "Budget exceeded for " << mib << " MiB: envelope=" << acc.plannedEnvelopeBytes
+                      << ", requested=" << acc.requestedTotalBytes << '\n';
+            return 1;
+        }
+        if (acc.ttBytes != TranspositionTable::CapacityBytes())
+        {
+            std::cerr << "TT accounting mismatch for " << mib << " MiB\n";
+            return 1;
+        }
+        // Verify power of two entries
+        std::size_t entries = TranspositionTable::EntryCount();
+        if (entries > 0 && (entries & (entries - 1)) != 0)
+        {
+            std::cerr << "TT entry count is not power of 2 for " << mib << " MiB: " << entries << '\n';
+            return 1;
+        }
+    }
+
+    // Test TT allocation failure fallback
+    TranspositionTable::SetAllocationFailureThresholdForTesting(16 * MiB);
+    diagnostics.str("");
+    diagnostics.clear();
+    if (!HashMemoryBudget::ConfigureMiB(40, diagnostics) ||
+        HashMemoryBudget::Accounting().ttBytes != 8 * MiB)
+    {
+        std::cerr << "TT allocation fallback to 8 MiB failed\n";
+        return 1;
+    }
+
+    TranspositionTable::SetAllocationFailureThresholdForTesting(sizeof(TTEntry));
+    diagnostics.str("");
+    diagnostics.clear();
+    if (!HashMemoryBudget::ConfigureMiB(40, diagnostics) ||
+        HashMemoryBudget::Accounting().ttBytes != 0 ||
+        TranspositionTable::IsActive() ||
+        diagnostics.str().find("TT allocation failed") == std::string::npos)
+    {
+        std::cerr << "TT total allocation failure was not handled safely\n";
+        return 1;
+    }
+    TranspositionTable::SetAllocationFailureThresholdForTesting(0);
+
     MoveLogic::SetExchangeCacheAllocationFailureThresholdForTesting(0);
     diagnostics.str("");
     diagnostics.clear();

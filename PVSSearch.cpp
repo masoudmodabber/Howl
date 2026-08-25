@@ -11,6 +11,8 @@
 #include "GameLogic.h"
 #include "ChessStringManipulation.h"
 #include "MissingInfoAboutPrevStateFromMove.h"
+#include "RepetitionHistory.h"
+#include "TranspositionTable.h"
 #include <iostream>
 #include <algorithm>
 
@@ -55,6 +57,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
         turn = 1;
     }
 
+    const int origAlpha = alpha;
     if (depth == 0)
     {
         delete retValue;
@@ -75,41 +78,112 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
     {
         previousMoveWasCheck = true;
     }
-    /*if (!BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove)) {
-        // NULL MOVE PRUNING
-        NullMovePruning(isPVNode, alpha, beta, depth, prevMove, move1, move2, move3, board4, MAtESearch, isNullMoveAllowed, depthGone, previousMoveWasCheck, nullWindowSearch, *MPValue);
-        // NULL MOVE REDUCTION
-        if (isNullMoveAllowed && depth >= 4) {
-            double valueReduced = NullMoveReduction(isPVNode, alpha, beta, depth, prevMove, move1, move2, move3, board4, MAtESearch, isNullMoveAllowed, depthGone, previousMoveWasCheck, nullWindowSearch, MPValue);
-            if (valueReduced >= beta) {
-                depth -= 4;
-                // int realreductionDepth = 4 + depth;
-                if (depth <= 0) {
-                    // return -evaluate(recDepth);
-                    int valueTemp = EvaluationLogic::Evaluate(board4);
-                    if (valueTemp >= beta) {
-                        retValue->value = valueTemp;
+    if (isNullMoveAllowed && !isPVNode && depth >= 4)
+    {
+        bool inCheck = BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove);
+        if (!inCheck)
+        {
+            bool hasNonPawn = (board4.pieces[turn * 8 + 2].size() > 0 ||
+                               board4.pieces[turn * 8 + 3].size() > 0 ||
+                               board4.pieces[turn * 8 + 4].size() > 0 ||
+                               board4.pieces[turn * 8 + 5].size() > 0);
+            if (hasNonPawn)
+            {
+                int staticEval = EvaluationLogic::Evaluate(board4);
+                if (staticEval >= beta)
+                {
+                    int R = (depth > 6) ? 4 : 3;
+                    Move nullMove{};
+                    nullMove.promotionPiece = -1;
+                    MissingInfoAboutPrevStateFromMove undoInfo(board4);
+                    GameLogic::DoMove(board4, nullMove, prevMove, depthGone, depthGone);
+
+                    std::unique_ptr<MovePrintValue> nullRes(PVS(false, -beta, -beta + 1, depth - 1 - R, nullMove, move2, move3, prevMove, board4, MAtESearch, false, depthGone + 1, previousMoveWasCheck, true));
+                    int nullScore = -nullRes->value;
+                    if (nullScore > 159800 && nullScore != 160000)
+                    {
+                        nullScore--;
+                    }
+                    else if (nullScore < -159800 && nullScore != -160000)
+                    {
+                        nullScore++;
+                    }
+
+                    GameLogic::UndoMove(board4, nullMove, undoInfo);
+
+                    if (nullScore >= beta)
+                    {
+                        retValue->value = (nullScore >= 159800) ? beta : nullScore;
+                        retValue->printString = "null";
                         delete MPValue;
                         MPValue = nullptr;
                         return retValue;
                     }
-                    delete retValue;
-                    retValue = nullptr;
-                    delete MPValue;
-                    MPValue = nullptr;
-                    return QSearcher::QSearch(isPVNode, alpha, beta, prevMove, depthGone, 0, true, 0, move1, move2, move3, board4, false, depthGone, nullWindowSearch);
                 }
             }
         }
-    }*/
+    }
     MoveList moveList = MoveLogic::MoveGenerator(board4, depth, depthGone);
     if constexpr (ProductionIGGEnabled)
     {
         IGG(isPVNode, alpha, beta, depth, prevMove, move1, move2, move3, board4, MAtESearch, isNullMoveAllowed, depthGone, previousMoveWasCheck, nullWindowSearch, moveList);
     }
+    TTEntry ttEntry{};
+    bool ttHit = TranspositionTable::Probe(board4.ZobristHashCode, ttEntry);
+    if (TranspositionTable::CutoffsEnabled() && !isPVNode && ttHit && ttEntry.depth >= depth && TTFlagIsRigorous(ttEntry.flag))
+    {
+        if (ttEntry.flag == TT_EXACT)
+        {
+            TranspositionTable::RecordCutoff();
+            retValue->value = ttEntry.score;
+            delete MPValue;
+            MPValue = nullptr;
+            return retValue;
+        }
+        else if (ttEntry.flag == TT_LOWER_BOUND && ttEntry.score >= beta)
+        {
+            TranspositionTable::RecordCutoff();
+            retValue->value = ttEntry.score;
+            delete MPValue;
+            MPValue = nullptr;
+            return retValue;
+        }
+        else if (ttEntry.flag == TT_UPPER_BOUND && ttEntry.score <= alpha)
+        {
+            TranspositionTable::RecordCutoff();
+            retValue->value = ttEntry.score;
+            delete MPValue;
+            MPValue = nullptr;
+            return retValue;
+        }
+    }
+    if (ttHit && ttEntry.bestMove != 0)
+    {
+        int ttFrom = TTMoveHelper::UnpackFrom(ttEntry.bestMove);
+        int ttTo = TTMoveHelper::UnpackTo(ttEntry.bestMove);
+        int ttPromo = TTMoveHelper::UnpackPromotion(ttEntry.bestMove);
+        for (int i = 0; i < moveList.count; ++i)
+        {
+            Move *m = moveList.moves[i];
+            if (m->beginPlace == ttFrom && m->endPlace == ttTo &&
+                (ttPromo == 0 ? (m->promotionPiece <= 0) : (m->promotionPiece == ttPromo)))
+            {
+                TranspositionTable::RecordHitStats(true, i == 0);
+                if (i != 0)
+                {
+                    std::swap(moveList.moves[0], moveList.moves[i]);
+                }
+                break;
+            }
+        }
+    }
+    int inCheck = -1;
+    int staticEval = -200000;
     int bestMoveValue = -200000;
     std::string SelectedPV = "";
     int availMoves = 0;
+    int futilityPrunedCount = 0;
+    int unverifiedLMRCount = 0;
     {
         bool firstMove = true;
         for (int i = 0; i < moveList.count; ++i)
@@ -132,7 +206,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                 boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
                 MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
                 GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone);
-                if (MoveLogic::Same(move2, move3, prevMove, *move))
+                if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                 {
                     bestMoveValue = 0;
                     SelectedMove = move;
@@ -154,7 +228,11 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     {
                         availMoves++;
                     }
-                    if (bestMoveValue < -159800)
+                    if (bestMoveValue > 159800 && bestMoveValue != 160000)
+                    {
+                        bestMoveValue--;
+                    }
+                    else if (bestMoveValue < -159800 && bestMoveValue != -160000)
                     {
                         bestMoveValue++;
                     }
@@ -179,9 +257,13 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                             move->isRefuteWithoutNullMove = true;
                         }
                         // TODO: remove rest of list from movelist for memory management
+                        if (bestMoveValue != 0)
+                        {
+                            uint16_t packed = TTMoveHelper::PackMove(*move);
+                            TranspositionTable::Store(board4.ZobristHashCode, move->value, depth, TT_LOWER_BOUND, packed);
+                        }
                         retValue->value = move->value;
                         retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + MPValue->printString;
-                        // AddToTable(board4, move, depth, false, nullWindowSearch, depthGone);
                         deleteMoveList(moveList);
                         delete MPValue;
                         MPValue = nullptr;
@@ -194,12 +276,37 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             }
             else
             {
+                if (!isPVNode && depth <= 2 && availMoves > 0 && move->endPiece == 0 && move->promotionPiece <= 0 &&
+                    alpha > -159800 && beta < 159800)
+                {
+                    if (staticEval == -200000)
+                    {
+                        if (inCheck < 0)
+                        {
+                            inCheck = BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove) ? 1 : 0;
+                        }
+                        if (inCheck == 0)
+                        {
+                            staticEval = EvaluationLogic::Evaluate(board4);
+                        }
+                    }
+                    if (inCheck == 0 && staticEval != -200000)
+                    {
+                        int futilityMargin = (depth == 1) ? 150 : 300;
+                        if (staticEval + futilityMargin <= alpha)
+                        {
+                            futilityPrunedCount++;
+                            continue;
+                        }
+                    }
+                }
+
                 bool tempRepeat = false;
                 boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
                 MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
                 GameLogic::DoMove(board4, *move, prevMove, depth, depthGone);
                 int value;
-                if (MoveLogic::Same(move2, move3, prevMove, *move))
+                if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                 {
                     tempRepeat = true;
                     value = 0;
@@ -239,11 +346,20 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     {
                         availMoves++;
                     }
-                    if (value < -159800)
+                    if (value > 159800 && value != 160000)
+                    {
+                        value--;
+                    }
+                    else if (value < -159800 && value != -160000)
                     {
                         value++;
                     }
                     move->value = value;
+
+                    if (LMRDepth > 0 && value <= alpha)
+                    {
+                        unverifiedLMRCount++;
+                    }
                 }
                 if (value > alpha /* && value < beta */)
                 {
@@ -257,7 +373,11 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                         delete MPValue;
                         MPValue = PVS(tempPVNode, -beta, -alpha, depth - 1, *move, move2, move3, prevMove, board4, MAtESearch, true, depthGone + 1, previousMoveWasCheck, nullWindowSearch);
                         value = -MPValue->value;
-                        if (value < -159800)
+                        if (value > 159800 && value != 160000)
+                        {
+                            value--;
+                        }
+                        else if (value < -159800 && value != -160000)
                         {
                             value++;
                         }
@@ -286,16 +406,19 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                             move->isRefuteWithoutNullMove = true;
                         }
                         // TODO: delete movelist except first and second move
+                        if (value != 0)
+                        {
+                            uint16_t packed = TTMoveHelper::PackMove(*move);
+                            TranspositionTable::Store(board4.ZobristHashCode, move->value, depth, TT_LOWER_BOUND, packed);
+                        }
                         retValue->value = move->value;
                         retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + MPValue->printString;
-                        // AddToTable(board4, move, depth, false, nullWindowSearch, depthGone);
                         deleteMoveList(moveList);
                         delete MPValue;
                         MPValue = nullptr;
                         return retValue;
                     }
                     move->isRefuteWithoutNullMove = false;
-                    // AddToTable(board4, move, depth, false, nullWindowSearch, depthGone);
                     bestMoveValue = value;
                     SelectedMove = move;
                     SelectedPV = MPValue->printString;
@@ -308,7 +431,6 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             stalemateMove.value = 0;
             stalemateMove.promotionPiece = -2;
             retValue->value = 0;
-            // AddToTable(board4, stalemateMove, depth, false, nullWindowSearch, depthGone);
             deleteMoveList(moveList);
             delete MPValue;
             MPValue = nullptr;
@@ -319,7 +441,6 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             Move mateMove;
             mateMove.value = -159999;
             retValue->value = -159999;
-            // AddToTable(board4, mateMove, depth, false, nullWindowSearch, depthGone);
             deleteMoveList(moveList);
             delete MPValue;
             MPValue = nullptr;
@@ -327,9 +448,18 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
         }
         else
         {
+            if (SelectedMove != nullptr && bestMoveValue != 0)
+            {
+                uint8_t flag = (bestMoveValue > origAlpha) ? TT_EXACT : TT_UPPER_BOUND;
+                if (futilityPrunedCount > 0 || unverifiedLMRCount > 0)
+                {
+                    flag = static_cast<uint8_t>(flag + 4);
+                }
+                uint16_t packed = TTMoveHelper::PackMove(*SelectedMove);
+                TranspositionTable::Store(board4.ZobristHashCode, bestMoveValue, depth, flag, packed);
+            }
             retValue->value = bestMoveValue;
             retValue->printString = ChessStringManipulation::PVToString(*SelectedMove, 0, false, board4) + ' ' + SelectedPV;
-            // AddToTable(board4, SelectedMove, depth, false, nullWindowSearch, depthGone);
             deleteMoveList(moveList);
             delete MPValue;
             MPValue = nullptr;
@@ -411,7 +541,7 @@ void PVSSearch::NullMovePruning(bool isPVNode, int alpha, int beta, int depth, M
     }*/
 }
 
-double PVSSearch::NullMoveReduction(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool mateSearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, MovePrintValue *MPValue)
+double PVSSearch::NullMoveReduction(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool mateSearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch)
 {
     Move nullMove = Move();
     nullMove.promotionPiece = -1;
@@ -420,23 +550,21 @@ double PVSSearch::NullMoveReduction(bool isPVNode, int alpha, int beta, int dept
     MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
     GameLogic::DoMove(board4, nullMove, prevMove, depthGone, depthGone);
     double valueReduced;
+    std::unique_ptr<MovePrintValue> childResult;
     if (depth > 6)
     {
-        delete MPValue;
-        MPValue = PVS(false, -beta, -beta + 1, depth - 4 - 1, nullMove, move2, move3, prevMove, board4, mateSearch, false, depthGone + 1, previousMoveWasCheck, true);
-        valueReduced = -MPValue->value;
+        childResult.reset(PVS(false, -beta, -beta + 1, depth - 4 - 1, nullMove, move2, move3, prevMove, board4, mateSearch, false, depthGone + 1, previousMoveWasCheck, true));
+        valueReduced = -childResult->value;
     }
     else if (depth >= 4)
     {
-        delete MPValue;
-        MPValue = PVS(false, -beta, -beta + 1, depth - 3 - 1, nullMove, move2, move3, prevMove, board4, mateSearch, false, depthGone + 1, previousMoveWasCheck, true);
-        valueReduced = -MPValue->value;
+        childResult.reset(PVS(false, -beta, -beta + 1, depth - 3 - 1, nullMove, move2, move3, prevMove, board4, mateSearch, false, depthGone + 1, previousMoveWasCheck, true));
+        valueReduced = -childResult->value;
     }
     else
     {
-        delete MPValue;
-        MPValue = QSearcher::QSearch(false, -beta, -beta + 1, nullMove, depthGone + 1, 0, true, 0, move2, move3, prevMove, board4, false, depthGone + 1, nullWindowSearch);
-        valueReduced = -MPValue->value;
+        childResult.reset(QSearcher::QSearch(false, -beta, -beta + 1, nullMove, depthGone + 1, 0, true, 0, move2, move3, prevMove, board4, false, depthGone + 1, nullWindowSearch));
+        valueReduced = -childResult->value;
     }
     GameLogic::UndoMove(board4, nullMove, *missingInfoAboutPrevStateFromMove);
     if (UCI::IsTest())
@@ -493,7 +621,7 @@ void PVSSearch::IGG(bool isPVNode, int alpha, int beta, int depth, Move &prevMov
                         boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
                         MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
                         GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone);
-                        if (MoveLogic::Same(move2, move3, prevMove, *move))
+                        if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                         {
                             bestMoveValue = 0;
                             move->value = 0;
@@ -512,7 +640,11 @@ void PVSSearch::IGG(bool isPVNode, int alpha, int beta, int depth, Move &prevMov
                             {
                                 availMovesIr++;
                             }
-                            if (bestMoveValue < -159800)
+                            if (bestMoveValue > 159800 && bestMoveValue != 160000)
+                            {
+                                bestMoveValue--;
+                            }
+                            else if (bestMoveValue < -159800 && bestMoveValue != -160000)
                             {
                                 bestMoveValue++;
                             }
@@ -548,7 +680,7 @@ void PVSSearch::IGG(bool isPVNode, int alpha, int beta, int depth, Move &prevMov
                         boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
                         MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
                         GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone);
-                        if (MoveLogic::Same(move2, move3, prevMove, *move))
+                        if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                         {
                             tempRepeat = true;
                             value = 0;
@@ -588,7 +720,11 @@ void PVSSearch::IGG(bool isPVNode, int alpha, int beta, int depth, Move &prevMov
                             {
                                 availMovesIr++;
                             }
-                            if (value < -159800)
+                            if (value > 159800 && value != 160000)
+                            {
+                                value--;
+                            }
+                            else if (value < -159800 && value != -160000)
                             {
                                 value++;
                             }
@@ -606,7 +742,11 @@ void PVSSearch::IGG(bool isPVNode, int alpha, int beta, int depth, Move &prevMov
                                 delete MPValue;
                                 MPValue = PVSSearch::PVS(tempPVNode, -beta, -alpha, depth - 1, *move, move2, move3, prevMove, board4, MAtESearch, isNullMoveAllowed, depthGone + 1, lastCheck, nullWindowSearch);
                                 value = -MPValue->value;
-                                if (value < -159800)
+                                if (value > 159800 && value != 160000)
+                                {
+                                    value--;
+                                }
+                                else if (value < -159800 && value != -160000)
                                 {
                                     value++;
                                 }

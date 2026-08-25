@@ -2,6 +2,7 @@
 
 #include "EvaluationLogic.h"
 #include "MoveLogic.h"
+#include "TranspositionTable.h"
 
 #include <algorithm>
 #include <charconv>
@@ -74,8 +75,8 @@ bool HashMemoryBudget::ConfigureMiB(int requestedMiB, std::ostream& diagnostics)
         static_cast<std::uint64_t>(requestedMiB) * Mebibyte;
     const std::uint64_t selectedEval = SelectedEvalBytes(requestedMiB);
 
-    // Release the largest table before any replacement allocation. This avoids
-    // temporarily retaining both the old and new EvalCache backing stores.
+    // Release largest tables before replacement allocation to avoid transient memory spikes
+    TranspositionTable::Resize(0);
     EvaluationLogic::ResizeEvalCache(0);
     lastConfigurationPeakTableBytes =
         MoveLogic::ExchangeCacheCapacityBytes() +
@@ -123,7 +124,32 @@ bool HashMemoryBudget::ConfigureMiB(int requestedMiB, std::ostream& diagnostics)
     const std::uint64_t exchangeWithoutActual =
         MoveLogic::ExchangeWithoutBeginPieceCacheCapacityBytes();
     const std::uint64_t evalActual = EvaluationLogic::EvalCacheCapacityBytes();
-    const std::uint64_t combined = evalActual + exchangeActual + exchangeWithoutActual;
+    const std::uint64_t fixedAndEval = NonTableReserveBytes + evalActual + exchangeActual + exchangeWithoutActual;
+
+    // Allocate TT from remaining unallocated budget bytes
+    std::uint64_t ttTargetBytes = 0;
+    if (requestedTotal > fixedAndEval)
+    {
+        ttTargetBytes = requestedTotal - fixedAndEval;
+    }
+
+    std::uint64_t actualTT = ttTargetBytes;
+    while (actualTT >= sizeof(TTEntry) &&
+           !TranspositionTable::Resize(static_cast<std::size_t>(actualTT)))
+    {
+        actualTT /= 2;
+    }
+    if (actualTT < sizeof(TTEntry))
+    {
+        TranspositionTable::Resize(0);
+        if (ttTargetBytes >= sizeof(TTEntry))
+        {
+            diagnostics << "info string TT allocation failed; TT disabled\n";
+        }
+    }
+
+    const std::uint64_t ttActual = TranspositionTable::CapacityBytes();
+    const std::uint64_t combined = evalActual + exchangeActual + exchangeWithoutActual + ttActual;
     const std::uint64_t envelope = NonTableReserveBytes + combined;
     lastConfigurationPeakTableBytes = std::max(lastConfigurationPeakTableBytes, combined);
 
@@ -133,6 +159,7 @@ bool HashMemoryBudget::ConfigureMiB(int requestedMiB, std::ostream& diagnostics)
     accounting.evalCacheBytes = evalActual;
     accounting.exchangeCacheBytes = exchangeActual;
     accounting.exchangeWithoutBeginPieceCacheBytes = exchangeWithoutActual;
+    accounting.ttBytes = ttActual;
     accounting.combinedTableBytes = combined;
     accounting.plannedEnvelopeBytes = envelope;
     accounting.unallocatedBytes = requestedTotal - envelope;
@@ -195,9 +222,11 @@ std::uint64_t HashMemoryBudget::LastConfigurationPeakTableBytes()
 #if HOWL_CORRECTNESS_TESTING
 void HashMemoryBudget::ResetForTesting()
 {
+    TranspositionTable::Resize(0);
     EvaluationLogic::ResizeEvalCache(0);
     MoveLogic::ResizeExchangeCache(0);
     MoveLogic::ResizeExchangeWithoutBeginPieceCache(0);
+    TranspositionTable::SetAllocationFailureThresholdForTesting(0);
     EvaluationLogic::SetEvalCacheAllocationFailureThresholdForTesting(0);
     MoveLogic::SetExchangeCacheAllocationFailureThresholdForTesting(0);
     configured = false;

@@ -1,4 +1,4 @@
-﻿#ifdef _WIN32
+#ifdef _WIN32
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
 #endif
@@ -14,6 +14,7 @@
 #include "ChessStringManipulation.h"
 #include "MissingInfoAboutPrevStateFromMove.h"
 #include "BoardInitializer.h"
+#include "RepetitionHistory.h"
 #include <algorithm>
 #ifdef _WIN32
 #include <crtdbg.h>
@@ -36,6 +37,10 @@ bool Search::mated = false;
 
 void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Board &board4)
 {
+    if (RepetitionHistory::Size() == 0)
+    {
+        RepetitionHistory::ResetWithRoot(board4.ZobristHashCode);
+    }
     auto beginTime = std::chrono::high_resolution_clock::now();
     int MultiPV = finiteSearch ? 1 : Option::MultiPV;
     MoveList moveList = MoveLogic::MoveGenerator(board4, -1, -1);
@@ -100,7 +105,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 Board *boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
                 MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
                 GameLogic::DoMove(board4, *move, move4, -1, -1);
-                if (MoveLogic::Same(move2, move3, move4, *move))
+                if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                 {
                     move->value = 0;
                 }
@@ -117,7 +122,11 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     delete MPValue;
                     MPValue = PVSSearch::PVS(true, -200000, 200000, recDepth - 1, *move, move2, move3, move4, board4, MATESearch, true, 1, false, false);
                     value = -MPValue->value;
-                    if (value < -159800)
+                    if (value > 159800 && value != 160000)
+                    {
+                        value--;
+                    }
+                    else if (value < -159800 && value != -160000)
                     {
                         value++;
                     }
@@ -167,7 +176,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 Board *boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
                 MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
                 GameLogic::DoMove(board4, *move, move4, -1, -1);
-                if (MoveLogic::Same(move2, move3, move4, *move))
+                if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                 {
                     value = 0;
                     move->value = 0;
@@ -192,7 +201,11 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                         delete MPValue;
                         MPValue = PVSSearch::PVS(true, -beta, -KthBestValue, recDepth - 1, *move, move2, move3, move4, board4, MATESearch, true, 1, false, false);
                         value = -MPValue->value;
-                        if (value < -159800)
+                        if (value > 159800 && value != 160000)
+                        {
+                            value--;
+                        }
+                        else if (value < -159800 && value != -160000)
                         {
                             value++;
                         }
@@ -223,14 +236,18 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 }
                 mated = false;
                 Score = "";
-                if (move->value > 159900)
+                if (move->value > 159800 && move->value != 160000)
                 {
-                    Score = "mate " + std::to_string(160000 - move->value);
+                    int plies = 159999 - move->value;
+                    int mateMoves = (plies + 2) / 2;
+                    Score = "mate " + std::to_string(mateMoves);
                     mated = true;
                 }
-                else if (move->value < -159900)
+                else if (move->value < -159800 && move->value != -160000)
                 {
-                    Score = "mate " + std::to_string(-160000 - move->value);
+                    int plies = move->value - (-159999);
+                    int mateMoves = (plies + 2) / 2;
+                    Score = "mate -" + std::to_string(mateMoves);
                     mated = true;
                 }
                 else
@@ -388,7 +405,7 @@ void Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
                 firstAssign = true;
             }
 
-            if (MoveLogic::Same(move2, move3, move4, *move))
+            if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
             {
                 move->value = 0;
             }
@@ -477,14 +494,18 @@ void Search::CalculateAndDisplayScore(int value)
 {
     Score = "";
     mated = false;
-    if (value > 159900)
+    if (value > 159800 && value != 160000)
     {
-        Score = "mate " + std::to_string(160000 - value);
+        int plies = 159999 - value;
+        int mateMoves = (plies + 2) / 2;
+        Score = "mate " + std::to_string(mateMoves);
         mated = true;
     }
-    else if (value < -159900)
+    else if (value < -159800 && value != -160000)
     {
-        Score = "mate " + std::to_string(-160000 - value);
+        int plies = value - (-159999);
+        int mateMoves = (plies + 2) / 2;
+        Score = "mate -" + std::to_string(mateMoves);
         mated = true;
     }
     else

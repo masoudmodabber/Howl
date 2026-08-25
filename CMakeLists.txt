@@ -55,7 +55,7 @@ if(BUILD_TESTING)
         )
     endforeach()
 
-    foreach(SEARCH_CASE mate_in_one mate_in_two forced_evasion illegal_king_capture promotion_mate returned_move_legality lmr_research_accounting lmr_promotion_exemption lmr_equal_winning_capture_exemption)
+    foreach(SEARCH_CASE mate_in_one mate_in_two forced_evasion illegal_king_capture promotion_mate returned_move_legality lmr_research_accounting lmr_promotion_exemption lmr_equal_winning_capture_exemption repetition_real_knight repetition_false_a1 repetition_castling_difference repetition_ep_difference repetition_search_line repetition_undo_restoration mate_in_1_2_3_progression mate_search_ply_propagation mate_winning_and_losing_scores mate_illegal_sentinel_distinction null_move_ep_restoration null_move_pointer_lifetime nmp_zugzwang_pawn_endgame nmp_tactical_integrity futility_pruning_quiet_move_skip tt_entry_layout_and_packed_move)
         add_test(
             NAME search_${SEARCH_CASE}
             COMMAND howl_correctness_tests search ${SEARCH_CASE}

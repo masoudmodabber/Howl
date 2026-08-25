@@ -10,6 +10,7 @@
 #include "UCI.h"
 #include "GameLogic.h"
 #include "MoveLogic.h"
+#include "RepetitionHistory.h"
 #include "ChessStringManipulation.h"
 
 int QSearcher::pieceValue100[15] = {
@@ -210,7 +211,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
 #endif
             int value;
             std::string movePV = "";
-            if (MoveLogic::Same(move2, move3, prevMove, *move)) {
+            if (RepetitionHistory::IsRepetition(board4.ZobristHashCode)) {
                 value = 0;
                 move->value = 0;
             } else {
@@ -225,7 +226,9 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                     value = -MPValue->value;
                     movePV = MPValue->printString;
                 }
-                if (value < -159800) {
+                if (value > 159800 && value != 160000) {
+                    value--;
+                } else if (value < -159800 && value != -160000) {
                     value++;
                 }
                 move->value = value;
@@ -261,7 +264,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
             bool tempRepeat = false;
             int value;
             std::string movePV = "";
-            if (MoveLogic::Same(move2, move3, prevMove, *move)) {
+            if (RepetitionHistory::IsRepetition(board4.ZobristHashCode)) {
                 tempRepeat = true;
                 value = 0;
                 move->value = 0;
@@ -277,7 +280,9 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                     value = -MPValue->value;
                     movePV = MPValue->printString;
                 }
-                if (value < -159800) {
+                if (value > 159800 && value != 160000) {
+                    value--;
+                } else if (value < -159800 && value != -160000) {
                     value++;
                 }
                 move->value = value;
@@ -300,7 +305,9 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                         value = -MPValue->value;
                         movePV = MPValue->printString;
                     }
-                    if (value < -159800) {
+                    if (value > 159800 && value != 160000) {
+                        value--;
+                    } else if (value < -159800 && value != -160000) {
                         value++;
                     }
                     move->value = value;

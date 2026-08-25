@@ -1,4 +1,4 @@
-﻿#ifdef _WIN32
+#ifdef _WIN32
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
 #endif
@@ -13,6 +13,7 @@
 #include "GameLogic.h"
 #include "BoardMaker.h"
 #include "HashMemoryBudget.h"
+#include "RepetitionHistory.h"
 
 // Correctness tests retain the make/undo board-copy assertions. Normal engine
 // execution starts in production mode and avoids those diagnostic allocations.
@@ -200,6 +201,7 @@ void UCI::MainAsync()
             {
                 ReplaceCurrentBoard(BoardInitializer::beginBoard->MakeCopy());
                 thisBoard->moveNumber = 1;
+                RepetitionHistory::ResetWithRoot(thisBoard->ZobristHashCode);
                 if (order.length() > 17)
                 {
                     LastFourMoves *lTemp = MakeMoves(order.substr(18), *thisBoard);
@@ -220,15 +222,28 @@ void UCI::MainAsync()
             else
             {
                 Board *replacementBoard;
+                std::string fenPart = order.substr(9);
                 if (order.substr(9, 3) == "fen")
                 {
-                    replacementBoard = BoardMaker::MakeInitialBoard(order.substr(13));
+                    fenPart = order.substr(13);
+                }
+                size_t movesPos = fenPart.find(" moves ");
+                if (movesPos != std::string::npos)
+                {
+                    std::string fenOnly = fenPart.substr(0, movesPos);
+                    std::string movesOnly = fenPart.substr(movesPos + 1);
+                    replacementBoard = BoardMaker::MakeInitialBoard(fenOnly);
+                    ReplaceCurrentBoard(replacementBoard);
+                    RepetitionHistory::ResetWithRoot(thisBoard->ZobristHashCode);
+                    LastFourMoves *lTemp = MakeMoves(movesOnly, *thisBoard);
+                    ReplaceMoveHistory(lTemp);
                 }
                 else
                 {
-                    replacementBoard = BoardMaker::MakeInitialBoard(order.substr(9));
+                    replacementBoard = BoardMaker::MakeInitialBoard(fenPart);
+                    ReplaceCurrentBoard(replacementBoard);
+                    RepetitionHistory::ResetWithRoot(thisBoard->ZobristHashCode);
                 }
-                ReplaceCurrentBoard(replacementBoard);
             }
         }
         bool infiniteSearch;
