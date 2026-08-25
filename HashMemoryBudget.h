@@ -14,6 +14,7 @@ struct HashMemoryAccounting
     std::uint64_t evalCacheBytes = 0;
     std::uint64_t exchangeCacheBytes = 0;
     std::uint64_t exchangeWithoutBeginPieceCacheBytes = 0;
+    std::uint64_t ttBytes = 0;
     std::uint64_t combinedTableBytes = 0;
     std::uint64_t plannedEnvelopeBytes = 0;
     std::uint64_t unallocatedBytes = 0;

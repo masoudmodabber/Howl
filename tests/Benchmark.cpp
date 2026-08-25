@@ -12,7 +12,9 @@
 #include "PVSSearch.h"
 #include "PassedPawnSetup.h"
 #include "PieceMoves.h"
+#include "RepetitionHistory.h"
 #include "Search.h"
+#include "TranspositionTable.h"
 #include "UCI.h"
 
 #include <algorithm>
@@ -189,6 +191,7 @@ std::string JoinPV(const std::string& rootMove, const std::string& childPV)
 
 RootSearchResult FixedDepthProductionRoot(Board& board, int depth)
 {
+    RepetitionHistory::ResetWithRoot(board.ZobristHashCode);
     // Production creates this list once and carries its ordering through the root loop.
     GeneratedMoves generatedMoves(board, -1, -1);
     Move move2{};
@@ -216,7 +219,7 @@ RootSearchResult FixedDepthProductionRoot(Board& board, int depth)
 
         int value = MinimumScore;
         std::string childPV;
-        const bool sameMove = MoveLogic::Same(move2, move3, move4, move);
+        const bool sameMove = RepetitionHistory::IsRepetition(board.ZobristHashCode);
         const bool mateSearch = orderingValue > 159800 || orderingValue < -159800;
 
         if (sameMove)
@@ -242,7 +245,11 @@ RootSearchResult FixedDepthProductionRoot(Board& board, int depth)
                 false,
                 false));
             value = -searched->value;
-            if (value < -159800)
+            if (value > 159800 && value != 160000)
+            {
+                value--;
+            }
+            else if (value < -159800 && value != -160000)
             {
                 value++;
             }
@@ -288,7 +295,11 @@ RootSearchResult FixedDepthProductionRoot(Board& board, int depth)
                     false,
                     false));
                 value = -searched->value;
-                if (value < -159800)
+                if (value > 159800 && value != 160000)
+                {
+                    value--;
+                }
+                else if (value < -159800 && value != -160000)
                 {
                     value++;
                 }
@@ -672,6 +683,7 @@ int RunSample(const std::filesystem::path& outputPath, bool diagnosticCopies)
         MoveLogic::ExchangeWithoutBeginPieceCacheStats();
     MoveLogic::ResetExchangeCacheStats();
 #endif
+    TranspositionTable::Clear();
     memorySnapshots.push_back(CaptureMemory("after complete warmup"));
     CorpusResult measured = RunCorpus(true, "measured", memorySnapshots);
 #if HOWL_EVAL_CACHE_STATS

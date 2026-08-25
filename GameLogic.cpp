@@ -9,6 +9,7 @@
 #include "Option.h"
 #include <iostream>
 #include "BoardInitializer.h"
+#include "RepetitionHistory.h"
 #include <algorithm>
 
 void GameLogic::HaveReachedToMoveSequence(Move &move, Move &prevMove, int depth, int depthGone)
@@ -78,14 +79,16 @@ void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int dep
     }
     else
     {
+        SetUnpassent(thisBoard, thisMove);
         // thisBoard.fiftyMoveRule++;
     }
     ChangeSide(thisBoard);
     SetCastleFlags(thisBoard, thisMove);
-    if (thisBoard.pieces[0].size() != 0)
-    {
-        std::cout << "Breakpoint here" << std::endl;
-    }
+    RepetitionHistory::Push(thisBoard.ZobristHashCode);
+    // if (thisBoard.pieces[0].size() != 0)
+    //{
+    //    std::cout << "Breakpoint here" << std::endl;
+    //}
 }
 
 void GameLogic::SetUnpassent(Board &thisBoard, Move &thisMove)
@@ -805,8 +808,10 @@ void GameLogic::UndoMove(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevS
     }
     else
     {
+        UnSetUnpassentPlace(thisBoard, thisMove, missingInfo.previousUnpassentPlace);
         // thisBoard.fiftyMoveRule--;
     }
+    RepetitionHistory::Pop();
 }
 
 void GameLogic::UnSetUnpassentPlace(Board& thisBoard, Move& thisMove, int previousUnpassentPlace)

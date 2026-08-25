@@ -12,6 +12,7 @@
 #include "PVSSearch.h"
 #include "PassedPawnSetup.h"
 #include "PieceMoves.h"
+#include "RepetitionHistory.h"
 #include "Search.h"
 #include "UCI.h"
 
@@ -249,6 +250,7 @@ int KthBestScore(std::vector<int> scores, int multiPV)
 
 StressResult FixedDepthProductionRoot(Board& board, int depth, int multiPV)
 {
+    RepetitionHistory::ResetWithRoot(board.ZobristHashCode);
     GeneratedMoves generated(board, -1, -1);
     Move move2{};
     Move move3{};
@@ -275,7 +277,7 @@ StressResult FixedDepthProductionRoot(Board& board, int depth, int multiPV)
 
         int value = MinimumScore;
         std::string childPV;
-        const bool sameMove = MoveLogic::Same(move2, move3, move4, move);
+        const bool sameMove = RepetitionHistory::IsRepetition(board.ZobristHashCode);
         const bool mateSearch = orderingValue > 159800 || orderingValue < -159800;
         if (sameMove)
         {
@@ -287,7 +289,11 @@ StressResult FixedDepthProductionRoot(Board& board, int depth, int multiPV)
                 true, MinimumScore, MaximumScore, depth - 1, move,
                 move2, move3, move4, board, mateSearch, true, 1, false, false));
             value = -searched->value;
-            if (value < -159800)
+            if (value > 159800 && value != 160000)
+            {
+                value--;
+            }
+            else if (value < -159800 && value != -160000)
             {
                 value++;
             }
@@ -307,7 +313,11 @@ StressResult FixedDepthProductionRoot(Board& board, int depth, int multiPV)
                     true, -MaximumScore, -kthBestValue, depth - 1, move,
                     move2, move3, move4, board, mateSearch, true, 1, false, false));
                 value = -searched->value;
-                if (value < -159800)
+                if (value > 159800 && value != 160000)
+                {
+                    value--;
+                }
+                else if (value < -159800 && value != -160000)
                 {
                     value++;
                 }
