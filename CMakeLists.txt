@@ -26,4 +26,11 @@ if(BUILD_TESTING)
             COMMAND howl_correctness_tests restoration ${POSITION}
         )
     endforeach()
+
+    foreach(ZOBRIST_CASE start_parity move_order fen_vs_moves side_to_move castling_rights)
+        add_test(
+            NAME zobrist_${ZOBRIST_CASE}
+            COMMAND howl_correctness_tests zobrist ${ZOBRIST_CASE}
+        )
+    endforeach()
 endif()

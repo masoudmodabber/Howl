@@ -259,6 +259,7 @@ Board *BoardMaker::MakeBoard(int boardArray[])
         if (boardArray[counter] != 0)
         {
             madeBoard->pieces[boardArray[counter]].push_back(counter - firstofRow + (firstofRow - 20) / 10 * 8);
+            madeBoard->ZobristHashCode ^= BoardInitializer::ZCode[boardArray[counter]][counter - firstofRow + (firstofRow - 20) / 10 * 8];
             if (boardArray[counter] < 8)
             {
                 madeBoard->whitePieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
@@ -276,6 +277,7 @@ Board *BoardMaker::MakeBoard(int boardArray[])
         if (boardArray[counter] != 0)
         {
             madeBoard->pieces[boardArray[counter]].push_back(counter - firstofRow + (firstofRow - 20) / 10 * 8);
+            madeBoard->ZobristHashCode ^= BoardInitializer::ZCode[boardArray[counter]][counter - firstofRow + (firstofRow - 20) / 10 * 8];
             if (boardArray[counter] < 8)
             {
                 madeBoard->whitePieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
@@ -293,6 +295,7 @@ Board *BoardMaker::MakeBoard(int boardArray[])
         if (boardArray[counter] != 0)
         {
             madeBoard->pieces[boardArray[counter]].push_back(counter - firstofRow + (firstofRow - 20) / 10 * 8);
+            madeBoard->ZobristHashCode ^= BoardInitializer::ZCode[boardArray[counter]][counter - firstofRow + (firstofRow - 20) / 10 * 8];
             if (boardArray[counter] < 8)
             {
                 madeBoard->whitePieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
@@ -310,6 +313,7 @@ Board *BoardMaker::MakeBoard(int boardArray[])
         if (boardArray[counter] != 0)
         {
             madeBoard->pieces[boardArray[counter]].push_back(counter - firstofRow + (firstofRow - 20) / 10 * 8);
+            madeBoard->ZobristHashCode ^= BoardInitializer::ZCode[boardArray[counter]][counter - firstofRow + (firstofRow - 20) / 10 * 8];
             if (boardArray[counter] < 8)
             {
                 madeBoard->whitePieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
@@ -327,6 +331,7 @@ Board *BoardMaker::MakeBoard(int boardArray[])
         if (boardArray[counter] != 0)
         {
             madeBoard->pieces[boardArray[counter]].push_back(counter - firstofRow + (firstofRow - 20) / 10 * 8);
+            madeBoard->ZobristHashCode ^= BoardInitializer::ZCode[boardArray[counter]][counter - firstofRow + (firstofRow - 20) / 10 * 8];
             if (boardArray[counter] < 8)
             {
                 madeBoard->whitePieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
@@ -344,6 +349,7 @@ Board *BoardMaker::MakeBoard(int boardArray[])
         if (boardArray[counter] != 0)
         {
             madeBoard->pieces[boardArray[counter]].push_back(counter - firstofRow + (firstofRow - 20) / 10 * 8);
+            madeBoard->ZobristHashCode ^= BoardInitializer::ZCode[boardArray[counter]][counter - firstofRow + (firstofRow - 20) / 10 * 8];
             if (boardArray[counter] < 8)
             {
                 madeBoard->whitePieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
@@ -361,6 +367,7 @@ Board *BoardMaker::MakeBoard(int boardArray[])
         if (boardArray[counter] != 0)
         {
             madeBoard->pieces[boardArray[counter]].push_back(counter - firstofRow + (firstofRow - 20) / 10 * 8);
+            madeBoard->ZobristHashCode ^= BoardInitializer::ZCode[boardArray[counter]][counter - firstofRow + (firstofRow - 20) / 10 * 8];
             if (boardArray[counter] < 8)
             {
                 madeBoard->whitePieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
@@ -378,6 +385,7 @@ Board *BoardMaker::MakeBoard(int boardArray[])
         if (boardArray[counter] != 0)
         {
             madeBoard->pieces[boardArray[counter]].push_back(counter - firstofRow + (firstofRow - 20) / 10 * 8);
+            madeBoard->ZobristHashCode ^= BoardInitializer::ZCode[boardArray[counter]][counter - firstofRow + (firstofRow - 20) / 10 * 8];
             if (boardArray[counter] < 8)
             {
                 madeBoard->whitePieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];

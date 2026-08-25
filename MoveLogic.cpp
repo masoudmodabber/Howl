@@ -1992,13 +1992,13 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
         case 1:
             for (int piecePosition : thisBoard.pieces[piece])
             {
-                if (PieceMoves::WhitePawnMoves[piecePosition][8] != nullptr)
+                if (PieceMoves::WhitePawnMoves[piecePosition][8] != nullptr || PieceMoves::WhitePawnMoves[piecePosition][9] != nullptr)
                 {
                     whiteAttacker[0][piecePosition + 7] = whiteAttacker[0][piecePosition + 7] * 8 + 1;
                     whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[piecePosition + 7]];
                     whiteAttacker[1][piecePosition + 7] += Option::AttackValueMovement[piece][mainBoard[piecePosition + 7]];
                 }
-                if (PieceMoves::WhitePawnMoves[piecePosition][13] != nullptr)
+                if (PieceMoves::WhitePawnMoves[piecePosition][13] != nullptr || PieceMoves::WhitePawnMoves[piecePosition][14] != nullptr)
                 {
                     whiteAttacker[0][piecePosition + 9] = whiteAttacker[0][piecePosition + 9] * 8 + 1;
                     whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[piecePosition + 9]];
@@ -2016,7 +2016,7 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
     int **blackAttacker = new int *[2];
     for (int i = 0; i < 2; ++i)
     {
-        blackAttacker[i] = new int[64];
+        blackAttacker[i] = new int[64]();
     }
     long long whitePieces = thisBoard.whitePieces;
     long long blackPieces = thisBoard.blackPieces;
@@ -2407,13 +2407,13 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
         case 9:
             for (int piecePosition : thisBoard.pieces[piece])
             {
-                if (PieceMoves::BlackPawnMoves[piecePosition][8] != nullptr)
+                if (PieceMoves::BlackPawnMoves[piecePosition][8] != nullptr || PieceMoves::BlackPawnMoves[piecePosition][9] != nullptr)
                 {
                     blackAttacker[0][piecePosition - 7] = blackAttacker[0][piecePosition - 7] * 8 + 1;
                     blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[piecePosition - 7]];
                     blackAttacker[1][piecePosition - 7] += Option::AttackValueMovement[piece][mainBoard[piecePosition - 7]];
                 }
-                if (PieceMoves::BlackPawnMoves[piecePosition][13] != nullptr)
+                if (PieceMoves::BlackPawnMoves[piecePosition][13] != nullptr || PieceMoves::BlackPawnMoves[piecePosition][14] != nullptr)
                 {
                     blackAttacker[0][piecePosition - 9] = blackAttacker[0][piecePosition - 9] * 8 + 1;
                     blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[piecePosition - 9]];
@@ -2434,6 +2434,7 @@ Move *MoveLogic::MoveCopy(Move *move)
     newMove->endPlace = move->endPlace;
     newMove->promotionPiece = move->promotionPiece;
     newMove->PublicFlag = move->PublicFlag;
+    newMove->unpassentPlace = move->unpassentPlace;
     newMove->moveCount = move->moveCount;
     return newMove;
 }

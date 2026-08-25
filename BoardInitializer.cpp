@@ -133,7 +133,7 @@ void BoardInitializer::Initialize()
         {
             beginBoard->blackPawns += Option::PowerTwo[counter];
         }
-        beginBoard->ZobristHashCode = 0 ^ ZCode[4][0] ^ ZCode[2][1] ^ ZCode[3][2] ^ ZCode[5][3] ^ ZCode[6][4] ^ ZCode[3][5] ^ ZCode[2][6] ^ ZCode[4][7] ^ ZCode[1][8] ^ ZCode[1][9] ^ ZCode[1][10] ^ ZCode[1][11] ^ ZCode[1][12] ^ ZCode[1][13] ^ ZCode[1][14] ^ ZCode[1][15] ^ ZCode[9][48] ^ ZCode[9][49] ^ ZCode[9][50] ^ ZCode[9][51] ^ ZCode[9][52] ^ ZCode[9][53] ^ ZCode[9][54] ^ ZCode[9][55] ^ ZCode[12][56] ^ ZCode[10][57] ^ ZCode[11][58] ^ ZCode[13][59] ^ ZCode[14][60] ^ ZCode[11][61] ^ ZCode[10][62] ^ ZCode[12][63];
+        beginBoard->ZobristHashCode ^= 0 ^ ZCode[4][0] ^ ZCode[2][1] ^ ZCode[3][2] ^ ZCode[5][3] ^ ZCode[6][4] ^ ZCode[3][5] ^ ZCode[2][6] ^ ZCode[4][7] ^ ZCode[1][8] ^ ZCode[1][9] ^ ZCode[1][10] ^ ZCode[1][11] ^ ZCode[1][12] ^ ZCode[1][13] ^ ZCode[1][14] ^ ZCode[1][15] ^ ZCode[9][48] ^ ZCode[9][49] ^ ZCode[9][50] ^ ZCode[9][51] ^ ZCode[9][52] ^ ZCode[9][53] ^ ZCode[9][54] ^ ZCode[9][55] ^ ZCode[12][56] ^ ZCode[10][57] ^ ZCode[11][58] ^ ZCode[13][59] ^ ZCode[14][60] ^ ZCode[11][61] ^ ZCode[10][62] ^ ZCode[12][63];
         initialized = true;
     }
 }

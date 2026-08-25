@@ -168,6 +168,194 @@ void RequireSemanticEquality(Board& actual, Board& expected)
     }
 }
 
+std::string CompareHashRelevantState(Board& actual, Board& expected)
+{
+    std::unique_ptr<Board> actualCopy(actual.MakeCopy());
+    std::unique_ptr<Board> expectedCopy(expected.MakeCopy());
+    actualCopy->ZobristHashCode = 0;
+    expectedCopy->ZobristHashCode = 0;
+
+    try
+    {
+        Board::AreBoardsEqual(*actualCopy, *expectedCopy);
+        return "equal";
+    }
+    catch (const std::exception& error)
+    {
+        return std::string("different: ") + error.what();
+    }
+}
+
+void ApplyMoves(Board& board, const std::vector<std::string>& moveTexts)
+{
+    Move previousMove{};
+
+    for (const std::string& moveText : moveTexts)
+    {
+        GeneratedMoves generatedMoves(board, 1, 0);
+        Move selectedMove{};
+        bool found = false;
+
+        for (int counter = 0; counter < generatedMoves.moveList.count; counter++)
+        {
+            Move& candidate = *generatedMoves.moveList.moves[counter];
+            if (MoveToString(candidate) == moveText)
+            {
+                selectedMove = candidate;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found)
+        {
+            throw std::runtime_error("Production move generator did not produce " + moveText);
+        }
+
+        int movingSide = board.sideToMove ? 1 : 0;
+        GameLogic::DoMove(board, selectedMove, previousMove, 1, 0);
+        if (!IsLegalAfterMove(board, movingSide))
+        {
+            throw std::runtime_error("Production move generator produced illegal requested move " + moveText);
+        }
+        previousMove = selectedMove;
+    }
+}
+
+int RequireEqualHashes(const std::string& testName, Board& actual, Board& expected)
+{
+    std::string semanticResult = CompareHashRelevantState(actual, expected);
+    if (actual.ZobristHashCode != expected.ZobristHashCode || semanticResult != "equal")
+    {
+        std::cerr << "Zobrist consistency failure for " << testName << '\n'
+                  << "  Expected relationship: actualHash == expectedHash\n"
+                  << "  Actual relationship: actualHash=" << actual.ZobristHashCode
+                  << ", expectedHash=" << expected.ZobristHashCode
+                  << ", xor=" << (actual.ZobristHashCode ^ expected.ZobristHashCode) << '\n'
+                  << "  Semantic board comparison: " << semanticResult << '\n';
+        return 1;
+    }
+
+    std::cout << "Zobrist " << testName << ": hashes and semantic state match\n";
+    return 0;
+}
+
+int RunZobristStartParity()
+{
+    std::unique_ptr<Board> startCopy(BoardInitializer::beginBoard->MakeCopy());
+    std::unique_ptr<Board> fenBoard(BoardMaker::MakeInitialBoard(Positions.front().fen));
+    return RequireEqualHashes("start position construction parity", *startCopy, *fenBoard);
+}
+
+int RunZobristMoveOrder()
+{
+    std::unique_ptr<Board> first(BoardInitializer::beginBoard->MakeCopy());
+    std::unique_ptr<Board> second(BoardInitializer::beginBoard->MakeCopy());
+    ApplyMoves(*first, {"g1f3", "g8f6", "b1c3", "b8c6"});
+    ApplyMoves(*second, {"b1c3", "b8c6", "g1f3", "g8f6"});
+    return RequireEqualHashes("move order transposition", *first, *second);
+}
+
+int RunZobristFenVersusMoves()
+{
+    std::unique_ptr<Board> moved(BoardInitializer::beginBoard->MakeCopy());
+    ApplyMoves(*moved, {"g1f3", "g8f6", "b1c3", "b8c6"});
+    std::unique_ptr<Board> fenBoard(BoardMaker::MakeInitialBoard(
+        "r1bqkb1r/pppppppp/2n2n2/8/8/2N2N2/PPPPPPPP/R1BQKB1R w KQkq - 0 3"));
+    return RequireEqualHashes("FEN versus production moves", *moved, *fenBoard);
+}
+
+int RunZobristSideToMove()
+{
+    std::unique_ptr<Board> white(BoardMaker::MakeInitialBoard(
+        "4k3/8/8/8/8/8/8/4K3 w - - 0 1"));
+    std::unique_ptr<Board> black(BoardMaker::MakeInitialBoard(
+        "4k3/8/8/8/8/8/8/4K3 b - - 0 1"));
+    std::unique_ptr<Board> normalizedBlack(black->MakeCopy());
+    normalizedBlack->sideToMove = white->sideToMove;
+    std::string semanticResult = CompareHashRelevantState(*white, *normalizedBlack);
+    long long actualDifference = white->ZobristHashCode ^ black->ZobristHashCode;
+    long long expectedDifference = BoardInitializer::ZCodeFlag[7];
+
+    if (actualDifference != expectedDifference || semanticResult != "equal")
+    {
+        std::cerr << "Zobrist consistency failure for side to move\n"
+                  << "  Expected relationship: whiteHash ^ blackHash == ZCodeFlag[7] ("
+                  << expectedDifference << ")\n"
+                  << "  Actual relationship: whiteHash ^ blackHash == " << actualDifference << '\n'
+                  << "  Semantic board comparison after normalizing side to move: "
+                  << semanticResult << '\n';
+        return 1;
+    }
+
+    std::cout << "Zobrist side to move: expected XOR relationship holds\n";
+    return 0;
+}
+
+int RunZobristCastlingRights()
+{
+    struct CastlingCase
+    {
+        const char* name;
+        const char* rights;
+        int flagIndex;
+        bool Board::*right;
+    };
+
+    const CastlingCase cases[] = {
+        {"white kingside", "Qkq", 6, &Board::whiteSmallCastle},
+        {"white queenside", "Kkq", 5, &Board::whiteBigCastle},
+        {"black kingside", "KQq", 4, &Board::blackSmallCastle},
+        {"black queenside", "KQk", 3, &Board::blackBigCastle}
+    };
+    const std::string placement = "r3k2r/8/8/8/8/8/8/R3K2R w ";
+    std::unique_ptr<Board> allRights(BoardMaker::MakeInitialBoard(
+        placement + "KQkq - 0 1"));
+
+    for (const CastlingCase& castlingCase : cases)
+    {
+        std::unique_ptr<Board> withoutRight(BoardMaker::MakeInitialBoard(
+            placement + castlingCase.rights + " - 0 1"));
+        std::unique_ptr<Board> normalized(withoutRight->MakeCopy());
+        normalized.get()->*(castlingCase.right) = allRights.get()->*(castlingCase.right);
+        std::string semanticResult = CompareHashRelevantState(*allRights, *normalized);
+        long long actualDifference = allRights->ZobristHashCode ^ withoutRight->ZobristHashCode;
+        long long expectedDifference = BoardInitializer::ZCodeFlag[castlingCase.flagIndex];
+
+        if (actualDifference != expectedDifference || semanticResult != "equal")
+        {
+            std::cerr << "Zobrist consistency failure for " << castlingCase.name
+                      << " castling right\n"
+                      << "  Expected relationship: withRightHash ^ withoutRightHash == ZCodeFlag["
+                      << castlingCase.flagIndex << "] (" << expectedDifference << ")\n"
+                      << "  Actual relationship: withRightHash ^ withoutRightHash == "
+                      << actualDifference << '\n'
+                      << "  Semantic board comparison after normalizing the castling right: "
+                      << semanticResult << '\n';
+            return 1;
+        }
+    }
+
+    std::cout << "Zobrist castling rights: all expected XOR relationships hold\n";
+    return 0;
+}
+
+int RunZobrist(const std::string& testCase)
+{
+    if (testCase == "start_parity")
+        return RunZobristStartParity();
+    if (testCase == "move_order")
+        return RunZobristMoveOrder();
+    if (testCase == "fen_vs_moves")
+        return RunZobristFenVersusMoves();
+    if (testCase == "side_to_move")
+        return RunZobristSideToMove();
+    if (testCase == "castling_rights")
+        return RunZobristCastlingRights();
+
+    throw std::runtime_error("Unknown Zobrist test case: " + testCase);
+}
+
 std::uint64_t Perft(Board& board, int depth, Move& previousMove)
 {
     if (depth == 0)
@@ -322,15 +510,21 @@ int main(int argc, char* argv[])
 {
     if (argc != 3)
     {
-        std::cerr << "Usage: howl_correctness_tests <perft|restoration> <position>\n";
+        std::cerr << "Usage: howl_correctness_tests <perft|restoration|zobrist> <case>\n";
         return 2;
     }
 
     try
     {
         InitializeEngine();
-        const PerftPosition& position = FindPosition(argv[2]);
         std::string testType = argv[1];
+
+        if (testType == "zobrist")
+        {
+            return RunZobrist(argv[2]);
+        }
+
+        const PerftPosition& position = FindPosition(argv[2]);
 
         if (testType == "perft")
         {
