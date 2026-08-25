@@ -15,6 +15,27 @@ if(BUILD_TESTING)
         ${TEST_ENGINE_SOURCES}
     )
     target_include_directories(howl_correctness_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_definitions(howl_correctness_tests PRIVATE HOWL_CORRECTNESS_TESTING=1)
+
+    add_executable(howl_benchmark
+        tests/Benchmark.cpp
+        ${TEST_ENGINE_SOURCES}
+    )
+    target_include_directories(howl_benchmark PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_definitions(howl_benchmark PRIVATE
+        HOWL_BENCHMARK_RELEASE=$<IF:$<CONFIG:Release>,1,0>
+        HOWL_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+
+    add_executable(howl_memory_stress
+        tests/MemoryStress.cpp
+        ${TEST_ENGINE_SOURCES}
+    )
+    target_include_directories(howl_memory_stress PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_definitions(howl_memory_stress PRIVATE
+        HOWL_MEMORY_STRESS_RELEASE=$<IF:$<CONFIG:Release>,1,0>
+        HOWL_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    )
 
     foreach(POSITION start kiwipete position3 position4 position5 position6)
         add_test(
@@ -40,4 +61,20 @@ if(BUILD_TESTING)
             COMMAND howl_correctness_tests search ${SEARCH_CASE}
         )
     endforeach()
+
+    foreach(CACHE_CASE evaluation evaluation_rook_ordering evaluation_rook_connection evaluation_fixed_table exchange exchange_variants pawn_key exchange_promotion_key exchange_wrong_lookup exchange_field_collision exchange_attacker_bounds exchange_power_two_bounds exchange_legacy_equivalence exchange_fixed_table)
+        add_test(
+            NAME cache_${CACHE_CASE}
+            COMMAND howl_correctness_tests cache ${CACHE_CASE}
+        )
+    endforeach()
+
+    add_test(
+        NAME lifecycle_fen_replacement
+        COMMAND howl_correctness_tests lifecycle fen_replacement
+    )
+    add_test(
+        NAME memory_hash_budget
+        COMMAND howl_correctness_tests memory hash_budget
+    )
 endif()

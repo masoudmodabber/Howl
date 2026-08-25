@@ -9,11 +9,73 @@
 #include "Option.h"
 #include "PieceMoves.h"
 #include <algorithm>
+#include <cstdint>
+
+namespace
+{
+constexpr std::uint32_t PackedAttackerUnits[7] = {
+    0,
+    std::uint32_t{1} << 0,
+    std::uint32_t{1} << 2,
+    std::uint32_t{1} << 6,
+    std::uint32_t{1} << 9,
+    std::uint32_t{1} << 12,
+    std::uint32_t{1} << 16
+};
+
+constexpr std::uint32_t PackedAttackerMasks[7] = {
+    0,
+    std::uint32_t{0x3} << 0,
+    std::uint32_t{0xf} << 2,
+    std::uint32_t{0x7} << 6,
+    std::uint32_t{0x7} << 9,
+    std::uint32_t{0xf} << 12,
+    std::uint32_t{0x1} << 16
+};
+
+void AddPackedAttacker(std::uint32_t& attackers, int pieceType)
+{
+    attackers += PackedAttackerUnits[pieceType];
+}
+
+int PopLeastValuableAttacker(std::uint32_t& attackers)
+{
+    for (int pieceType = 1; pieceType <= 6; ++pieceType)
+    {
+        if ((attackers & PackedAttackerMasks[pieceType]) != 0)
+        {
+            attackers -= PackedAttackerUnits[pieceType];
+            return pieceType;
+        }
+    }
+    return 0;
+}
+
+bool IsSoleAttacker(std::uint32_t attackers, int pieceType)
+{
+    return attackers == PackedAttackerUnits[pieceType];
+}
+
+int NormalizeExchangePiece(int piece)
+{
+    return piece > 8 ? piece - 8 : piece;
+}
+
+std::uint64_t MakeExchangeKey(std::uint32_t attacker, std::uint32_t defender,
+                              int beginPiece, int endPiece, int promotionPiece)
+{
+    return static_cast<std::uint64_t>(attacker)
+        | (static_cast<std::uint64_t>(defender) << 17)
+        | (static_cast<std::uint64_t>(beginPiece) << 34)
+        | (static_cast<std::uint64_t>(NormalizeExchangePiece(endPiece)) << 37)
+        | (static_cast<std::uint64_t>(promotionPiece % 8) << 40);
+}
+}
 
 double MoveLogic::pieceValue[15];
 int MoveLogic::pieceMoveStack[15];
-ChessCache MoveLogic::ExchangeCache;
-ChessCache MoveLogic::ExchangeCacheWithoutBeginPiece;
+ExchangeChessCache MoveLogic::ExchangeCache;
+ExchangeChessCache MoveLogic::ExchangeCacheWithoutBeginPiece;
 
 bool MoveLogic::initialized = false;
 
@@ -59,8 +121,8 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
     {
         int x = 1;
     }
-    int **whiteAttacker = SetWhiteAttacker(thisBoard);
-    int **blackAttacker = SetBlackAttacker(thisBoard);
+    AttackerState whiteAttacker = SetWhiteAttacker(thisBoard);
+    AttackerState blackAttacker = SetBlackAttacker(thisBoard);
     long long whitePieces = thisBoard.whitePieces;
     long long blackPieces = thisBoard.blackPieces;
     int *mainBoard = thisBoard.mainBoard;
@@ -82,7 +144,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         if ((PieceMoves::pawnTwoMove[piecePosition] & wholeBoard) == 0)
                         {
                             newMove->endPiece = mainBoard[newMove->endPlace];
-                            newMove->value = ExchangeWithoutBeginPiece(whiteAttacker[0][newMove->endPlace], blackAttacker[0][newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
+                            newMove->value = ExchangeWithoutBeginPiece(whiteAttacker.pieceCounts[newMove->endPlace], blackAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
                             complicatedMoves[complicatedCount++] = newMove;
                         }
                         else
@@ -95,7 +157,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         Move *newMove = MoveCopy(PieceMoves::WhitePawnMoves[piecePosition][1]);
                         newMove->endPiece = mainBoard[newMove->endPlace];
-                        newMove->value = ExchangeWithoutBeginPiece(whiteAttacker[0][newMove->endPlace], blackAttacker[0][newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
+                        newMove->value = ExchangeWithoutBeginPiece(whiteAttacker.pieceCounts[newMove->endPlace], blackAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
                         complicatedMoves[complicatedCount++] = newMove;
                     }
                     if (PieceMoves::WhitePawnMoves[piecePosition][2] != nullptr && (Option::PowerTwo[piecePosition + 8] & wholeBoard) == 0)
@@ -104,7 +166,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         {
                             Move *newMove = MoveCopy(PieceMoves::WhitePawnMoves[piecePosition][i]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
-                            newMove->value = ExchangeWithoutBeginPiece(whiteAttacker[0][newMove->endPlace], blackAttacker[0][newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 5 - (i - 2));
+                            newMove->value = ExchangeWithoutBeginPiece(whiteAttacker.pieceCounts[newMove->endPlace], blackAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 5 - (i - 2));
                             complicatedMoves[complicatedCount++] = newMove;
                         }
                     }
@@ -657,7 +719,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                 {
                     int endPlace;
                     endPlace = piecePosition + 7;
-                    if (PieceMoves::WhiteKingMoves[piecePosition][0] != nullptr && blackAttacker[0][endPlace] == 0)
+                    if (PieceMoves::WhiteKingMoves[piecePosition][0] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
@@ -672,7 +734,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         }
                     }
                     endPlace = piecePosition + 8;
-                    if (PieceMoves::WhiteKingMoves[piecePosition][2] != nullptr && blackAttacker[0][endPlace] == 0)
+                    if (PieceMoves::WhiteKingMoves[piecePosition][2] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
@@ -687,7 +749,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         }
                     }
                     endPlace = piecePosition + 9;
-                    if (PieceMoves::WhiteKingMoves[piecePosition][4] != nullptr && blackAttacker[0][endPlace] == 0)
+                    if (PieceMoves::WhiteKingMoves[piecePosition][4] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
@@ -702,7 +764,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         }
                     }
                     endPlace = piecePosition + 1;
-                    if (PieceMoves::WhiteKingMoves[piecePosition][6] != nullptr && blackAttacker[0][endPlace] == 0)
+                    if (PieceMoves::WhiteKingMoves[piecePosition][6] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
@@ -717,7 +779,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         }
                     }
                     endPlace = piecePosition - 7;
-                    if (PieceMoves::WhiteKingMoves[piecePosition][8] != nullptr && blackAttacker[0][endPlace] == 0)
+                    if (PieceMoves::WhiteKingMoves[piecePosition][8] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
@@ -732,7 +794,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         }
                     }
                     endPlace = piecePosition - 8;
-                    if (PieceMoves::WhiteKingMoves[piecePosition][10] != nullptr && blackAttacker[0][endPlace] == 0)
+                    if (PieceMoves::WhiteKingMoves[piecePosition][10] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
@@ -747,7 +809,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         }
                     }
                     endPlace = piecePosition - 9;
-                    if (PieceMoves::WhiteKingMoves[piecePosition][12] != nullptr && blackAttacker[0][endPlace] == 0)
+                    if (PieceMoves::WhiteKingMoves[piecePosition][12] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
@@ -762,7 +824,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         }
                     }
                     endPlace = piecePosition - 1;
-                    if (PieceMoves::WhiteKingMoves[piecePosition][14] != nullptr && blackAttacker[0][endPlace] == 0)
+                    if (PieceMoves::WhiteKingMoves[piecePosition][14] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
@@ -776,13 +838,13 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                             moveList.moves[moveList.count++] = newMove;
                         }
                     }
-                    if (thisBoard.whiteSmallCastle && blackAttacker[0][4] == 0 && blackAttacker[0][5] == 0 && blackAttacker[0][6] == 0 && mainBoard[5] == 0 && mainBoard[6] == 0)
+                    if (thisBoard.whiteSmallCastle && blackAttacker.pieceCounts[4] == 0 && blackAttacker.pieceCounts[5] == 0 && blackAttacker.pieceCounts[6] == 0 && mainBoard[5] == 0 && mainBoard[6] == 0)
                     {
                         Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][16]);
                         newMove->value = 50;
                         complicatedMoves[complicatedCount++] = newMove;
                     }
-                    if (thisBoard.whiteBigCastle && blackAttacker[0][4] == 0 && blackAttacker[0][3] == 0 && blackAttacker[0][2] == 0 && mainBoard[3] == 0 && mainBoard[2] == 0 && mainBoard[1] == 0)
+                    if (thisBoard.whiteBigCastle && blackAttacker.pieceCounts[4] == 0 && blackAttacker.pieceCounts[3] == 0 && blackAttacker.pieceCounts[2] == 0 && mainBoard[3] == 0 && mainBoard[2] == 0 && mainBoard[1] == 0)
                     {
                         Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][17]);
                         newMove->value = 50;
@@ -803,14 +865,14 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
             case 9:
                 for (int piecePosition : thisBoard.pieces[piece])
                 {
-                    int exchangeInPlace = -ExchangeWithoutBeginPiece(blackAttacker[0][piecePosition], whiteAttacker[0][piecePosition], piecePosition, piece - 8, 0, 0);
+                    int exchangeInPlace = -ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[piecePosition], whiteAttacker.pieceCounts[piecePosition], piecePosition, piece - 8, 0, 0);
                     if (PieceMoves::BlackPawnMoves[piecePosition][0] != nullptr)
                     {
                         if ((PieceMoves::pawnTwoMove[piecePosition] & wholeBoard) == 0)
                         {
                             Move *newMove = MoveCopy(PieceMoves::BlackPawnMoves[piecePosition][0]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
-                            newMove->value = ExchangeWithoutBeginPiece(blackAttacker[0][newMove->endPlace], whiteAttacker[0][newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
+                            newMove->value = ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[newMove->endPlace], whiteAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
                             complicatedMoves[complicatedCount++] = newMove;
                         }
                     }
@@ -818,7 +880,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         Move *newMove = MoveCopy(PieceMoves::BlackPawnMoves[piecePosition][1]);
                         newMove->endPiece = mainBoard[newMove->endPlace];
-                        newMove->value = ExchangeWithoutBeginPiece(blackAttacker[0][newMove->endPlace], whiteAttacker[0][newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
+                        newMove->value = ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[newMove->endPlace], whiteAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
                         complicatedMoves[complicatedCount++] = newMove;
                     }
                     if (PieceMoves::BlackPawnMoves[piecePosition][2] != nullptr && (Option::PowerTwo[piecePosition - 8] & wholeBoard) == 0)
@@ -827,7 +889,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         {
                             Move *newMove = MoveCopy(PieceMoves::BlackPawnMoves[piecePosition][i]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
-                            newMove->value = ExchangeWithoutBeginPiece(blackAttacker[0][newMove->endPlace], whiteAttacker[0][newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 5 - (i - 2));
+                            newMove->value = ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[newMove->endPlace], whiteAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 5 - (i - 2));
                             complicatedMoves[complicatedCount++] = newMove;
                         }
                     }
@@ -1380,7 +1442,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                 {
                     int endPlace;
                     endPlace = piecePosition + 7;
-                    if (PieceMoves::BlackKingMoves[piecePosition][0] != nullptr && whiteAttacker[0][endPlace] == 0)
+                    if (PieceMoves::BlackKingMoves[piecePosition][0] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
@@ -1395,7 +1457,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         }
                     }
                     endPlace = piecePosition + 8;
-                    if (PieceMoves::BlackKingMoves[piecePosition][2] != nullptr && whiteAttacker[0][endPlace] == 0)
+                    if (PieceMoves::BlackKingMoves[piecePosition][2] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
@@ -1410,7 +1472,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         }
                     }
                     endPlace = piecePosition + 9;
-                    if (PieceMoves::BlackKingMoves[piecePosition][4] != nullptr && whiteAttacker[0][endPlace] == 0)
+                    if (PieceMoves::BlackKingMoves[piecePosition][4] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
@@ -1425,7 +1487,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         }
                     }
                     endPlace = piecePosition + 1;
-                    if (PieceMoves::BlackKingMoves[piecePosition][6] != nullptr && whiteAttacker[0][endPlace] == 0)
+                    if (PieceMoves::BlackKingMoves[piecePosition][6] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
@@ -1440,7 +1502,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         }
                     }
                     endPlace = piecePosition - 7;
-                    if (PieceMoves::BlackKingMoves[piecePosition][8] != nullptr && whiteAttacker[0][endPlace] == 0)
+                    if (PieceMoves::BlackKingMoves[piecePosition][8] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
@@ -1455,7 +1517,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         }
                     }
                     endPlace = piecePosition - 8;
-                    if (PieceMoves::BlackKingMoves[piecePosition][10] != nullptr && whiteAttacker[0][endPlace] == 0)
+                    if (PieceMoves::BlackKingMoves[piecePosition][10] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
@@ -1470,7 +1532,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         }
                     }
                     endPlace = piecePosition - 9;
-                    if (PieceMoves::BlackKingMoves[piecePosition][12] != nullptr && whiteAttacker[0][endPlace] == 0)
+                    if (PieceMoves::BlackKingMoves[piecePosition][12] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
@@ -1485,7 +1547,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         }
                     }
                     endPlace = piecePosition - 1;
-                    if (PieceMoves::BlackKingMoves[piecePosition][14] != nullptr && whiteAttacker[0][endPlace] == 0)
+                    if (PieceMoves::BlackKingMoves[piecePosition][14] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
@@ -1499,13 +1561,13 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                             moveList.moves[moveList.count++] = newMove;
                         }
                     }
-                    if (thisBoard.blackSmallCastle && whiteAttacker[0][60] == 0 && whiteAttacker[0][61] == 0 && whiteAttacker[0][62] == 0 && mainBoard[61] == 0 && mainBoard[62] == 0)
+                    if (thisBoard.blackSmallCastle && whiteAttacker.pieceCounts[60] == 0 && whiteAttacker.pieceCounts[61] == 0 && whiteAttacker.pieceCounts[62] == 0 && mainBoard[61] == 0 && mainBoard[62] == 0)
                     {
                         Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][16]);
                         newMove->value = 25;
                         complicatedMoves[complicatedCount++] = newMove;
                     }
-                    if (thisBoard.blackBigCastle && whiteAttacker[0][60] == 0 && whiteAttacker[0][59] == 0 && whiteAttacker[0][58] == 0 && mainBoard[59] == 0 && mainBoard[58] == 0 && mainBoard[57] == 0)
+                    if (thisBoard.blackBigCastle && whiteAttacker.pieceCounts[60] == 0 && whiteAttacker.pieceCounts[59] == 0 && whiteAttacker.pieceCounts[58] == 0 && mainBoard[59] == 0 && mainBoard[58] == 0 && mainBoard[57] == 0)
                     {
                         Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][17]);
                         newMove->value = 25;
@@ -1533,8 +1595,8 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
         {
             Move* move = moveList.moves[i];
             int beginPiece = mainBoard[move->beginPlace] % 8;
-            move->value = Exchange(blackAttacker[0][move->endPlace], whiteAttacker[0][move->endPlace], move->endPlace, beginPiece, move->endPiece, move->promotionPiece);
-            move->value += whiteAttacker[1][move->beginPlace] + whiteAttacker[1][move->endPlace];
+            move->value = Exchange(blackAttacker.pieceCounts[move->endPlace], whiteAttacker.pieceCounts[move->endPlace], move->endPlace, beginPiece, move->endPiece, move->promotionPiece);
+            move->value += whiteAttacker.orderingScores[move->beginPlace] + whiteAttacker.orderingScores[move->endPlace];
             move->value += Option::MoveOrderingValueBlack[state][beginPiece][move->endPlace];
         }
     }
@@ -1544,8 +1606,8 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
         {
             Move* move = moveList.moves[i];
             int beginPiece = mainBoard[move->beginPlace];
-            move->value = Exchange(whiteAttacker[0][move->endPlace], blackAttacker[0][move->endPlace], move->endPlace, beginPiece, move->endPiece % 8, move->promotionPiece);
-            move->value += blackAttacker[1][move->beginPlace] + blackAttacker[1][move->endPlace];
+            move->value = Exchange(whiteAttacker.pieceCounts[move->endPlace], blackAttacker.pieceCounts[move->endPlace], move->endPlace, beginPiece, move->endPiece % 8, move->promotionPiece);
+            move->value += blackAttacker.orderingScores[move->beginPlace] + blackAttacker.orderingScores[move->endPlace];
             move->value += Option::MoveOrderingValueWhite[state][beginPiece][move->endPlace];
         }
     }
@@ -1560,26 +1622,19 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
     std::sort(moveList.moves, moveList.moves + moveList.count, [](const Move *a, const Move *b)
               { return b->value < a->value; });
 
-    for (int i = 0; i < 2; ++i)
-    {
-        delete[] whiteAttacker[i];
-        delete[] blackAttacker[i];
-    }
-    delete[] whiteAttacker;
-    delete[] blackAttacker;
+    delete[] whiteAttacker.pieceCounts;
+    delete[] whiteAttacker.orderingScores;
+    delete[] blackAttacker.pieceCounts;
+    delete[] blackAttacker.orderingScores;
 
     return moveList;
 }
 // NOTE: You must also replace all Moves->push_back and ComplicatedMoves->push_back in the body with the array logic as described above.
 // The rest of the function logic remains the same, just replace vector operations with array operations.
 
-int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
+AttackerState MoveLogic::SetWhiteAttacker(Board &thisBoard)
 {
-    int **whiteAttacker = new int *[2];
-    for (int i = 0; i < 2; ++i)
-    {
-        whiteAttacker[i] = new int[64]();
-    }
+    AttackerState whiteAttacker = {new std::uint32_t[64](), new int[64]()};
     long long whitePieces = thisBoard.whitePieces;
     long long blackPieces = thisBoard.blackPieces;
     int *mainBoard = thisBoard.mainBoard;
@@ -1595,65 +1650,65 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                 int endPlace = piecePosition + 7;
                 if (PieceMoves::WhiteKingMoves[piecePosition][0] != nullptr)
                 {
-                    whiteAttacker[0][endPlace] = whiteAttacker[0][endPlace] * 8 + 6;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 6);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
 
                 endPlace = piecePosition + 8;
                 if (PieceMoves::WhiteKingMoves[piecePosition][2] != nullptr)
                 {
-                    whiteAttacker[0][endPlace] = whiteAttacker[0][endPlace] * 8 + 6;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 6);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
 
                 endPlace = piecePosition + 9;
                 if (PieceMoves::WhiteKingMoves[piecePosition][4] != nullptr)
                 {
-                    whiteAttacker[0][endPlace] = whiteAttacker[0][endPlace] * 8 + 6;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 6);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
 
                 endPlace = piecePosition + 1;
                 if (PieceMoves::WhiteKingMoves[piecePosition][6] != nullptr)
                 {
-                    whiteAttacker[0][endPlace] = whiteAttacker[0][endPlace] * 8 + 6;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 6);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
 
                 endPlace = piecePosition - 7;
                 if (PieceMoves::WhiteKingMoves[piecePosition][8] != nullptr)
                 {
-                    whiteAttacker[0][endPlace] = whiteAttacker[0][endPlace] * 8 + 6;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 6);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
 
                 endPlace = piecePosition - 8;
                 if (PieceMoves::WhiteKingMoves[piecePosition][10] != nullptr)
                 {
-                    whiteAttacker[0][endPlace] = whiteAttacker[0][endPlace] * 8 + 6;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 6);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
 
                 endPlace = piecePosition - 9;
                 if (PieceMoves::WhiteKingMoves[piecePosition][12] != nullptr)
                 {
-                    whiteAttacker[0][endPlace] = whiteAttacker[0][endPlace] * 8 + 6;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 6);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
 
                 endPlace = piecePosition - 1;
                 if (PieceMoves::WhiteKingMoves[piecePosition][14] != nullptr)
                 {
-                    whiteAttacker[0][endPlace] = whiteAttacker[0][endPlace] * 8 + 6;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 6);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
             }
             break;
@@ -1665,13 +1720,13 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                     int endPos = PieceMoves::QueenMoves[piecePosition][0][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 5;
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
                     }
                     else
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 5;
-                        whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
+                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -1681,13 +1736,13 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                     int endPos = PieceMoves::QueenMoves[piecePosition][2][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 5;
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
                     }
                     else
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 5;
-                        whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
+                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -1697,13 +1752,13 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                     int endPos = PieceMoves::QueenMoves[piecePosition][4][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 5;
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
                     }
                     else
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 5;
-                        whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
+                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -1713,13 +1768,13 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                     int endPos = PieceMoves::QueenMoves[piecePosition][6][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 5;
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
                     }
                     else
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 5;
-                        whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
+                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -1729,13 +1784,13 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                     int endPos = PieceMoves::QueenMoves[piecePosition][8][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 5;
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
                     }
                     else
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 5;
-                        whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
+                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -1745,13 +1800,13 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                     int endPos = PieceMoves::QueenMoves[piecePosition][10][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 5;
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
                     }
                     else
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 5;
-                        whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
+                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -1761,13 +1816,13 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                     int endPos = PieceMoves::QueenMoves[piecePosition][12][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 5;
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
                     }
                     else
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 5;
-                        whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
+                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -1777,13 +1832,13 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                     int endPos = PieceMoves::QueenMoves[piecePosition][14][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 5;
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
                     }
                     else
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 5;
-                        whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
+                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -1797,13 +1852,13 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                     int endPos = PieceMoves::RookMoves[piecePosition][0][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 4;
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 4);
                     }
                     else
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 4;
-                        whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 4);
+                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -1813,13 +1868,13 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                     int endPos = PieceMoves::RookMoves[piecePosition][2][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 4;
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 4);
                     }
                     else
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 4;
-                        whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 4);
+                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -1829,13 +1884,13 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                     int endPos = PieceMoves::RookMoves[piecePosition][4][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 4;
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 4);
                     }
                     else
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 4;
-                        whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 4);
+                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -1845,13 +1900,13 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                     int endPos = PieceMoves::RookMoves[piecePosition][6][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 4;
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 4);
                     }
                     else
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 4;
-                        whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 4);
+                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -1866,13 +1921,13 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                     int endPos = PieceMoves::BishopMoves[piecePosition][0][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 3;
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 3);
                     }
                     else
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 3;
-                        whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 3);
+                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -1882,13 +1937,13 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                     int endPos = PieceMoves::BishopMoves[piecePosition][2][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 3;
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 3);
                     }
                     else
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 3;
-                        whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 3);
+                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -1898,13 +1953,13 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                     int endPos = PieceMoves::BishopMoves[piecePosition][4][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 3;
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 3);
                     }
                     else
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 3;
-                        whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 3);
+                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -1914,13 +1969,13 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                     int endPos = PieceMoves::BishopMoves[piecePosition][6][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 3;
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 3);
                     }
                     else
                     {
-                        whiteAttacker[0][endPos] = whiteAttacker[0][endPos] * 8 + 3;
-                        whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 3);
+                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -1933,58 +1988,58 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
                 int endPlace = piecePosition + 17;
                 if (PieceMoves::KnightMoves[piecePosition][0] != nullptr)
                 {
-                    whiteAttacker[0][endPlace] = whiteAttacker[0][endPlace] * 8 + 2;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 2);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition + 10;
                 if (PieceMoves::KnightMoves[piecePosition][2] != nullptr)
                 {
-                    whiteAttacker[0][endPlace] = whiteAttacker[0][endPlace] * 8 + 2;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 2);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition + 15;
                 if (PieceMoves::KnightMoves[piecePosition][4] != nullptr)
                 {
-                    whiteAttacker[0][endPlace] = whiteAttacker[0][endPlace] * 8 + 2;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 2);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition + 6;
                 if (PieceMoves::KnightMoves[piecePosition][6] != nullptr)
                 {
-                    whiteAttacker[0][endPlace] = whiteAttacker[0][endPlace] * 8 + 2;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 2);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition - 10;
                 if (PieceMoves::KnightMoves[piecePosition][8] != nullptr)
                 {
-                    whiteAttacker[0][endPlace] = whiteAttacker[0][endPlace] * 8 + 2;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 2);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition - 17;
                 if (PieceMoves::KnightMoves[piecePosition][10] != nullptr)
                 {
-                    whiteAttacker[0][endPlace] = whiteAttacker[0][endPlace] * 8 + 2;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 2);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition - 15;
                 if (PieceMoves::KnightMoves[piecePosition][12] != nullptr)
                 {
-                    whiteAttacker[0][endPlace] = whiteAttacker[0][endPlace] * 8 + 2;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 2);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition - 6;
                 if (PieceMoves::KnightMoves[piecePosition][14] != nullptr)
                 {
-                    whiteAttacker[0][endPlace] = whiteAttacker[0][endPlace] * 8 + 2;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 2);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
             }
             break;
@@ -1994,15 +2049,15 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
             {
                 if (PieceMoves::WhitePawnMoves[piecePosition][8] != nullptr || PieceMoves::WhitePawnMoves[piecePosition][9] != nullptr)
                 {
-                    whiteAttacker[0][piecePosition + 7] = whiteAttacker[0][piecePosition + 7] * 8 + 1;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[piecePosition + 7]];
-                    whiteAttacker[1][piecePosition + 7] += Option::AttackValueMovement[piece][mainBoard[piecePosition + 7]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[piecePosition + 7], 1);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[piecePosition + 7]];
+                    whiteAttacker.orderingScores[piecePosition + 7] += Option::AttackValueMovement[piece][mainBoard[piecePosition + 7]];
                 }
                 if (PieceMoves::WhitePawnMoves[piecePosition][13] != nullptr || PieceMoves::WhitePawnMoves[piecePosition][14] != nullptr)
                 {
-                    whiteAttacker[0][piecePosition + 9] = whiteAttacker[0][piecePosition + 9] * 8 + 1;
-                    whiteAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[piecePosition + 9]];
-                    whiteAttacker[1][piecePosition + 9] += Option::AttackValueMovement[piece][mainBoard[piecePosition + 9]];
+                    AddPackedAttacker(whiteAttacker.pieceCounts[piecePosition + 9], 1);
+                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[piecePosition + 9]];
+                    whiteAttacker.orderingScores[piecePosition + 9] += Option::AttackValueMovement[piece][mainBoard[piecePosition + 9]];
                 }
             }
             break;
@@ -2011,13 +2066,9 @@ int **MoveLogic::SetWhiteAttacker(Board &thisBoard)
     return whiteAttacker;
 }
 
-int **MoveLogic::SetBlackAttacker(Board &thisBoard)
+AttackerState MoveLogic::SetBlackAttacker(Board &thisBoard)
 {
-    int **blackAttacker = new int *[2];
-    for (int i = 0; i < 2; ++i)
-    {
-        blackAttacker[i] = new int[64]();
-    }
+    AttackerState blackAttacker = {new std::uint32_t[64](), new int[64]()};
     long long whitePieces = thisBoard.whitePieces;
     long long blackPieces = thisBoard.blackPieces;
     int *mainBoard = thisBoard.mainBoard;
@@ -2033,58 +2084,58 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                 int endPlace = piecePosition + 7;
                 if (PieceMoves::BlackKingMoves[piecePosition][0] != nullptr)
                 {
-                    blackAttacker[0][endPlace] = blackAttacker[0][endPlace] * 8 + 6;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 6);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition + 8;
                 if (PieceMoves::BlackKingMoves[piecePosition][2] != nullptr)
                 {
-                    blackAttacker[0][endPlace] = blackAttacker[0][endPlace] * 8 + 6;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 6);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition + 9;
                 if (PieceMoves::BlackKingMoves[piecePosition][4] != nullptr)
                 {
-                    blackAttacker[0][endPlace] = blackAttacker[0][endPlace] * 8 + 6;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 6);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition + 1;
                 if (PieceMoves::BlackKingMoves[piecePosition][6] != nullptr)
                 {
-                    blackAttacker[0][endPlace] = blackAttacker[0][endPlace] * 8 + 6;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 6);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition - 7;
                 if (PieceMoves::BlackKingMoves[piecePosition][8] != nullptr)
                 {
-                    blackAttacker[0][endPlace] = blackAttacker[0][endPlace] * 8 + 6;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 6);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition - 8;
                 if (PieceMoves::BlackKingMoves[piecePosition][10] != nullptr)
                 {
-                    blackAttacker[0][endPlace] = blackAttacker[0][endPlace] * 8 + 6;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 6);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition - 9;
                 if (PieceMoves::BlackKingMoves[piecePosition][12] != nullptr)
                 {
-                    blackAttacker[0][endPlace] = blackAttacker[0][endPlace] * 8 + 6;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 6);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition - 1;
                 if (PieceMoves::BlackKingMoves[piecePosition][14] != nullptr)
                 {
-                    blackAttacker[0][endPlace] = blackAttacker[0][endPlace] * 8 + 6;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 6);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
             }
             break;
@@ -2096,13 +2147,13 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                     int endPos = PieceMoves::QueenMoves[piecePosition][0][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 5;
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
                     }
                     else
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 5;
-                        blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
+                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -2111,13 +2162,13 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                     int endPos = PieceMoves::QueenMoves[piecePosition][2][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 5;
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
                     }
                     else
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 5;
-                        blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
+                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -2126,13 +2177,13 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                     int endPos = PieceMoves::QueenMoves[piecePosition][4][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 5;
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
                     }
                     else
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 5;
-                        blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
+                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -2141,13 +2192,13 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                     int endPos = PieceMoves::QueenMoves[piecePosition][6][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 5;
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
                     }
                     else
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 5;
-                        blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
+                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -2156,13 +2207,13 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                     int endPos = PieceMoves::QueenMoves[piecePosition][8][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 5;
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
                     }
                     else
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 5;
-                        blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
+                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -2171,13 +2222,13 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                     int endPos = PieceMoves::QueenMoves[piecePosition][10][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 5;
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
                     }
                     else
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 5;
-                        blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
+                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -2186,13 +2237,13 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                     int endPos = PieceMoves::QueenMoves[piecePosition][12][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 5;
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
                     }
                     else
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 5;
-                        blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
+                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -2201,13 +2252,13 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                     int endPos = PieceMoves::QueenMoves[piecePosition][14][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 5;
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
                     }
                     else
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 5;
-                        blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
+                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -2221,13 +2272,13 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                     int endPos = PieceMoves::RookMoves[piecePosition][0][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 4;
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 4);
                     }
                     else
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 4;
-                        blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 4);
+                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -2236,13 +2287,13 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                     int endPos = PieceMoves::RookMoves[piecePosition][2][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 4;
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 4);
                     }
                     else
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 4;
-                        blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 4);
+                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -2251,13 +2302,13 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                     int endPos = PieceMoves::RookMoves[piecePosition][4][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 4;
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 4);
                     }
                     else
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 4;
-                        blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 4);
+                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -2266,13 +2317,13 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                     int endPos = PieceMoves::RookMoves[piecePosition][6][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 4;
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 4);
                     }
                     else
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 4;
-                        blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 4);
+                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -2286,13 +2337,13 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                     int endPos = PieceMoves::BishopMoves[piecePosition][0][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 3;
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 3);
                     }
                     else
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 3;
-                        blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 3);
+                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -2301,13 +2352,13 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                     int endPos = PieceMoves::BishopMoves[piecePosition][2][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 3;
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 3);
                     }
                     else
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 3;
-                        blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 3);
+                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -2316,13 +2367,13 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                     int endPos = PieceMoves::BishopMoves[piecePosition][4][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 3;
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 3);
                     }
                     else
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 3;
-                        blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 3);
+                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -2331,13 +2382,13 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                     int endPos = PieceMoves::BishopMoves[piecePosition][6][counter]->endPlace;
                     if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 3;
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 3);
                     }
                     else
                     {
-                        blackAttacker[0][endPos] = blackAttacker[0][endPos] * 8 + 3;
-                        blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker[1][endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 3);
+                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
+                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
                         break;
                     }
                 }
@@ -2349,58 +2400,58 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
                 int endPlace = piecePosition + 17;
                 if (PieceMoves::KnightMoves[piecePosition][0] != nullptr)
                 {
-                    blackAttacker[0][endPlace] = blackAttacker[0][endPlace] * 8 + 2;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 2);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition + 10;
                 if (PieceMoves::KnightMoves[piecePosition][2] != nullptr)
                 {
-                    blackAttacker[0][endPlace] = blackAttacker[0][endPlace] * 8 + 2;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 2);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition + 15;
                 if (PieceMoves::KnightMoves[piecePosition][4] != nullptr)
                 {
-                    blackAttacker[0][endPlace] = blackAttacker[0][endPlace] * 8 + 2;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 2);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition + 6;
                 if (PieceMoves::KnightMoves[piecePosition][6] != nullptr)
                 {
-                    blackAttacker[0][endPlace] = blackAttacker[0][endPlace] * 8 + 2;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 2);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition - 10;
                 if (PieceMoves::KnightMoves[piecePosition][8] != nullptr)
                 {
-                    blackAttacker[0][endPlace] = blackAttacker[0][endPlace] * 8 + 2;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 2);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition - 17;
                 if (PieceMoves::KnightMoves[piecePosition][10] != nullptr)
                 {
-                    blackAttacker[0][endPlace] = blackAttacker[0][endPlace] * 8 + 2;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 2);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition - 15;
                 if (PieceMoves::KnightMoves[piecePosition][12] != nullptr)
                 {
-                    blackAttacker[0][endPlace] = blackAttacker[0][endPlace] * 8 + 2;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 2);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
                 endPlace = piecePosition - 6;
                 if (PieceMoves::KnightMoves[piecePosition][14] != nullptr)
                 {
-                    blackAttacker[0][endPlace] = blackAttacker[0][endPlace] * 8 + 2;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker[1][endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 2);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
+                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
                 }
             }
             break;
@@ -2409,15 +2460,15 @@ int **MoveLogic::SetBlackAttacker(Board &thisBoard)
             {
                 if (PieceMoves::BlackPawnMoves[piecePosition][8] != nullptr || PieceMoves::BlackPawnMoves[piecePosition][9] != nullptr)
                 {
-                    blackAttacker[0][piecePosition - 7] = blackAttacker[0][piecePosition - 7] * 8 + 1;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[piecePosition - 7]];
-                    blackAttacker[1][piecePosition - 7] += Option::AttackValueMovement[piece][mainBoard[piecePosition - 7]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[piecePosition - 7], 1);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[piecePosition - 7]];
+                    blackAttacker.orderingScores[piecePosition - 7] += Option::AttackValueMovement[piece][mainBoard[piecePosition - 7]];
                 }
                 if (PieceMoves::BlackPawnMoves[piecePosition][13] != nullptr || PieceMoves::BlackPawnMoves[piecePosition][14] != nullptr)
                 {
-                    blackAttacker[0][piecePosition - 9] = blackAttacker[0][piecePosition - 9] * 8 + 1;
-                    blackAttacker[1][piecePosition] += Option::AttackValueMovement[piece][mainBoard[piecePosition - 9]];
-                    blackAttacker[1][piecePosition - 9] += Option::AttackValueMovement[piece][mainBoard[piecePosition - 9]];
+                    AddPackedAttacker(blackAttacker.pieceCounts[piecePosition - 9], 1);
+                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[piecePosition - 9]];
+                    blackAttacker.orderingScores[piecePosition - 9] += Option::AttackValueMovement[piece][mainBoard[piecePosition - 9]];
                 }
             }
             break;
@@ -2439,27 +2490,13 @@ Move *MoveLogic::MoveCopy(Move *move)
     return newMove;
 }
 
-int MoveLogic::Exchange(int attacker, int defender, int attackPlace, int beginPiece, int endPiece, int promotionPiece)
+int MoveLogic::Exchange(std::uint32_t attacker, std::uint32_t defender, int attackPlace, int beginPiece, int endPiece, int promotionPiece)
 {
-    long long exchangeHash;
-    int count = 3;
-    if (endPiece > 8)
-    {
-        endPiece -= 8;
-    }
-    while (Option::PowerTwo[count] < defender)
-    {
-        count += 3;
-    }
-    exchangeHash = defender + Option::PowerTwo[count] * 7 + Option::PowerTwo[count + 3] * attacker;
-    int countAttack = 3;
-    while (Option::PowerTwo[countAttack] < attacker)
-    {
-        countAttack += 3;
-    }
-    exchangeHash += Option::PowerTwo[count + countAttack] * 7 + Option::PowerTwo[count + countAttack] * endPiece;
-    exchangeHash += Option::PowerTwo[count + countAttack + 3] * 7 + Option::PowerTwo[count + countAttack + 6] * beginPiece;
-    std::optional<int> exchangeSavedValue = ExchangeCache.getFromCache(exchangeHash);
+    const std::uint64_t exchangeHash =
+        MakeExchangeKey(attacker, defender, beginPiece, endPiece, promotionPiece);
+    endPiece = NormalizeExchangePiece(endPiece);
+    std::optional<int> exchangeSavedValue;
+    exchangeSavedValue = ExchangeCache.getFromCache(exchangeHash);
     if (exchangeSavedValue.has_value())
     {
         return exchangeSavedValue.value();
@@ -2472,8 +2509,8 @@ int MoveLogic::Exchange(int attacker, int defender, int attackPlace, int beginPi
         }
         int beginPieceTemp = beginPiece;
         double exchangeValue = 0;
-        int attackerTemp = attacker;
-        int defenderTemp = defender;
+        std::uint32_t attackerTemp = attacker;
+        std::uint32_t defenderTemp = defender;
         if (promotionPiece != 0)
         {
             exchangeValue = pieceValue[promotionPiece] - 1;
@@ -2490,15 +2527,15 @@ int MoveLogic::Exchange(int attacker, int defender, int attackPlace, int beginPi
                 defendList[defendListCount++] = exchangeValue;
                 break;
             }
-            else if (defenderTemp == 6 && attackerTemp > 0 && attackerTemp != beginPiece)
+            else if (IsSoleAttacker(defenderTemp, 6) && attackerTemp > 0 &&
+                     !IsSoleAttacker(attackerTemp, beginPiece))
             {
                 defendList[defendListCount++] = exchangeValue;
                 break;
             }
             else
             {
-                endPiece = defenderTemp % 8;
-                defenderTemp = (defenderTemp - endPiece) / 8;
+                endPiece = PopLeastValuableAttacker(defenderTemp);
             }
             exchangeValue -= pieceValue[beginPiece];
             defendList[defendListCount++] = exchangeValue;
@@ -2507,15 +2544,14 @@ int MoveLogic::Exchange(int attacker, int defender, int attackPlace, int beginPi
                 attackList[attackListCount++] = exchangeValue;
                 break;
             }
-            else if (attackerTemp == 6 && defenderTemp > 0)
+            else if (IsSoleAttacker(attackerTemp, 6) && defenderTemp > 0)
             {
                 attackList[attackListCount++] = exchangeValue;
                 break;
             }
             else
             {
-                beginPiece = attackerTemp % 8;
-                attackerTemp = (attackerTemp - beginPiece) / 8;
+                beginPiece = PopLeastValuableAttacker(attackerTemp);
                 if (!attackerRemove && beginPiece == beginPieceTemp)
                 {
                     attackerRemove = true;
@@ -2524,15 +2560,14 @@ int MoveLogic::Exchange(int attacker, int defender, int attackPlace, int beginPi
                         attackList[attackListCount++] = exchangeValue;
                         break;
                     }
-                    else if (attackerTemp == 6 && defenderTemp > 0)
+                    else if (IsSoleAttacker(attackerTemp, 6) && defenderTemp > 0)
                     {
                         attackList[attackListCount++] = exchangeValue;
                         break;
                     }
                     else
                     {
-                        beginPiece = attackerTemp % 8;
-                        attackerTemp = (attackerTemp - beginPiece) / 8;
+                        beginPiece = PopLeastValuableAttacker(attackerTemp);
                     }
                 }
                 exchangeValue += pieceValue[endPiece];
@@ -2581,27 +2616,13 @@ int MoveLogic::Exchange(int attacker, int defender, int attackPlace, int beginPi
     }
 }
 
-int MoveLogic::ExchangeWithoutBeginPiece(int attacker, int defender, int attackPlace, int beginPiece, int endPiece, int promotionPiece)
+int MoveLogic::ExchangeWithoutBeginPiece(std::uint32_t attacker, std::uint32_t defender, int attackPlace, int beginPiece, int endPiece, int promotionPiece)
 {
-    long long exchangeHash;
-    int count = 3;
-    if (endPiece > 8)
-    {
-        endPiece -= 8;
-    }
-    while (Option::PowerTwo[count] < defender)
-    {
-        count += 3;
-    }
-    exchangeHash = defender + Option::PowerTwo[count] * 7 + Option::PowerTwo[count + 3] * attacker;
-    int countAttack = 3;
-    while (Option::PowerTwo[countAttack] < attacker)
-    {
-        countAttack += 3;
-    }
-    exchangeHash += Option::PowerTwo[count + countAttack] * 7 + Option::PowerTwo[count + countAttack] * endPiece;
-    exchangeHash += Option::PowerTwo[count + countAttack + 3] * 7 + Option::PowerTwo[count + countAttack + 6] * beginPiece;
-    std::optional<int> exchangeSavedValue = ExchangeCache.getFromCache(exchangeHash);
+    const std::uint64_t exchangeHash =
+        MakeExchangeKey(attacker, defender, beginPiece, endPiece, promotionPiece);
+    endPiece = NormalizeExchangePiece(endPiece);
+    std::optional<int> exchangeSavedValue;
+    exchangeSavedValue = ExchangeCacheWithoutBeginPiece.getFromCache(exchangeHash);
     if (exchangeSavedValue.has_value())
     {
         return exchangeSavedValue.value();
@@ -2614,8 +2635,8 @@ int MoveLogic::ExchangeWithoutBeginPiece(int attacker, int defender, int attackP
         }
 
         double exchangeValue = 0;
-        int attackerTemp = attacker;
-        int defenderTemp = defender;
+        std::uint32_t attackerTemp = attacker;
+        std::uint32_t defenderTemp = defender;
         if (promotionPiece != 0)
         {
             exchangeValue = pieceValue[promotionPiece] - 1;
@@ -2631,15 +2652,14 @@ int MoveLogic::ExchangeWithoutBeginPiece(int attacker, int defender, int attackP
                 defendList[defendListCount++] = exchangeValue;
                 break;
             }
-            else if (defenderTemp == 6 && attackerTemp > 0)
+            else if (IsSoleAttacker(defenderTemp, 6) && attackerTemp > 0)
             {
                 defendList[defendListCount++] = exchangeValue;
                 break;
             }
             else
             {
-                endPiece = defenderTemp % 8;
-                defenderTemp = (defenderTemp - endPiece) / 8;
+                endPiece = PopLeastValuableAttacker(defenderTemp);
             }
             exchangeValue -= pieceValue[beginPiece];
             defendList[defendListCount++] = exchangeValue;
@@ -2649,15 +2669,14 @@ int MoveLogic::ExchangeWithoutBeginPiece(int attacker, int defender, int attackP
                 attackList[attackListCount++] = exchangeValue;
                 break;
             }
-            else if (attackerTemp == 6 && defenderTemp > 0)
+            else if (IsSoleAttacker(attackerTemp, 6) && defenderTemp > 0)
             {
                 attackList[attackListCount++] = exchangeValue;
                 break;
             }
             else
             {
-                beginPiece = attackerTemp % 8;
-                attackerTemp = (attackerTemp - beginPiece) / 8;
+                beginPiece = PopLeastValuableAttacker(attackerTemp);
                 exchangeValue += pieceValue[endPiece];
                 attackList[attackListCount++] = exchangeValue;
             }
@@ -2719,14 +2738,65 @@ bool MoveLogic::Same(Move &move2, Move &move3, Move &move4, Move &move)
     return false;
 }
 
+std::size_t MoveLogic::ExchangeCacheSize()
+{
+    return ExchangeCache.size();
+}
+
+std::size_t MoveLogic::ExchangeWithoutBeginPieceCacheSize()
+{
+    return ExchangeCacheWithoutBeginPiece.size();
+}
+
+ExchangeCacheStatistics MoveLogic::ExchangeCacheStats()
+{
+    return ExchangeCache.statistics();
+}
+
+ExchangeCacheStatistics MoveLogic::ExchangeWithoutBeginPieceCacheStats()
+{
+    return ExchangeCacheWithoutBeginPiece.statistics();
+}
+
+void MoveLogic::ResetExchangeCacheStats()
+{
+    ExchangeCache.resetStatistics();
+    ExchangeCacheWithoutBeginPiece.resetStatistics();
+}
+
+bool MoveLogic::ResizeExchangeCache(std::size_t capacityBytes)
+{
+    return ExchangeCache.resize(capacityBytes);
+}
+
+bool MoveLogic::ResizeExchangeWithoutBeginPieceCache(std::size_t capacityBytes)
+{
+    return ExchangeCacheWithoutBeginPiece.resize(capacityBytes);
+}
+
+std::size_t MoveLogic::ExchangeCacheCapacityBytes()
+{
+    return ExchangeCache.capacityBytes();
+}
+
+std::size_t MoveLogic::ExchangeWithoutBeginPieceCacheCapacityBytes()
+{
+    return ExchangeCacheWithoutBeginPiece.capacityBytes();
+}
+
+#if HOWL_CORRECTNESS_TESTING
+void MoveLogic::SetExchangeCacheAllocationFailureThresholdForTesting(
+    std::size_t capacityBytes)
+{
+    ExchangeChessCache::SetAllocationFailureThresholdForTesting(capacityBytes);
+}
+#endif
+
 void MoveLogic::Cleanup()
 {
     // Clean up static cache objects
-    ExchangeCache.evalCache.clear();
-    ExchangeCache.currentMemoryUsage = 0;
-
-    ExchangeCacheWithoutBeginPiece.evalCache.clear();
-    ExchangeCacheWithoutBeginPiece.currentMemoryUsage = 0;
+    ExchangeCache.clear();
+    ExchangeCacheWithoutBeginPiece.clear();
 
     // Note: The main memory allocations in this class are temporary:
     // 1. whiteAttacker and blackAttacker arrays in SetWhiteAttacker/SetBlackAttacker

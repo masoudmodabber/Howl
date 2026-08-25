@@ -12,9 +12,15 @@
 #include "MoveLogic.h"
 #include "GameLogic.h"
 #include "BoardMaker.h"
+#include "HashMemoryBudget.h"
 
-// Initialize static members
+// Correctness tests retain the make/undo board-copy assertions. Normal engine
+// execution starts in production mode and avoids those diagnostic allocations.
+#if HOWL_CORRECTNESS_TESTING
 bool UCI::IsRelease = false;
+#else
+bool UCI::IsRelease = true;
+#endif
 bool UCI::TestOrderAvailable = false;
 bool UCI::StartPosForTest = false;
 
@@ -25,10 +31,101 @@ Move *UCI::move4 = nullptr;
 Board *UCI::thisBoard = nullptr;
 std::string UCI::order = ""; // std::string(7, 'c');
 
+#if HOWL_CORRECTNESS_TESTING
+std::size_t UCI::releasedBoards = 0;
+std::size_t UCI::releasedHistoryMoves = 0;
+#endif
+
+void UCI::ReplaceCurrentBoard(Board *replacementBoard)
+{
+    if (thisBoard != nullptr)
+    {
+        delete thisBoard;
+#if HOWL_CORRECTNESS_TESTING
+        releasedBoards++;
+#endif
+    }
+    thisBoard = replacementBoard;
+}
+
+void UCI::ReleaseMoveHistory()
+{
+    Move **currentHistory[] = {&move1, &move2, &move3, &move4};
+    for (Move **historyMove : currentHistory)
+    {
+        if (*historyMove != nullptr)
+        {
+            delete *historyMove;
+#if HOWL_CORRECTNESS_TESTING
+            releasedHistoryMoves++;
+#endif
+        }
+        *historyMove = nullptr;
+    }
+}
+
+void UCI::ReplaceMoveHistory(LastFourMoves *replacementHistory)
+{
+    ReleaseMoveHistory();
+    move1 = replacementHistory->Move1;
+    move2 = replacementHistory->Move2;
+    move3 = replacementHistory->Move3;
+    move4 = replacementHistory->Move4;
+    replacementHistory->Move1 = nullptr;
+    replacementHistory->Move2 = nullptr;
+    replacementHistory->Move3 = nullptr;
+    replacementHistory->Move4 = nullptr;
+    delete replacementHistory;
+}
+
+void UCI::ReleaseCurrentPosition()
+{
+    ReplaceCurrentBoard(nullptr);
+    ReleaseMoveHistory();
+}
+
+#if HOWL_CORRECTNESS_TESTING
+void UCI::ResetPositionOwnershipStatistics()
+{
+    releasedBoards = 0;
+    releasedHistoryMoves = 0;
+}
+
+std::size_t UCI::ReleasedBoardCount()
+{
+    return releasedBoards;
+}
+
+std::size_t UCI::ReleasedHistoryMoveCount()
+{
+    return releasedHistoryMoves;
+}
+#endif
+
 void UCI::MainSearchStart()
 {
+    HashMemoryBudget::EnsureDefaultConfigured(std::cout);
+    HashMemoryBudget::MarkSearchStarted();
     std::thread thread(Search::MainSearch, std::ref(*move1), std::ref(*move2), std::ref(*move3), std::ref(*move4), std::ref(*thisBoard));
     thread.detach();
+}
+
+bool UCI::ApplyHashOptionCommand(const std::string& command,
+                                 std::ostream& diagnostics)
+{
+    const std::string prefix = "setoption name Hash";
+    const std::string valuePrefix = prefix + " value ";
+    if (command.compare(0, valuePrefix.size(), valuePrefix) == 0)
+    {
+        return HashMemoryBudget::ConfigureValue(
+            command.substr(valuePrefix.size()), diagnostics);
+    }
+    if (command == prefix || command == prefix + " value")
+    {
+        return HashMemoryBudget::ConfigureValue("", diagnostics);
+    }
+    diagnostics << "info string malformed Hash option command\n";
+    return false;
 }
 
 bool UCI::IsTest()
@@ -63,11 +160,12 @@ void UCI::MainAsync()
             std::cout << "id name Howl5\n";
             std::cout << "id author Masoud Modabber\n";
             std::cout << "option name MultiPV type spin default 1 min 1 max 99\n";
-            std::cout << "option name Hash type spin min 4 max 1024 default 40\n";
+            std::cout << "option name Hash type spin min 8 max 1024 default 40\n";
             std::cout << "uciok\n";
         }
         else if (order == "isready")
         {
+            HashMemoryBudget::EnsureDefaultConfigured(std::cout);
             std::cout << "readyok\n";
         }
         else if (order == "ucinewgame")
@@ -100,47 +198,37 @@ void UCI::MainAsync()
         {
             if (order.substr(9, 8) == "startpos")
             {
-                delete thisBoard;
-                thisBoard = BoardInitializer::beginBoard->MakeCopy();
+                ReplaceCurrentBoard(BoardInitializer::beginBoard->MakeCopy());
                 thisBoard->moveNumber = 1;
                 if (order.length() > 17)
                 {
                     LastFourMoves *lTemp = MakeMoves(order.substr(18), *thisBoard);
-                    delete move1;
-                    delete move2;
-                    delete move3;
-                    delete move4;
-                    move1 = lTemp->Move1;
-                    move2 = lTemp->Move2;
-                    move3 = lTemp->Move3;
-                    move4 = lTemp->Move4;
-                    delete lTemp;
-                    lTemp = nullptr;
+                    ReplaceMoveHistory(lTemp);
                 }
                 else
                 {
                     Move *move = new Move();
-                    delete move1;
-                    delete move2;
-                    delete move3;
-                    delete move4;
-                    move1 = MoveLogic::MoveCopy(move);
-                    move2 = MoveLogic::MoveCopy(move);
-                    move3 = MoveLogic::MoveCopy(move);
-                    move4 = MoveLogic::MoveCopy(move);
+                    LastFourMoves *replacementHistory = new LastFourMoves();
+                    replacementHistory->Move1 = MoveLogic::MoveCopy(move);
+                    replacementHistory->Move2 = MoveLogic::MoveCopy(move);
+                    replacementHistory->Move3 = MoveLogic::MoveCopy(move);
+                    replacementHistory->Move4 = MoveLogic::MoveCopy(move);
                     delete move;
+                    ReplaceMoveHistory(replacementHistory);
                 }
             }
             else
             {
+                Board *replacementBoard;
                 if (order.substr(9, 3) == "fen")
                 {
-                    thisBoard = BoardMaker::MakeInitialBoard(order.substr(13));
+                    replacementBoard = BoardMaker::MakeInitialBoard(order.substr(13));
                 }
                 else
                 {
-                    thisBoard = BoardMaker::MakeInitialBoard(order.substr(9));
+                    replacementBoard = BoardMaker::MakeInitialBoard(order.substr(9));
                 }
+                ReplaceCurrentBoard(replacementBoard);
             }
         }
         bool infiniteSearch;
@@ -151,6 +239,11 @@ void UCI::MainAsync()
         }
         if (order.length() > 9 && order.substr(0, 10) == "setoption ")
         {
+            if (order.compare(0, 19, "setoption name Hash") == 0)
+            {
+                ApplyHashOptionCommand(order, std::cout);
+                continue;
+            }
             std::string tempString = order.substr(15);
             int counter = 0;
             std::string option = "";
@@ -170,12 +263,6 @@ void UCI::MainAsync()
             else if (option == "MultiPV")
             {
                 Option::MultiPV = std::stoi(tempString.substr(counter + 7));
-            }
-            else if (option == "Hash")
-            {
-                Option::hashSize = std::stoi(tempString.substr(counter + 7));
-                Option::EvalDictionaryShare = static_cast<int>(Option::EvalDictionarySharePercent * (Option::hashSize - 17) * 1024 * 1024 / Option::EvalDictionaryitemSize);
-                Option::PawnDictionaryShare = static_cast<int>(Option::PawnDictionarySharePercent * (Option::hashSize - 17) * 1024 * 1024 / Option::PawnDictionaryitemSize);
             }
         }
         if (order.length() > 2 && order.substr(0, 3) == "go ")
@@ -447,9 +534,10 @@ LastFourMoves *UCI::MakeMoves(std::string moves, Board &thisBoard)
             eachMoveCounter = 0;
             Move *doneMove = ChessStringManipulation::ConvertTextToMove(tempMove, thisBoard);
             GameLogic::DoMove(thisBoard, *doneMove, *doneMove, -4, -4);
-            lastMoves->Move1 = MoveLogic::MoveCopy(lastMoves->Move2);
-            lastMoves->Move2 = MoveLogic::MoveCopy(lastMoves->Move3);
-            lastMoves->Move3 = MoveLogic::MoveCopy(lastMoves->Move4);
+            delete lastMoves->Move1;
+            lastMoves->Move1 = lastMoves->Move2;
+            lastMoves->Move2 = lastMoves->Move3;
+            lastMoves->Move3 = lastMoves->Move4;
             lastMoves->Move4 = MoveLogic::MoveCopy(doneMove);
             tempMove = "";
             counter++;
@@ -460,9 +548,10 @@ LastFourMoves *UCI::MakeMoves(std::string moves, Board &thisBoard)
     }
     Move *doneMove2 = ChessStringManipulation::ConvertTextToMove(tempMove, thisBoard);
     GameLogic::DoMove(thisBoard, *doneMove2, *doneMove2, -4, -4);
-    lastMoves->Move1 = MoveLogic::MoveCopy(lastMoves->Move2);
-    lastMoves->Move2 = MoveLogic::MoveCopy(lastMoves->Move3);
-    lastMoves->Move3 = MoveLogic::MoveCopy(lastMoves->Move4);
+    delete lastMoves->Move1;
+    lastMoves->Move1 = lastMoves->Move2;
+    lastMoves->Move2 = lastMoves->Move3;
+    lastMoves->Move3 = lastMoves->Move4;
     lastMoves->Move4 = MoveLogic::MoveCopy(doneMove2);
     delete doneMove2;
     doneMove2 = nullptr;

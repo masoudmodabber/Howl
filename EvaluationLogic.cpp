@@ -11,13 +11,129 @@
 #include <algorithm>
 #include <iostream>
 
-ChessCache EvaluationLogic::EvalCache;
+namespace
+{
+bool RooksAreConnected(int firstRook, int secondRook, long long occupiedSquares)
+{
+    return (AttackPlaces::RookAttack[firstRook][secondRook] & occupiedSquares) ==
+        Option::PowerTwo[secondRook];
+}
+
+bool HasConnectedRooks(const MyList& rooks, long long occupiedSquares)
+{
+    const int rookCount = rooks.size();
+    if (rookCount < 2)
+    {
+        return false;
+    }
+
+    if (RooksAreConnected(rooks[0], rooks[1], occupiedSquares))
+    {
+        return true;
+    }
+    if (rookCount == 2)
+    {
+        return false;
+    }
+
+    for (int first = 0; first < rookCount - 1; first++)
+    {
+        const int firstUncheckedSecond = first == 0 ? 2 : first + 1;
+        for (int second = firstUncheckedSecond; second < rookCount; second++)
+        {
+            if (RooksAreConnected(rooks[first], rooks[second], occupiedSquares))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+int RookConnectionValue(MyList (&pieces)[15], long long occupiedSquares)
+{
+    int value = 0;
+    if (HasConnectedRooks(pieces[4], occupiedSquares))
+    {
+        value += 30;
+    }
+    if (HasConnectedRooks(pieces[12], occupiedSquares))
+    {
+        value -= 30;
+    }
+    return value;
+}
+}
+
+EvaluationChessCache EvaluationLogic::EvalCache;
 PawnCache EvaluationLogic::PawnEvalCache;
+
+std::size_t EvaluationLogic::EvalCacheSize()
+{
+    return EvalCache.size();
+}
+
+std::size_t EvaluationLogic::PawnEvalCacheSize()
+{
+    return PawnEvalCache.size();
+}
+
+std::size_t EvaluationLogic::EvalCacheCapacityBytes()
+{
+    return EvalCache.capacityBytes();
+}
+
+std::size_t EvaluationLogic::EvalCacheEntryCapacity()
+{
+    return EvalCache.entryCapacity();
+}
+
+std::size_t EvaluationLogic::EvalCacheClusterCount()
+{
+    return EvalCache.clusterCount();
+}
+
+EvaluationCacheStatistics EvaluationLogic::EvalCacheStats()
+{
+    return EvalCache.statistics();
+}
+
+void EvaluationLogic::ResetEvalCacheStats()
+{
+    EvalCache.resetStatistics();
+}
+
+bool EvaluationLogic::ResizeEvalCache(std::size_t capacityBytes)
+{
+    return EvalCache.resize(capacityBytes);
+}
+
+#if HOWL_CORRECTNESS_TESTING
+void EvaluationLogic::SetEvalCacheAllocationFailureThresholdForTesting(
+    std::size_t capacityBytes)
+{
+    EvaluationChessCache::SetAllocationFailureThresholdForTesting(capacityBytes);
+}
+#endif
+
+#if HOWL_CORRECTNESS_TESTING
+void EvaluationLogic::ClearEvalCacheForTesting()
+{
+    EvalCache.clear();
+}
+
+int EvaluationLogic::RookConnectionValueForTesting(Board& board)
+{
+    return RookConnectionValue(board.pieces, board.whitePieces | board.blackPieces);
+}
+#endif
 
 int EvaluationLogic::Evaluate(Board &thisBoard)
 {
     long long piecesBinary = thisBoard.whitePieces | thisBoard.blackPieces;
-    std::optional<int> cacheEvalResult = EvalCache.getFromCache(thisBoard.ZobristHashCode);
+    const std::uint64_t evaluationKey =
+        static_cast<std::uint64_t>(thisBoard.ZobristHashCode);
+    std::optional<std::int32_t> cacheEvalResult = EvalCache.getFromCache(evaluationKey);
 
     if (cacheEvalResult.has_value())
     {
@@ -112,22 +228,7 @@ int EvaluationLogic::Evaluate(Board &thisBoard)
     int pawnStructure = GetPawnStructureValue(thisBoard, state);
 
     // Rook Connection
-    int rookConnected = 0;
-    if (pieces[4].size() > 1)
-    {
-        if ((AttackPlaces::RookAttack[pieces[4][0]][pieces[4][1]] & piecesBinary) == Option::PowerTwo[pieces[4][1]])
-        {
-            rookConnected += 30;
-        }
-    }
-    if (pieces[12].size() > 1)
-    {
-        if ((AttackPlaces::RookAttack[pieces[12][0]][pieces[12][1]] & piecesBinary) == Option::PowerTwo[pieces[12][1]])
-        {
-            rookConnected -= 30;
-        }
-    }
-    int rookValue = rookConnected;
+    int rookValue = RookConnectionValue(pieces, piecesBinary);
     // Temp
     int temp = 0;
     if (state == 0)
@@ -191,12 +292,12 @@ int EvaluationLogic::Evaluate(Board &thisBoard)
     }
     if (!thisBoard.sideToMove)
     {
-        EvalCache.addToCache(thisBoard.ZobristHashCode, evaluation);
+        EvalCache.addToCache(evaluationKey, static_cast<std::int32_t>(evaluation));
         return evaluation;
     }
     else
     {
-        EvalCache.addToCache(thisBoard.ZobristHashCode, -evaluation);
+        EvalCache.addToCache(evaluationKey, static_cast<std::int32_t>(-evaluation));
         return -evaluation;
     }
 }

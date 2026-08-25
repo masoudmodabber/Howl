@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <vector>
 #include <chrono>
+#include <cstddef>
 #include <optional>
 
 class PawnCache {
@@ -15,6 +16,7 @@ public:
 
     long getMaxMemoryUsage() const;
     void setMaxMemoryUsage(long value);
+    std::size_t size() const;
 
 private:
     std::vector<std::vector<std::unordered_map<long, std::pair<std::chrono::system_clock::time_point, int>>>> caches;

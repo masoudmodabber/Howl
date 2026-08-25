@@ -12,6 +12,11 @@ void ChessCache::setMaxMemoryUsage(long value) {
     maxMemoryUsage = value; 
 }
 
+std::size_t ChessCache::size() const
+{
+    return evalCache.size();
+}
+
 void ChessCache::addToCache(long key, int value)
 {
     long itemSize = sizeof(long) + sizeof(int); // Estimate the size of the item
