@@ -55,14 +55,14 @@ if(BUILD_TESTING)
         )
     endforeach()
 
-    foreach(SEARCH_CASE mate_in_one mate_in_two forced_evasion illegal_king_capture promotion_mate returned_move_legality)
+    foreach(SEARCH_CASE mate_in_one mate_in_two forced_evasion illegal_king_capture promotion_mate returned_move_legality lmr_research_accounting lmr_promotion_exemption lmr_equal_winning_capture_exemption)
         add_test(
             NAME search_${SEARCH_CASE}
             COMMAND howl_correctness_tests search ${SEARCH_CASE}
         )
     endforeach()
 
-    foreach(QSEARCH_CASE in_check_stand_pat quiet_king_evasion quiet_block_evasion mate stalemate pseudo_legal_illegal research_accounting quiet_promotion promotion_capture quiet_check checking_capture delta_boundary)
+    foreach(QSEARCH_CASE in_check_stand_pat quiet_king_evasion quiet_block_evasion mate stalemate pseudo_legal_illegal research_accounting quiet_promotion promotion_capture underpromotion_knight underpromotion_rook promotion_check discovered_check ordinary_delta pawn_capture_recapture pawn_capture_free pawn_capture_forcing quiet_check checking_capture delta_boundary)
         add_test(
             NAME qsearch_${QSEARCH_CASE}
             COMMAND howl_correctness_tests qsearch ${QSEARCH_CASE}

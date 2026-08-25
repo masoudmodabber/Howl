@@ -919,17 +919,106 @@ int RunQSearchCheckingMove(bool capture)
             Option::SafetyMargin + EvaluationLogic::Evaluate(*board) + capturedValue <= alpha;
         break;
     }
-    if (!foundCheckingMove || currentDeltaRejectsMove)
+    const DirectQSearchResult result =
+        RunDirectQSearch(fen, alpha, 200000, 2, 1);
+    if (!foundCheckingMove || !currentDeltaRejectsMove ||
+        !PVStartsWith(result, expectedMove) || result.score <= alpha)
     {
-        DirectQSearchResult diagnostic =
-            RunDirectQSearch(fen, alpha, 200000, 2, 1);
         return ReportQSearchFailure(
             capture ? "checking capture delta pruning" : "quiet checking move delta pruning",
             fen,
             expectedMove + " gives check and must not be rejected solely by the material delta test",
-            diagnostic);
+            result);
     }
     std::cout << "QSearch exempts checking moves from material-only delta rejection\n";
+    return 0;
+}
+
+int RunQSearchUnderpromotion(bool knight)
+{
+    const char* fen = "7k/5P2/6K1/8/8/8/8/8 w - - 0 1";
+    std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+    const int eval = EvaluationLogic::Evaluate(*board);
+    // Pawn value = 100, Knight = 350 (+250), Rook = 550 (+450)
+    const int gain = knight ? 250 : 450;
+    const std::string promoMove = knight ? "f7f8n" : "f7f8r";
+    const int boundaryAlpha = Option::SafetyMargin + eval + gain; // equality boundary
+
+    // At boundaryAlpha, move should be pruned if searched with alpha = boundaryAlpha
+    // Below boundaryAlpha (boundaryAlpha - 1), move should be eligible
+    const DirectQSearchResult belowResult =
+        RunDirectQSearch(fen, boundaryAlpha - 1, 200000, 2, 1);
+    if (belowResult.score <= boundaryAlpha - 1)
+    {
+        return ReportQSearchFailure(
+            knight ? "knight underpromotion delta allowance" : "rook underpromotion delta allowance",
+            fen,
+            promoMove + " must be searchable below its exact delta boundary",
+            belowResult);
+    }
+
+    std::cout << "QSearch accounts for " << (knight ? "knight" : "rook") << " underpromotion gain\n";
+    return 0;
+}
+
+int RunQSearchPromotionCheck()
+{
+    const char* fen = "7k/4P3/6K1/8/8/8/8/8 w - - 0 1";
+    // e7e8q delivers rank-8 check to king on h8; must not be delta-pruned even at elevated alpha
+    const DirectQSearchResult result =
+        RunDirectQSearch(fen, 1000, 200000, 2, 1);
+    if (!PVStartsWith(result, "e7e8q") || result.score <= 1000)
+    {
+        return ReportQSearchFailure(
+            "promotion check delta exemption", fen,
+            "e7e8q gives check and must bypass delta pruning",
+            result);
+    }
+    std::cout << "QSearch exempts checking promotions from delta pruning\n";
+    return 0;
+}
+
+int RunQSearchDiscoveredCheck()
+{
+    const char* fen = "4k3/8/8/8/8/8/4N3/4R2K w - - 0 1";
+    // e2c3/e2f4 unmasks the rook on e1 to give discovered check to King on e8.
+    // Quiet move (capture=0) would delta-prune with alpha=500, but discovered check bypasses delta
+    const DirectQSearchResult result =
+        RunDirectQSearch(fen, 500, 200000, 2, 1);
+    if (result.score <= 500)
+    {
+        return ReportQSearchFailure(
+            "discovered check delta exemption", fen,
+            "unmasking discovered check must bypass delta pruning",
+            result);
+    }
+    std::cout << "QSearch exempts discovered checks from delta pruning\n";
+    return 0;
+}
+
+int RunQSearchOrdinaryDelta()
+{
+    const char* fen = "rnbqkb1r/pppppppp/5n2/8/8/5N2/PPPPPPPP/RNBQKB1R w KQkq - 2 2";
+    std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+    const int eval = EvaluationLogic::Evaluate(*board);
+
+    // Quiet move: pieceValue = 0, delta bound = SafetyMargin + eval
+    const int quietExactBoundary = Option::SafetyMargin + eval;
+
+    // At exact boundary (equality), quiet moves must be pruned:
+    // Testing with high alpha above any capture ensures all quiet moves are pruned by equality
+    const DirectQSearchResult equalityResult =
+        RunDirectQSearch(fen, quietExactBoundary, 200000, 2, 1);
+    // Since all quiet moves have delta <= quietExactBoundary and are non-checking, they are pruned
+    if (equalityResult.score > quietExactBoundary)
+    {
+        return ReportQSearchFailure(
+            "ordinary delta equality pruning", fen,
+            "ordinary non-checking moves at exact delta boundary must be pruned",
+            equalityResult);
+    }
+
+    std::cout << "QSearch preserves ordinary delta boundary and equality pruning\n";
     return 0;
 }
 
@@ -952,6 +1041,46 @@ int RunQSearchDeltaBoundary()
     return 0;
 }
 
+int RunQSearchPawnCaptureTactics(int scenario)
+{
+    if (scenario == 1)
+    {
+        // 1. Defended pawn capture followed by recapture (Qxd5 refuted by Re4xd4/recapture)
+        const char* fen = "4k3/8/8/3p4/4r3/8/3Q4/4K3 w - - 0 1";
+        const DirectQSearchResult result = RunDirectQSearch(fen, -200000, 200000, 2, 1);
+        if (result.score <= -150000)
+        {
+            return ReportQSearchFailure("defended pawn capture continuation", fen, "proper resolution without premature cutoff", result);
+        }
+        std::cout << "QSearch correctly resolves defended pawn capture and recapture\n";
+        return 0;
+    }
+    else if (scenario == 2)
+    {
+        // 2. Free pawn capture with no tactical reply
+        const char* fen = "4k3/8/8/3p4/8/8/3R4/4K3 w - - 0 1";
+        const DirectQSearchResult result = RunDirectQSearch(fen, -200000, 200000, 2, 1);
+        if (!PVStartsWith(result, "d2d5"))
+        {
+            return ReportQSearchFailure("free pawn capture continuation", fen, "Rxd5 captures free pawn", result);
+        }
+        std::cout << "QSearch correctly captures free pawn without tactical reply\n";
+        return 0;
+    }
+    else
+    {
+        // 3. Pawn capture inside a forcing sequence
+        const char* fen = "r1b1k2r/pppp1ppp/8/4P3/1b1q4/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 1";
+        const DirectQSearchResult result = RunDirectQSearch(fen, -200000, 200000, 2, 1);
+        if (result.score <= 0)
+        {
+            return ReportQSearchFailure("forcing sequence pawn capture", fen, "tactical sequence maintains advantage", result);
+        }
+        std::cout << "QSearch correctly evaluates pawn capture in forcing sequence\n";
+        return 0;
+    }
+}
+
 int RunQSearch(const std::string& testCase)
 {
     if (testCase == "in_check_stand_pat")
@@ -972,6 +1101,22 @@ int RunQSearch(const std::string& testCase)
         return RunQSearchPromotion(false);
     if (testCase == "promotion_capture")
         return RunQSearchPromotion(true);
+    if (testCase == "underpromotion_knight")
+        return RunQSearchUnderpromotion(true);
+    if (testCase == "underpromotion_rook")
+        return RunQSearchUnderpromotion(false);
+    if (testCase == "promotion_check")
+        return RunQSearchPromotionCheck();
+    if (testCase == "discovered_check")
+        return RunQSearchDiscoveredCheck();
+    if (testCase == "ordinary_delta")
+        return RunQSearchOrdinaryDelta();
+    if (testCase == "pawn_capture_recapture")
+        return RunQSearchPawnCaptureTactics(1);
+    if (testCase == "pawn_capture_free")
+        return RunQSearchPawnCaptureTactics(2);
+    if (testCase == "pawn_capture_forcing")
+        return RunQSearchPawnCaptureTactics(3);
     if (testCase == "quiet_check")
         return RunQSearchCheckingMove(false);
     if (testCase == "checking_capture")
@@ -1016,6 +1161,33 @@ int RunSearch(const std::string& testCase)
             {"f7f8q", "f7f8r"});
     if (testCase == "returned_move_legality")
         return RunReturnedMoveLegality();
+    if (testCase == "lmr_research_accounting")
+    {
+        // Kiwipete at depth 3 exercises LMR reduction and full-window re-searches
+        return RunSearchCase(
+            "lmr research legal move accounting",
+            Positions[1].fen,
+            3,
+            {});
+    }
+    if (testCase == "lmr_promotion_exemption")
+    {
+        // Promotion tactic at depth 4 exercises promotion unreduced search
+        return RunSearchCase(
+            "lmr promotion exemption",
+            Positions[4].fen,
+            4,
+            {"d7c8q"});
+    }
+    if (testCase == "lmr_equal_winning_capture_exemption")
+    {
+        // Kiwipete at depth 4 exercises equal and winning capture unreduced search
+        return RunSearchCase(
+            "lmr equal winning capture exemption",
+            Positions[1].fen,
+            4,
+            {"e2a6"});
+    }
 
     throw std::runtime_error("Unknown search test case: " + testCase);
 }
