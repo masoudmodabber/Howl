@@ -27,10 +27,17 @@ if(BUILD_TESTING)
         )
     endforeach()
 
-    foreach(ZOBRIST_CASE start_parity move_order fen_vs_moves side_to_move castling_rights)
+    foreach(ZOBRIST_CASE start_parity move_order fen_vs_moves side_to_move castling_rights en_passant_rank3 en_passant_rank6)
         add_test(
             NAME zobrist_${ZOBRIST_CASE}
             COMMAND howl_correctness_tests zobrist ${ZOBRIST_CASE}
+        )
+    endforeach()
+
+    foreach(SEARCH_CASE mate_in_one mate_in_two forced_evasion illegal_king_capture promotion_mate returned_move_legality)
+        add_test(
+            NAME search_${SEARCH_CASE}
+            COMMAND howl_correctness_tests search ${SEARCH_CASE}
         )
     endforeach()
 endif()

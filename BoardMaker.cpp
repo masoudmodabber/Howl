@@ -198,7 +198,7 @@ Board *BoardMaker::MakeInitialBoard(std::string position)
     counter++;
     if (position[counter] != '-')
     {
-        boardArray[125] = position[counter] - 'a' + 1 + (position[counter + 1] - '1' + 2) * 10;
+        boardArray[125] = (position[counter + 1] - '1') * 8 + (position[counter] - 'a');
         counter += 3;
     }
     else
