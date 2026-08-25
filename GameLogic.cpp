@@ -829,12 +829,12 @@ void GameLogic::UnSideChange(Board& thisBoard, Move& thisMove)
     {
         thisBoard.sideToMove = true;
         thisBoard.ZobristHashCode ^= BoardInitializer::ZCodeFlag[7];
+        thisBoard.moveNumber--;
     }
     else
     {
         thisBoard.sideToMove = false;
         thisBoard.ZobristHashCode ^= BoardInitializer::ZCodeFlag[7];
-        thisBoard.moveNumber++;
     }
 }
 
@@ -888,4 +888,3 @@ void GameLogic::UnBoardPawnListsUpdate(Board& thisBoard, Move& thisMove)
         thisBoard.blackPawns |= Option::PowerTwo[endPlace];
     }
 }
-

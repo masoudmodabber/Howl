@@ -23,15 +23,15 @@ void BoardInitializer::Initialize()
         for (int counter = 0; counter < 64; counter++)
         {
             for (int counter2 = 0; counter2 < 16; counter2++)
-                ZCode[counter2][counter] = ((long long)dis(gen) << 32) ^ dis(gen);
+                ZCode[counter2][counter] = dis(gen);
         }
         for (int counter = 0; counter < 8; counter++)
         {
-            ZCodeFlag[counter] = ((long long)dis(gen) << 32) ^ dis(gen);
+            ZCodeFlag[counter] = dis(gen);
         }
         for (int counter = 1; counter < 64; counter++)
         {
-            ZCodeUnpassentPlace[counter] = ((long long)dis(gen) << 32) ^ dis(gen);
+            ZCodeUnpassentPlace[counter] = dis(gen);
         }
 
         beginBoard = new Board();
