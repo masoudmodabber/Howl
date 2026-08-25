@@ -10,6 +10,8 @@
 #include "PassedPawnSetup.h"
 #include "PieceMoves.h"
 #include "PVSSearch.h"
+#include "QSearcher.h"
+#include "Search.h"
 #include "UCI.h"
 
 #include <algorithm>
@@ -679,6 +681,304 @@ int RunReturnedMoveLegality()
     }
 
     return 0;
+}
+
+struct DirectQSearchResult
+{
+    int score = -200000;
+    int moveCount = 0;
+    std::string pv;
+    QSearchTestStatistics statistics;
+};
+
+DirectQSearchResult RunDirectQSearch(
+    const char* fen,
+    int alpha,
+    int beta,
+    int lastCheck,
+    int depth)
+{
+    std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+    std::unique_ptr<Board> original(board->MakeCopy());
+    Move previousMove{};
+    Move move1{};
+    Move move2{};
+    Move move3{};
+    const bool savedReleaseMode = UCI::IsRelease;
+    UCI::IsRelease = true;
+    Search::moveCount = 0;
+    QSearcher::ResetTestStatistics();
+    std::unique_ptr<MovePrintValue> searched(QSearcher::QSearch(
+        true, alpha, beta, previousMove, 0, lastCheck, false, depth,
+        move1, move2, move3, *board, false, 0, false));
+    UCI::IsRelease = savedReleaseMode;
+    RequireSemanticEquality(*board, *original);
+    return {
+        searched->value,
+        Search::moveCount,
+        searched->printString,
+        QSearcher::TestStatistics()};
+}
+
+bool PVStartsWith(const DirectQSearchResult& result, const std::string& move)
+{
+    return result.pv == move || result.pv.rfind(move + " ", 0) == 0;
+}
+
+int ReportQSearchFailure(
+    const char* name,
+    const char* fen,
+    const std::string& expectation,
+    const DirectQSearchResult& result)
+{
+    std::cerr << "QSearch correctness failure: " << name << '\n'
+              << "  FEN: " << fen << '\n'
+              << "  Expected: " << expectation << '\n'
+              << "  Actual score: " << result.score << '\n'
+              << "  Actual PV: " << result.pv << '\n'
+              << "  Search::moveCount: " << result.moveCount << '\n';
+    return 1;
+}
+
+int RunQSearchInCheckStandPat()
+{
+    const char* fen = "7r/8/8/8/8/5k2/8/7K w - - 0 1";
+    std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+    const int staticEvaluation = EvaluationLogic::Evaluate(*board);
+    const DirectQSearchResult result =
+        RunDirectQSearch(fen, -200000, staticEvaluation, 0, 1);
+    if (result.pv.empty())
+    {
+        return ReportQSearchFailure(
+            "a checked side cannot stand pat", fen,
+            "a legal evasion must be searched before returning", result);
+    }
+    std::cout << "QSearch does not stand pat while in check\n";
+    return 0;
+}
+
+int RunQSearchQuietKingEvasion()
+{
+    const char* fen = "7r/8/8/8/8/5k2/8/7K w - - 0 1";
+    const DirectQSearchResult reference =
+        RunDirectQSearch(fen, -200000, 200000, 2, 1);
+    const DirectQSearchResult pruned =
+        RunDirectQSearch(fen, -281, 200000, 2, 1);
+    if (!PVStartsWith(pruned, "h1g1") || pruned.score != reference.score)
+    {
+        return ReportQSearchFailure(
+            "only legal quiet king evasion", fen,
+            "h1g1 must be searched despite the delta threshold; reference score=" +
+                std::to_string(reference.score), pruned);
+    }
+    std::cout << "QSearch searches its only legal quiet king evasion\n";
+    return 0;
+}
+
+int RunQSearchQuietBlockEvasion()
+{
+    const char* fen = "k3r3/8/8/6b1/8/1b5n/3R2b1/4K3 w - - 0 1";
+    const DirectQSearchResult reference =
+        RunDirectQSearch(fen, -200000, 200000, 2, 1);
+    const DirectQSearchResult pruned =
+        RunDirectQSearch(fen, -1012, 200000, 2, 1);
+    if (!PVStartsWith(pruned, "d2e2") || pruned.score != reference.score)
+    {
+        return ReportQSearchFailure(
+            "only legal quiet blocking evasion", fen,
+            "d2e2 must be searched; twelve pseudo-legal alternatives are illegal; reference score=" +
+                std::to_string(reference.score), pruned);
+    }
+    std::cout << "QSearch searches its only legal quiet blocking evasion\n";
+    return 0;
+}
+
+int RunQSearchTerminalPosition(bool mate)
+{
+    const char* fen = mate
+        ? "k3r3/8/8/6b1/8/1b5n/N5b1/4K3 w - - 0 1"
+        : "k3r3/8/8/6b1/8/1b5n/4N1b1/4K3 w - - 0 1";
+    const DirectQSearchResult result =
+        RunDirectQSearch(fen, -200000, 200000, 2, 1);
+    const int expected = mate ? -159999 : 0;
+    if (result.score != expected ||
+        result.statistics.rootGeneratedMoves == 0 ||
+        result.statistics.rootLegalMoves != 0 ||
+        result.statistics.rootAvailableMoves != 0)
+    {
+        return ReportQSearchFailure(
+            mate ? "checkmate accounting" : "stalemate accounting",
+            fen, "score " + std::to_string(expected), result);
+    }
+    std::cout << "QSearch " << (mate ? "checkmate" : "stalemate")
+              << " accounting is correct\n";
+    return 0;
+}
+
+int RunQSearchPseudoLegalIllegalMoves()
+{
+    const char* fen = "k3r3/8/8/6b1/8/1b5n/3R2b1/4K3 w - - 0 1";
+    const DirectQSearchResult result =
+        RunDirectQSearch(fen, -200000, 200000, 2, 1);
+    if (!PVStartsWith(result, "d2e2") ||
+        result.statistics.rootGeneratedMoves != 13 ||
+        result.statistics.rootLegalMoves != 1 ||
+        result.statistics.rootAvailableMoves != 1 ||
+        result.statistics.rootIllegalMovesBeforeFirstSearch == 0 ||
+        !result.statistics.firstLegalSearchedMoveUsedFullWindow)
+    {
+        return ReportQSearchFailure(
+            "pseudo-legal moves rejected after king-safety validation", fen,
+            "only legal move d2e2", result);
+    }
+    std::cout << "QSearch excludes searched pseudo-legal moves that leave the king in check\n";
+    return 0;
+}
+
+int RunQSearchFullWindowResearchAccounting()
+{
+    const char* fen = "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1";
+    const DirectQSearchResult result =
+        RunDirectQSearch(fen, -200000, 200000, 2, 1);
+    if (result.statistics.rootFullWindowResearches == 0 ||
+        result.statistics.rootAvailableMoves != result.statistics.rootLegalMoves)
+    {
+        return ReportQSearchFailure(
+            "full-window re-search legal move accounting", fen,
+            "at least one re-search and exactly one availability count per legal root move",
+            result);
+    }
+    std::cout << "QSearch full-window re-searches do not double-count legal moves\n";
+    return 0;
+}
+
+int RunQSearchPromotion(bool capture)
+{
+    const char* fen = capture
+        ? "k6r/6P1/8/8/8/8/8/6K1 w - - 0 1"
+        : "7k/5P2/6K1/8/8/8/8/8 w - - 0 1";
+    const int alpha = capture ? 216 : 198;
+    std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+    GeneratedMoves generatedMoves(*board, 1, 0);
+    const std::string queenMove = capture ? "g7h8q" : "f7f8q";
+    const std::string knightMove = capture ? "g7h8n" : "f7f8n";
+    bool queenGenerated = false;
+    bool knightGenerated = false;
+    for (int counter = 0; counter < generatedMoves.moveList.count; counter++)
+    {
+        const std::string move = MoveToString(*generatedMoves.moveList.moves[counter]);
+        queenGenerated = queenGenerated || move == queenMove;
+        knightGenerated = knightGenerated || move == knightMove;
+    }
+    const DirectQSearchResult result =
+        RunDirectQSearch(fen, alpha, 200000, 2, 1);
+    if (!queenGenerated || !knightGenerated ||
+        !PVStartsWith(result, queenMove) || result.score <= alpha)
+    {
+        return ReportQSearchFailure(
+            capture ? "promotion capture delta margin" : "quiet promotion delta margin",
+            fen,
+            queenMove + " must include promotion gain and exceed alpha=" +
+                std::to_string(alpha), result);
+    }
+    std::cout << "QSearch includes promotion gain in the delta decision\n";
+    return 0;
+}
+
+int RunQSearchCheckingMove(bool capture)
+{
+    const char* fen = capture
+        ? "4k3/4r3/8/8/8/8/4Q3/K3R3 w - - 0 1"
+        : "7k/8/5KQ1/8/8/8/8/8 w - - 0 1";
+    const std::string expectedMove = capture ? "e2e7" : "g6g7";
+    const int alpha = capture ? 1309 : 635;
+    std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+    const int movingSide = board->sideToMove ? 1 : 0;
+    GeneratedMoves moves(*board, 1, 0);
+    Move previousMove{};
+    bool foundCheckingMove = false;
+    bool currentDeltaRejectsMove = false;
+    for (int counter = 0; counter < moves.moveList.count; counter++)
+    {
+        Move& move = *moves.moveList.moves[counter];
+        if (MoveToString(move) != expectedMove)
+        {
+            continue;
+        }
+        MissingInfoAboutPrevStateFromMove missingInfo(*board);
+        GameLogic::DoMove(*board, move, previousMove, 1, 0);
+        const int opponent = board->sideToMove ? 1 : 0;
+        foundCheckingMove = IsLegalAfterMove(*board, movingSide) &&
+            BoardLogic::UnderAttack(
+                *board,
+                board->pieces[opponent * 8 + 6].front(),
+                !board->sideToMove);
+        GameLogic::UndoMove(*board, move, missingInfo);
+        const int capturedValue = capture ? 550 : 0;
+        currentDeltaRejectsMove =
+            Option::SafetyMargin + EvaluationLogic::Evaluate(*board) + capturedValue <= alpha;
+        break;
+    }
+    if (!foundCheckingMove || currentDeltaRejectsMove)
+    {
+        DirectQSearchResult diagnostic =
+            RunDirectQSearch(fen, alpha, 200000, 2, 1);
+        return ReportQSearchFailure(
+            capture ? "checking capture delta pruning" : "quiet checking move delta pruning",
+            fen,
+            expectedMove + " gives check and must not be rejected solely by the material delta test",
+            diagnostic);
+    }
+    std::cout << "QSearch exempts checking moves from material-only delta rejection\n";
+    return 0;
+}
+
+int RunQSearchDeltaBoundary()
+{
+    const char* fen = "7r/8/8/8/8/5k2/8/7K w - - 0 1";
+    const DirectQSearchResult below =
+        RunDirectQSearch(fen, -282, 200000, 2, 1);
+    const DirectQSearchResult at =
+        RunDirectQSearch(fen, -281, 200000, 2, 1);
+    if (below.score != -421 || at.score != -421 ||
+        !PVStartsWith(below, "h1g1") || !PVStartsWith(at, "h1g1"))
+    {
+        return ReportQSearchFailure(
+            "delta pruning boundary", fen,
+            "checked nodes search h1g1 on both sides of the ordinary delta boundary",
+            at);
+    }
+    std::cout << "QSearch bypasses the ordinary delta boundary while in check\n";
+    return 0;
+}
+
+int RunQSearch(const std::string& testCase)
+{
+    if (testCase == "in_check_stand_pat")
+        return RunQSearchInCheckStandPat();
+    if (testCase == "quiet_king_evasion")
+        return RunQSearchQuietKingEvasion();
+    if (testCase == "quiet_block_evasion")
+        return RunQSearchQuietBlockEvasion();
+    if (testCase == "mate")
+        return RunQSearchTerminalPosition(true);
+    if (testCase == "stalemate")
+        return RunQSearchTerminalPosition(false);
+    if (testCase == "pseudo_legal_illegal")
+        return RunQSearchPseudoLegalIllegalMoves();
+    if (testCase == "research_accounting")
+        return RunQSearchFullWindowResearchAccounting();
+    if (testCase == "quiet_promotion")
+        return RunQSearchPromotion(false);
+    if (testCase == "promotion_capture")
+        return RunQSearchPromotion(true);
+    if (testCase == "quiet_check")
+        return RunQSearchCheckingMove(false);
+    if (testCase == "checking_capture")
+        return RunQSearchCheckingMove(true);
+    if (testCase == "delta_boundary")
+        return RunQSearchDeltaBoundary();
+    throw std::runtime_error("Unknown QSearch test case: " + testCase);
 }
 
 int RunSearch(const std::string& testCase)
@@ -1665,13 +1965,26 @@ int RunHashMemoryBudgetCoverage()
                  "coverage passed\n";
     return 0;
 }
+
+int RunIGGDepthMappingCoverage()
+{
+    if (PVSSearch::ProductionIGGEnabledForTesting())
+    {
+        std::cerr << "IGG depth mapping safety failure\n"
+                  << "  Production PVS can still call the unsafe IGG depth lookup\n";
+        return 1;
+    }
+
+    std::cout << "Production PVS bypasses the unsafe IGG depth lookup\n";
+    return 0;
+}
 }
 
 int main(int argc, char* argv[])
 {
     if (argc != 3)
     {
-        std::cerr << "Usage: howl_correctness_tests <perft|restoration|zobrist|search|cache|lifecycle|memory> <case>\n";
+        std::cerr << "Usage: howl_correctness_tests <perft|restoration|zobrist|search|qsearch|cache|lifecycle|memory> <case>\n";
         return 2;
     }
 
@@ -1686,7 +1999,15 @@ int main(int argc, char* argv[])
         }
         if (testType == "search")
         {
+            if (std::string(argv[2]) == "igg_depth_mapping")
+            {
+                return RunIGGDepthMappingCoverage();
+            }
             return RunSearch(argv[2]);
+        }
+        if (testType == "qsearch")
+        {
+            return RunQSearch(argv[2]);
         }
         if (testType == "cache")
         {

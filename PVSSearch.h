@@ -7,10 +7,18 @@
 #include "MoveLogic.h"
 
 class PVSSearch {
+    static constexpr bool ProductionIGGEnabled = false;
+
 public:
     static MovePrintValue* PVS(bool isPVNode, int alpha, int beta, int depth, Move& prevMove, Move& move1, Move& move2, Move& move3, Board& board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch);
     static void IGG(bool isPVNode, int alpha, int beta, int depth, Move& prevMove, Move& move1, Move& move2, Move& move3, Board& board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool lastCheck, bool nullWindowSearch, MoveList moveList);
     static void deleteMoveList(MoveList moveList);
+#if HOWL_CORRECTNESS_TESTING
+    static constexpr bool ProductionIGGEnabledForTesting()
+    {
+        return ProductionIGGEnabled;
+    }
+#endif
 
 private:
     static int moveOrderingDepth[20];
