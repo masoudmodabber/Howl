@@ -7,7 +7,9 @@
 #include "Option.h"
 #include "PassedPawnSetup.h"
 #include "PieceMoves.h"
+#include "PVSSearch.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <exception>
 #include <iostream>
@@ -186,6 +188,24 @@ std::string CompareHashRelevantState(Board& actual, Board& expected)
     }
 }
 
+std::string CompareSemanticStateWithoutHash(Board& actual, Board& expected)
+{
+    std::unique_ptr<Board> actualCopy(actual.MakeCopy());
+    std::unique_ptr<Board> expectedCopy(expected.MakeCopy());
+    actualCopy->ZobristHashCode = 0;
+    expectedCopy->ZobristHashCode = 0;
+
+    try
+    {
+        RequireSemanticEquality(*actualCopy, *expectedCopy);
+        return "equal";
+    }
+    catch (const std::exception& error)
+    {
+        return std::string("different: ") + error.what();
+    }
+}
+
 void ApplyMoves(Board& board, const std::vector<std::string>& moveTexts)
 {
     Move previousMove{};
@@ -340,6 +360,121 @@ int RunZobristCastlingRights()
     return 0;
 }
 
+bool HasLegalEnPassantMove(Board& board, const std::string& expectedMove)
+{
+    GeneratedMoves generatedMoves(board, 1, 0);
+    Move previousMove{};
+    int movingSide = board.sideToMove ? 1 : 0;
+
+    for (int counter = 0; counter < generatedMoves.moveList.count; counter++)
+    {
+        Move& move = *generatedMoves.moveList.moves[counter];
+        if (MoveToString(move) != expectedMove ||
+            (move.PublicFlag & Option::PowerTwo[6]) == 0)
+        {
+            continue;
+        }
+
+        MissingInfoAboutPrevStateFromMove missingInfo(board);
+        GameLogic::DoMove(board, move, previousMove, 1, 0);
+        bool legal = IsLegalAfterMove(board, movingSide);
+        GameLogic::UndoMove(board, move, missingInfo);
+        return legal;
+    }
+
+    return false;
+}
+
+int RunZobristEnPassant(
+    const std::string& testName,
+    const std::string& initialFen,
+    const std::string& doublePawnMove,
+    const std::string& fenWithTarget,
+    const std::string& fenWithoutTarget,
+    int targetSquare,
+    const std::string& expectedEnPassantMove)
+{
+    std::unique_ptr<Board> moved(BoardMaker::MakeInitialBoard(initialFen));
+    ApplyMoves(*moved, {doublePawnMove});
+    std::unique_ptr<Board> withTarget(BoardMaker::MakeInitialBoard(fenWithTarget));
+    std::unique_ptr<Board> withoutTarget(BoardMaker::MakeInitialBoard(fenWithoutTarget));
+
+    std::string semanticResult = CompareSemanticStateWithoutHash(*moved, *withTarget);
+    bool movedHasCapture = HasLegalEnPassantMove(*moved, expectedEnPassantMove);
+    bool fenHasCapture = HasLegalEnPassantMove(*withTarget, expectedEnPassantMove);
+
+    if (semanticResult != "equal" ||
+        moved->unpassentPlace != targetSquare ||
+        withTarget->unpassentPlace != targetSquare ||
+        moved->ZobristHashCode != withTarget->ZobristHashCode ||
+        !movedHasCapture || !fenHasCapture)
+    {
+        std::cerr << "Zobrist consistency failure for " << testName << '\n'
+                  << "  Expected semantic board comparison: equal\n"
+                  << "  Actual semantic board comparison: " << semanticResult << '\n'
+                  << "  Expected en passant target: " << targetSquare << '\n'
+                  << "  Actual move/FEN targets: " << moved->unpassentPlace
+                  << "/" << withTarget->unpassentPlace << '\n'
+                  << "  Expected relationship: moveHash == fenHash\n"
+                  << "  Actual move/FEN hashes: " << moved->ZobristHashCode
+                  << "/" << withTarget->ZobristHashCode << '\n'
+                  << "  Expected legal en passant move: " << expectedEnPassantMove << '\n'
+                  << "  Generated legally from move/FEN positions: "
+                  << movedHasCapture << "/" << fenHasCapture << '\n';
+        return 1;
+    }
+
+    std::unique_ptr<Board> normalizedWithoutTarget(withoutTarget->MakeCopy());
+    normalizedWithoutTarget->unpassentPlace = targetSquare;
+    std::string relationSemanticResult =
+        CompareSemanticStateWithoutHash(*withTarget, *normalizedWithoutTarget);
+    long long actualDifference =
+        withTarget->ZobristHashCode ^ withoutTarget->ZobristHashCode;
+    long long expectedDifference =
+        BoardInitializer::ZCodeUnpassentPlace[targetSquare];
+
+    if (relationSemanticResult != "equal" || actualDifference != expectedDifference)
+    {
+        std::cerr << "Zobrist consistency failure for " << testName
+                  << " hash relation\n"
+                  << "  Expected relationship: withTargetHash ^ withoutTargetHash == "
+                  << "ZCodeUnpassentPlace[" << targetSquare << "] ("
+                  << expectedDifference << ")\n"
+                  << "  Actual XOR difference: " << actualDifference << '\n'
+                  << "  Semantic board comparison after normalizing en passant: "
+                  << relationSemanticResult << '\n';
+        return 1;
+    }
+
+    std::cout << "Zobrist " << testName
+              << ": FEN/move parity, legal capture, and XOR relationship hold\n";
+    return 0;
+}
+
+int RunZobristEnPassantRank3()
+{
+    return RunZobristEnPassant(
+        "rank 3 en passant",
+        "4k3/8/8/8/3p4/8/4P3/4K3 w - - 0 1",
+        "e2e4",
+        "4k3/8/8/8/3pP3/8/8/4K3 b - e3 0 1",
+        "4k3/8/8/8/3pP3/8/8/4K3 b - - 0 1",
+        20,
+        "d4e3");
+}
+
+int RunZobristEnPassantRank6()
+{
+    return RunZobristEnPassant(
+        "rank 6 en passant",
+        "4k3/4p3/8/3P4/8/8/8/4K3 b - - 0 1",
+        "e7e5",
+        "4k3/8/8/3Pp3/8/8/8/4K3 w - e6 0 2",
+        "4k3/8/8/3Pp3/8/8/8/4K3 w - - 0 2",
+        44,
+        "d5e6");
+}
+
 int RunZobrist(const std::string& testCase)
 {
     if (testCase == "start_parity")
@@ -352,8 +487,228 @@ int RunZobrist(const std::string& testCase)
         return RunZobristSideToMove();
     if (testCase == "castling_rights")
         return RunZobristCastlingRights();
+    if (testCase == "en_passant_rank3")
+        return RunZobristEnPassantRank3();
+    if (testCase == "en_passant_rank6")
+        return RunZobristEnPassantRank6();
 
     throw std::runtime_error("Unknown Zobrist test case: " + testCase);
+}
+
+struct FixedDepthSearchResult
+{
+    Move move{};
+    std::string moveText;
+    int score = -200000;
+    std::vector<std::pair<std::string, int>> rootScores;
+};
+
+FixedDepthSearchResult FixedDepthRoot(Board& board, int depth)
+{
+    std::unique_ptr<Board> original(board.MakeCopy());
+    GeneratedMoves generatedMoves(board, depth, 0);
+    Move previousMove{};
+    Move move2{};
+    Move move3{};
+    Move move4{};
+    int movingSide = board.sideToMove ? 1 : 0;
+    FixedDepthSearchResult result;
+    bool found = false;
+
+    for (int counter = 0; counter < generatedMoves.moveList.count; counter++)
+    {
+        Move& move = *generatedMoves.moveList.moves[counter];
+        std::string moveText = MoveToString(move);
+        MissingInfoAboutPrevStateFromMove missingInfo(board);
+        GameLogic::DoMove(board, move, previousMove, depth, 0);
+
+        if (IsLegalAfterMove(board, movingSide))
+        {
+            std::unique_ptr<MovePrintValue> searched(PVSSearch::PVS(
+                true,
+                -200000,
+                200000,
+                depth - 1,
+                move,
+                move2,
+                move3,
+                move4,
+                board,
+                false,
+                true,
+                1,
+                false,
+                false));
+            int score = -searched->value;
+            result.rootScores.push_back({moveText, score});
+
+            if (!found || score > result.score)
+            {
+                found = true;
+                result.move = move;
+                result.moveText = moveText;
+                result.score = score;
+            }
+        }
+
+        GameLogic::UndoMove(board, move, missingInfo);
+        RequireSemanticEquality(board, *original);
+    }
+
+    if (!found)
+    {
+        throw std::runtime_error("Fixed-depth root found no legal move");
+    }
+
+    RequireSemanticEquality(board, *original);
+    return result;
+}
+
+void PrintRootScores(const FixedDepthSearchResult& result)
+{
+    std::cerr << "  Root move scores:\n";
+    for (const auto& rootScore : result.rootScores)
+    {
+        std::cerr << "    " << rootScore.first << ": " << rootScore.second << '\n';
+    }
+}
+
+bool ValidateReturnedMove(Board& board, const FixedDepthSearchResult& result)
+{
+    std::unique_ptr<Board> original(board.MakeCopy());
+    GeneratedMoves generatedMoves(board, 1, 0);
+    Move previousMove{};
+    int movingSide = board.sideToMove ? 1 : 0;
+
+    for (int counter = 0; counter < generatedMoves.moveList.count; counter++)
+    {
+        Move& move = *generatedMoves.moveList.moves[counter];
+        if (MoveToString(move) != result.moveText)
+        {
+            continue;
+        }
+
+        MissingInfoAboutPrevStateFromMove missingInfo(board);
+        GameLogic::DoMove(board, move, previousMove, 1, 0);
+        bool legal = IsLegalAfterMove(board, movingSide);
+        GameLogic::UndoMove(board, move, missingInfo);
+        RequireSemanticEquality(board, *original);
+        return legal;
+    }
+
+    return false;
+}
+
+int RunSearchCase(
+    const std::string& name,
+    const std::string& fen,
+    int depth,
+    const std::vector<std::string>& acceptableMoves)
+{
+    std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+    FixedDepthSearchResult result = FixedDepthRoot(*board, depth);
+    bool expected = acceptableMoves.empty() ||
+        std::find(acceptableMoves.begin(), acceptableMoves.end(), result.moveText) != acceptableMoves.end();
+    bool legal = ValidateReturnedMove(*board, result);
+
+    if (!expected || !legal)
+    {
+        std::cerr << "Search correctness failure for " << name << '\n'
+                  << "  FEN: " << fen << '\n'
+                  << "  Requested depth: " << depth << '\n'
+                  << "  Returned move: " << result.moveText << '\n'
+                  << "  Returned score: " << result.score << '\n'
+                  << "  Expected move set: ";
+        if (acceptableMoves.empty())
+        {
+            std::cerr << "any legal move";
+        }
+        else
+        {
+            for (const std::string& move : acceptableMoves)
+            {
+                std::cerr << move << ' ';
+            }
+        }
+        std::cerr << "\n  Returned move legal: " << legal << '\n';
+        PrintRootScores(result);
+        return 1;
+    }
+
+    std::cout << "Search " << name << " depth " << depth
+              << ": " << result.moveText << " is expected and legal\n";
+    return 0;
+}
+
+int RunReturnedMoveLegality()
+{
+    struct LegalityCase
+    {
+        const char* name;
+        const char* fen;
+    };
+
+    const LegalityCase cases[] = {
+        {"start", Positions[0].fen},
+        {"kiwipete", Positions[1].fen},
+        {"forced evasion", "7k/8/5K2/8/8/8/8/7R b - - 0 1"},
+        {"rank 3 en passant", "4k3/8/8/8/3pP3/8/8/4K3 b - e3 0 1"},
+        {"promotion", "7k/5P2/6K1/8/8/8/8/8 w - - 0 1"}
+    };
+
+    for (const LegalityCase& legalityCase : cases)
+    {
+        int result = RunSearchCase(
+            std::string("returned move legality: ") + legalityCase.name,
+            legalityCase.fen,
+            2,
+            {});
+        if (result != 0)
+        {
+            return result;
+        }
+    }
+
+    return 0;
+}
+
+int RunSearch(const std::string& testCase)
+{
+    if (testCase == "mate_in_one")
+        return RunSearchCase(
+            "unique mate in one",
+            "7k/8/5KQ1/8/8/8/8/8 w - - 0 1",
+            1,
+            {"g6g7"});
+    if (testCase == "mate_in_two")
+        // Nominal depth 1 is intentional: QSearch extends this checking line beyond the PVS horizon.
+        return RunSearchCase(
+            "unique mate in two",
+            "1r4k1/4nppp/8/4Pb2/8/1P5P/r1PR4/3R3K w - - 0 27",
+            1,
+            {"d2d8"});
+    if (testCase == "forced_evasion")
+        return RunSearchCase(
+            "only legal move / forced check evasion",
+            "7k/8/5K2/8/8/8/8/7R b - - 0 1",
+            1,
+            {"h8g8"});
+    if (testCase == "illegal_king_capture")
+        return RunSearchCase(
+            "reject illegal king capture",
+            "k3r3/8/8/8/8/8/4q2R/4K3 w - - 0 1",
+            1,
+            {"h2e2"});
+    if (testCase == "promotion_mate")
+        return RunSearchCase(
+            "promotion mate",
+            "7k/5P2/6K1/8/8/8/8/8 w - - 0 1",
+            1,
+            {"f7f8q", "f7f8r"});
+    if (testCase == "returned_move_legality")
+        return RunReturnedMoveLegality();
+
+    throw std::runtime_error("Unknown search test case: " + testCase);
 }
 
 std::uint64_t Perft(Board& board, int depth, Move& previousMove)
@@ -510,7 +865,7 @@ int main(int argc, char* argv[])
 {
     if (argc != 3)
     {
-        std::cerr << "Usage: howl_correctness_tests <perft|restoration|zobrist> <case>\n";
+        std::cerr << "Usage: howl_correctness_tests <perft|restoration|zobrist|search> <case>\n";
         return 2;
     }
 
@@ -522,6 +877,10 @@ int main(int argc, char* argv[])
         if (testType == "zobrist")
         {
             return RunZobrist(argv[2]);
+        }
+        if (testType == "search")
+        {
+            return RunSearch(argv[2]);
         }
 
         const PerftPosition& position = FindPosition(argv[2]);
