@@ -62,6 +62,18 @@ if(BUILD_TESTING)
         )
     endforeach()
 
+    foreach(QSEARCH_CASE in_check_stand_pat quiet_king_evasion quiet_block_evasion mate stalemate pseudo_legal_illegal research_accounting quiet_promotion promotion_capture quiet_check checking_capture delta_boundary)
+        add_test(
+            NAME qsearch_${QSEARCH_CASE}
+            COMMAND howl_correctness_tests qsearch ${QSEARCH_CASE}
+        )
+    endforeach()
+
+    add_test(
+        NAME cache_igg_depth_mapping
+        COMMAND howl_correctness_tests search igg_depth_mapping
+    )
+
     foreach(CACHE_CASE evaluation evaluation_rook_ordering evaluation_rook_connection evaluation_fixed_table exchange exchange_variants pawn_key exchange_promotion_key exchange_wrong_lookup exchange_field_collision exchange_attacker_bounds exchange_power_two_bounds exchange_legacy_equivalence exchange_fixed_table)
         add_test(
             NAME cache_${CACHE_CASE}

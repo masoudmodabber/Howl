@@ -103,7 +103,10 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
         }
     }*/
     MoveList moveList = MoveLogic::MoveGenerator(board4, depth, depthGone);
-    IGG(isPVNode, alpha, beta, depth, prevMove, move1, move2, move3, board4, MAtESearch, isNullMoveAllowed, depthGone, previousMoveWasCheck, nullWindowSearch, moveList);
+    if constexpr (ProductionIGGEnabled)
+    {
+        IGG(isPVNode, alpha, beta, depth, prevMove, move1, move2, move3, board4, MAtESearch, isNullMoveAllowed, depthGone, previousMoveWasCheck, nullWindowSearch, moveList);
+    }
     int bestMoveValue = -200000;
     std::string SelectedPV = "";
     int availMoves = 0;
