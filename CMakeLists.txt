@@ -103,5 +103,9 @@ if(BUILD_TESTING)
             COMMAND howl_correctness_tests eval ${EVAL_CASE}
         )
     endforeach()
+    add_test(
+        NAME search_tt_lmr_reduced_depth_provenance
+        COMMAND howl_correctness_tests search tt_lmr_reduced_depth_provenance
+    )
 endif()
 

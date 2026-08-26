@@ -3022,6 +3022,21 @@ void CleanupEngine()
 }
 }
 
+int RunTTLMRReducedDepthProvenance()
+{
+    InitializeEngine();
+    TranspositionTable::Clear();
+    UCI::ReleaseCurrentPosition();
+    UCI::ReplaceCurrentBoard(BoardMaker::MakeInitialBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
+    Search::maxDepth = 10;
+    Search::finiteSearch = true;
+    Search::active = true;
+    Move m1{}, m2{}, m3{}, m4{};
+    Search::MainSearch(m1, m2, m3, m4, *UCI::thisBoard);
+    std::cout << "TT LMR reduced depth provenance test passed\n";
+    return 0;
+}
+
 int main(int argc, char* argv[])
 {
     if (argc != 3)
@@ -3045,6 +3060,10 @@ int main(int argc, char* argv[])
             if (std::string(argv[2]) == "igg_depth_mapping")
             {
                 result = RunIGGDepthMappingCoverage();
+            }
+            else if (std::string(argv[2]) == "tt_lmr_reduced_depth_provenance")
+            {
+                result = RunTTLMRReducedDepthProvenance();
             }
             else
             {

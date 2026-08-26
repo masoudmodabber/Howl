@@ -189,6 +189,8 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
         for (int i = 0; i < moveList.count; ++i)
         {
             Move *move = moveList.moves[i];
+            int LMRDepth = 0;
+            bool wasResearchedAtFullDepth = false;
             if (Search::overAllIteration == 1 && move->beginPlace == 60 && move->endPlace == 53)
             {
                 //std::cout << "here" << std::endl;
@@ -319,7 +321,6 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     {
                         tempPVNode = true;
                     }
-                    int LMRDepth = 0;
                     bool exempt = false;
                     if (move->promotionPiece > 0)
                     {
@@ -372,6 +373,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                         }
                         delete MPValue;
                         MPValue = PVS(tempPVNode, -beta, -alpha, depth - 1, *move, move2, move3, prevMove, board4, MAtESearch, true, depthGone + 1, previousMoveWasCheck, nullWindowSearch);
+                        wasResearchedAtFullDepth = true;
                         value = -MPValue->value;
                         if (value > 159800 && value != 160000)
                         {
@@ -409,7 +411,8 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                         if (value != 0)
                         {
                             uint16_t packed = TTMoveHelper::PackMove(*move);
-                            TranspositionTable::Store(board4.ZobristHashCode, move->value, depth, TT_LOWER_BOUND, packed);
+                            int storedDepth = (LMRDepth > 0 && !wasResearchedAtFullDepth) ? (depth - LMRDepth) : depth;
+                            TranspositionTable::Store(board4.ZobristHashCode, move->value, storedDepth, TT_LOWER_BOUND, packed);
                         }
                         retValue->value = move->value;
                         retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + MPValue->printString;
