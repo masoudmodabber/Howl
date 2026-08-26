@@ -191,7 +191,7 @@ void UCI::Run(std::istream& in, std::ostream& out)
 
         if (order == "uci")
         {
-            out << "id name Howl5\n";
+            out << "id name Howl 1\n";
             out << "id author Masoud Modabber\n";
             out << "option name MultiPV type spin default 1 min 1 max 99\n";
             out << "option name Hash type spin min 8 max 1024 default 40\n";

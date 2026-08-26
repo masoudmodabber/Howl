@@ -115,7 +115,7 @@ void MoveLogic::Initialize()
 MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
 {
     MoveList moveList;
-    Move* complicatedMoves[80];
+    Move* complicatedMoves[256];
     int complicatedCount = 0;
     if (Search::moveCount == 14962)
     {
@@ -1622,11 +1622,6 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
     std::sort(moveList.moves, moveList.moves + moveList.count, [](const Move *a, const Move *b)
               { return b->value < a->value; });
 
-    delete[] whiteAttacker.pieceCounts;
-    delete[] whiteAttacker.orderingScores;
-    delete[] blackAttacker.pieceCounts;
-    delete[] blackAttacker.orderingScores;
-
     return moveList;
 }
 // NOTE: You must also replace all Moves->push_back and ComplicatedMoves->push_back in the body with the array logic as described above.
@@ -1634,7 +1629,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
 
 AttackerState MoveLogic::SetWhiteAttacker(Board &thisBoard)
 {
-    AttackerState whiteAttacker = {new std::uint32_t[64](), new int[64]()};
+    AttackerState whiteAttacker;
     long long whitePieces = thisBoard.whitePieces;
     long long blackPieces = thisBoard.blackPieces;
     int *mainBoard = thisBoard.mainBoard;
@@ -2068,7 +2063,7 @@ AttackerState MoveLogic::SetWhiteAttacker(Board &thisBoard)
 
 AttackerState MoveLogic::SetBlackAttacker(Board &thisBoard)
 {
-    AttackerState blackAttacker = {new std::uint32_t[64](), new int[64]()};
+    AttackerState blackAttacker;
     long long whitePieces = thisBoard.whitePieces;
     long long blackPieces = thisBoard.blackPieces;
     int *mainBoard = thisBoard.mainBoard;

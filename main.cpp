@@ -1,4 +1,4 @@
-﻿//#define _CRTDBG_MAP_ALLOC
+//#define _CRTDBG_MAP_ALLOC
 //#include <crtdbg.h>
 //#include <malloc.h>
 
@@ -36,7 +36,6 @@ int main(int argc, char* argv[])
     {
         int processors = std::stoi(processorsStr);
     }
-    std::cout << "id name Howl 5\n";
     std::ios_base::sync_with_stdio(false);
     std::cin.tie(nullptr);
     std::cout.setf(std::ios::unitbuf);      // auto-flush after each <<

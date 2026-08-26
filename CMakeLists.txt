@@ -96,5 +96,12 @@ if(BUILD_TESTING)
             COMMAND howl_correctness_tests uci ${UCI_CASE}
         )
     endforeach()
+
+    foreach(EVAL_CASE black_en_passant black_knight_attack bishop_pair_color king_danger_sign passed_pawn_table_symmetry king_safety_table_symmetry pawn_move_center_symmetry)
+        add_test(
+            NAME eval_${EVAL_CASE}
+            COMMAND howl_correctness_tests eval ${EVAL_CASE}
+        )
+    endforeach()
 endif()
 

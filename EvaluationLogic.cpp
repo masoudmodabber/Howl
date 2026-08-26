@@ -185,11 +185,11 @@ int EvaluationLogic::Evaluate(Board &thisBoard)
     int pieceEvaluation = (int)((whitePieceEvaluation - blackPieceEvaluation) * pieceBalance);
     // Bishop pair
     int bishopPairVaue = 0;
-    if (pieces[3].size() == 2 && std::abs(pieces[3][0] - pieces[3][1]) % 2 == 1)    
+    if (pieces[3].size() == 2 && ((pieces[3][0] / 8 + pieces[3][0] % 8) % 2) != ((pieces[3][1] / 8 + pieces[3][1] % 8) % 2))    
     {
         bishopPairVaue += 50;
     }
-    if (pieces[11].size() == 2 && std::abs(pieces[11][0] - pieces[11][1]) % 2 == 1)
+    if (pieces[11].size() == 2 && ((pieces[11][0] / 8 + pieces[11][0] % 8) % 2) != ((pieces[11][1] / 8 + pieces[11][1] % 8) % 2))
     {
         bishopPairVaue -= 50;
     }
@@ -254,7 +254,7 @@ int EvaluationLogic::Evaluate(Board &thisBoard)
         }
     }
     double oppositeColorBishop = 1;
-    if (pieces[3].size() == 1 && pieces[11].size() == 1 && (pieces[3].front() - pieces[11].front()) % 2 == 0)
+    if (pieces[3].size() == 1 && pieces[11].size() == 1 && ((pieces[3].front() / 8 + pieces[3].front() % 8) % 2) != ((pieces[11].front() / 8 + pieces[11].front() % 8) % 2))
     {
         if (state == 0)
         {
@@ -325,7 +325,7 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int state)
     {
         for (int item : thisBoard.pieces[1])
         {
-            whitePawnPerColumn[item / 8].push_back(item);
+            whitePawnPerColumn[item % 8].push_back(item);
         }
         int doubledPawnValueWhite = 0;
         for (int counter = 0; counter < 8; counter++)
@@ -371,7 +371,7 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int state)
     {
         for (int item : thisBoard.pieces[9])
         {
-            blackPawnPerColumn[item / 8].push_back(item);
+            blackPawnPerColumn[item % 8].push_back(item);
         }
         int doubledPawnValueBlack = 0;
         for (int counter = 0; counter < 8; counter++)
@@ -696,7 +696,7 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                     if (PieceMoves::BlackPawnMoves[piecePoisiion][7] != nullptr && piecePoisiion - 9 == thisBoard.unpassentPlace)
                     {
                         // pieceMovePosition[1][2][piecePoisiion - 9][piece - 8]++;
-                        Movement[state] -= Option::KingAttackValue[state][1];
+                        Movement[state] -= Option::PawnAttackValue[state][1];
                     }
                     if (PieceMoves::BlackPawnMoves[piecePoisiion][8] != nullptr && (Option::PowerTwo[piecePoisiion - 7] & whitePieces) != 0)
                     {
@@ -903,8 +903,8 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
     int kingSafety = 0;
     for (int counter = 0; counter < 64; counter++)
     {
-        kingSafety -= Option::ArroundTheKingDangerMiddleGame[KingSetup::DistanceToKing[thisBoard.pieces[14].front()][counter]] * KingSafety[state][0][counter];
-        kingSafety -= Option::ArroundTheKingDangerMiddleGame[KingSetup::DistanceToKing[thisBoard.pieces[6].front()][counter]] * KingSafety[state][1][counter];
+        kingSafety += Option::ArroundTheKingDangerMiddleGame[KingSetup::DistanceToKing[thisBoard.pieces[14].front()][counter]] * KingSafety[state][0][counter];
+        kingSafety += Option::ArroundTheKingDangerMiddleGame[KingSetup::DistanceToKing[thisBoard.pieces[6].front()][counter]] * KingSafety[state][1][counter];
     }
     movementAndKingSafetyAndCenter[0] = Movement[state];
     movementAndKingSafetyAndCenter[1] = kingSafety;
