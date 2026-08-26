@@ -21,6 +21,8 @@ public:
     static double allowedTime;
     static std::string bestMove;
     static std::string ponderMove;
+    static std::string completedBestMove;
+    static std::string completedPonderMove;
     static bool finiteSearch;
 
     static int maxDepth;

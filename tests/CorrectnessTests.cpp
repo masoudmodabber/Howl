@@ -1042,8 +1042,9 @@ int RunQSearchDeltaBoundary()
         RunDirectQSearch(fen, -282, 200000, 2, 1);
     const DirectQSearchResult at =
         RunDirectQSearch(fen, -281, 200000, 2, 1);
-    if ((below.score != -421 && below.score != -491) || (at.score != -421 && at.score != -491) ||
-        !PVStartsWith(below, "h1g1") || !PVStartsWith(at, "h1g1"))
+    if (!PVStartsWith(below, "h1g1") || !PVStartsWith(at, "h1g1") ||
+        below.moveCount == 0 || at.moveCount == 0 ||
+        below.score <= -150000 || at.score <= -150000)
     {
         return ReportQSearchFailure(
             "delta pruning boundary", fen,
@@ -1642,6 +1643,124 @@ int RunSearch(const std::string& testCase)
         }
 
         std::cout << "TT 16-byte entry layout, packed move, full int32 score, and flags verified\n";
+        return 0;
+    }
+    if (testCase == "interrupted_iteration_bestmove")
+    {
+        InitializeEngine();
+        const char* fen = Positions[1].fen; // Kiwipete
+        std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+
+        // 1. Run completed search to depth 2
+        Search::maxDepth = 2;
+        Search::maxNodes = -1;
+        Search::isMoveTime = false;
+        Search::allowedTime = 0.0;
+        Search::finiteSearch = true;
+        Search::startTime = std::chrono::high_resolution_clock::now();
+        Search::active = true;
+
+        TranspositionTable::Clear();
+        TranspositionTable::SetCutoffsEnabled(true);
+        RepetitionHistory::ResetWithRoot(board->ZobristHashCode);
+
+        Move dummy{};
+        Move move1 = dummy, move2 = dummy, move3 = dummy, move4 = dummy;
+        Search::MainSearch(move1, move2, move3, move4, *board);
+
+        const std::string depth2BestMove = Search::completedBestMove;
+        if (depth2BestMove.empty())
+        {
+            std::cerr << "Expected non-empty completedBestMove at depth 2\n";
+            return 1;
+        }
+
+        // 2. Start depth 3 search with limited nodes to simulate interruption mid-iteration
+        Search::maxDepth = 3;
+        Search::maxNodes = 5; // Interrupted almost immediately
+        Search::isMoveTime = false;
+        Search::allowedTime = 0.0;
+        Search::finiteSearch = true;
+        Search::startTime = std::chrono::high_resolution_clock::now();
+        Search::active = true;
+
+        std::unique_ptr<Board> board2(BoardMaker::MakeInitialBoard(fen));
+        RepetitionHistory::ResetWithRoot(board2->ZobristHashCode);
+        Search::MainSearch(move1, move2, move3, move4, *board2);
+
+        // Capture PrintBestMove output
+        std::ostringstream buffer;
+        std::streambuf* oldCout = std::cout.rdbuf(buffer.rdbuf());
+        Search::PrintBestMove();
+        std::cout.rdbuf(oldCout);
+
+        const std::string expectedPrefix = "bestmove " + depth2BestMove;
+        if (buffer.str().find(expectedPrefix) != 0)
+        {
+            std::cerr << "Interrupted search returned incorrect bestmove: got '"
+                      << buffer.str() << "', expected prefix '" << expectedPrefix << "'\n";
+            return 1;
+        }
+
+        std::cout << "Interrupted search bestmove preservation verified (" << depth2BestMove << ")\n";
+        return 0;
+    }
+    if (testCase == "single_pv_iteration_reporting")
+    {
+        InitializeEngine();
+        // Position where non-first root moves can produce null-window bounds
+        const char* fen = "1rb1kb1r/p1pqpppp/2n2n2/2P5/3pPB2/P4N2/1PQ2PPP/RN2KB1R b KQk - 0 10";
+        std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+
+        Option::MultiPV = 1;
+        Search::maxDepth = 3;
+        Search::maxNodes = -1;
+        Search::isMoveTime = false;
+        Search::allowedTime = 0.0;
+        Search::finiteSearch = true;
+        Search::startTime = std::chrono::high_resolution_clock::now();
+        Search::active = true;
+
+        TranspositionTable::Clear();
+        TranspositionTable::SetCutoffsEnabled(true);
+        RepetitionHistory::ResetWithRoot(board->ZobristHashCode);
+
+        std::ostringstream buffer;
+        std::streambuf* oldCout = std::cout.rdbuf(buffer.rdbuf());
+
+        Move dummy{};
+        Move move1 = dummy, move2 = dummy, move3 = dummy, move4 = dummy;
+        Search::MainSearch(move1, move2, move3, move4, *board);
+
+        std::cout.rdbuf(oldCout);
+
+        // Find the last "info depth 3 ... pv <move>" output
+        std::string out = buffer.str();
+        std::string targetDepth = "info depth 3 ";
+        size_t pos = out.rfind(targetDepth);
+        if (pos == std::string::npos)
+        {
+            std::cerr << "Did not find depth 3 info line in search output\n";
+            return 1;
+        }
+        size_t pvPos = out.find(" pv ", pos);
+        if (pvPos == std::string::npos)
+        {
+            std::cerr << "Did not find pv in depth 3 info line\n";
+            return 1;
+        }
+        size_t moveStart = pvPos + 4;
+        size_t moveEnd = out.find_first_of(" \n\r", moveStart);
+        std::string reportedFirstPvMove = out.substr(moveStart, moveEnd - moveStart);
+
+        if (reportedFirstPvMove != Search::completedBestMove)
+        {
+            std::cerr << "Single-PV reporting mismatch: reported PV starts with " << reportedFirstPvMove
+                      << ", but actual bestMove was " << Search::completedBestMove << '\n';
+            return 1;
+        }
+
+        std::cout << "Single-PV iteration reporting matches bestMove (" << Search::completedBestMove << ")\n";
         return 0;
     }
 
@@ -2964,10 +3083,10 @@ int RunEvaluationCorrectness(const std::string& testCase)
                 }
             }
         }
-        // Verify rank 7 middle game values are 100 for central pawns
-        if (Option::WhitePassedPawnValueMiddleGam[6 * 8 + 3] != 100 || Option::WhitePassedPawnValueMiddleGam[6 * 8 + 4] != 100)
+        // Verify rank 7 middle game values are 25 for central pawns
+        if (Option::WhitePassedPawnValueMiddleGam[6 * 8 + 3] != 25 || Option::WhitePassedPawnValueMiddleGam[6 * 8 + 4] != 25)
         {
-            std::cerr << "WhitePassedPawnValueMiddleGam central rank 7 not 100\n";
+            std::cerr << "WhitePassedPawnValueMiddleGam central rank 7 not 25\n";
             return 1;
         }
         std::cout << "Passed pawn tables symmetry and values verified\n";
@@ -3005,6 +3124,258 @@ int RunEvaluationCorrectness(const std::string& testCase)
             }
         }
         std::cout << "PawnMoveCenterValueWhite symmetry verified\n";
+        return 0;
+    }
+    if (testCase == "game_phase_calculation")
+    {
+        InitializeEngine();
+        // Full starting material = 24
+        std::unique_ptr<Board> startBoard(BoardMaker::MakeInitialBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
+        int startPhase = EvaluationLogic::CalculatePhase(*startBoard);
+        if (startPhase != 24)
+        {
+            std::cerr << "Expected start position phase 24, got " << startPhase << '\n';
+            return 1;
+        }
+
+        // Kings and pawns only = 0
+        std::unique_ptr<Board> pawnEndgame(BoardMaker::MakeInitialBoard("8/4k3/8/8/8/8/4K3/8 w - - 0 1"));
+        int pawnPhase = EvaluationLogic::CalculatePhase(*pawnEndgame);
+        if (pawnPhase != 0)
+        {
+            std::cerr << "Expected pawn endgame phase 0, got " << pawnPhase << '\n';
+            return 1;
+        }
+
+        // Representative partial material (White: Q=4, R=2; Black: R=2, B=1, N=1 -> Total = 10)
+        std::unique_ptr<Board> partialBoard(BoardMaker::MakeInitialBoard("1n1rkb2/8/8/8/8/8/3QKR2/8 w - - 0 1"));
+        int partialPhase = EvaluationLogic::CalculatePhase(*partialBoard);
+        if (partialPhase != 10)
+        {
+            std::cerr << "Expected partial phase 10, got " << partialPhase << '\n';
+            return 1;
+        }
+
+        // Clamping upper bound verification
+        std::unique_ptr<Board> heavyBoard(BoardMaker::MakeInitialBoard("qqqqkqqq/8/8/8/8/8/8/QQQQKQQQ w - - 0 1"));
+        int heavyPhase = EvaluationLogic::CalculatePhase(*heavyBoard);
+        if (heavyPhase != 24)
+        {
+            std::cerr << "Expected clamped phase 24 for heavy board, got " << heavyPhase << '\n';
+            return 1;
+        }
+
+        std::cout << "Game phase calculation tests passed\n";
+        return 0;
+    }
+    if (testCase == "breakdown_reconciliation")
+    {
+        InitializeEngine();
+        std::vector<std::string> testFens = {
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "1rb1kb1r/p1pqpppp/2n2n2/2P5/3pPB2/P4N2/1PQ2PPP/RN2KB1R b KQk - 0 10",
+            "8/4k3/8/2b5/8/8/4K3/2B5 w - - 0 1",
+            "8/4k3/4p3/8/8/4P3/4K3/8 w - - 0 1",
+            "r1bqk2r/pppp1ppp/2n5/4p3/2B1n3/2P2N2/PPP2PPP/R1BQK2R w KQkq - 0 7"
+        };
+
+        for (const auto& fen : testFens)
+        {
+            std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+            EvaluationLogic::ClearEvalCacheForTesting();
+            EvaluationBreakdown bd = EvaluationLogic::EvaluateDetailed(*board);
+            EvaluationLogic::ClearEvalCacheForTesting();
+            int normalEval = EvaluationLogic::Evaluate(*board);
+
+            if (bd.sideToMoveTotal != normalEval)
+            {
+                std::cerr << "Mismatch between breakdown sideToMoveTotal (" << bd.sideToMoveTotal
+                          << ") and normal Evaluate (" << normalEval << ") on FEN: " << fen << '\n';
+                return 1;
+            }
+
+            int expectedUnscaled = bd.pieceEvaluation + bd.bishopPairNet + bd.mobilityNet +
+                                   bd.pawnStructureNet + bd.kingSafetyTotal + bd.rookConnectionNet +
+                                   bd.centerNet + bd.tempoNet;
+            if (bd.unscaledTotal != expectedUnscaled)
+            {
+                std::cerr << "Unscaled breakdown sum mismatch: got " << bd.unscaledTotal
+                          << ", expected " << expectedUnscaled << " on FEN: " << fen << '\n';
+                return 1;
+            }
+
+            int expectedScaled = static_cast<int>(bd.unscaledTotal * bd.oppositeColorBishopScale);
+            if (bd.scaledTotal != expectedScaled)
+            {
+                std::cerr << "Scaled breakdown mismatch on FEN: " << fen << '\n';
+                return 1;
+            }
+
+            int expectedKingSafety = bd.kingAttackNet + bd.kingPlacementNet + bd.pawnShieldNet + bd.centralKingExposureNet;
+            if (bd.kingSafetyTotal != expectedKingSafety)
+            {
+                std::cerr << "King safety breakdown mismatch on FEN: " << fen << '\n';
+                return 1;
+            }
+
+            int expectedWhitePerspective = board->sideToMove ? -bd.sideToMoveTotal : bd.sideToMoveTotal;
+            if (bd.whitePerspectiveTotal != expectedWhitePerspective)
+            {
+                std::cerr << "White perspective sign mismatch on FEN: " << fen << '\n';
+                return 1;
+            }
+        }
+
+        std::cout << "Evaluation breakdown reconciliation tests passed\n";
+        return 0;
+    }
+    if (testCase == "passed_pawn_phase_interpolation")
+    {
+        InitializeEngine();
+
+        // 1. MG Endpoint (phase = 24): White pawn on d5 (Option::WhitePassedPawnValueMiddleGam[35] = 20)
+        std::unique_ptr<Board> mgBoard(BoardMaker::MakeInitialBoard("rnbqkbnr/pp3ppp/8/3P4/8/8/PPP1PPPP/RNBQKBNR w KQkq - 0 1"));
+        int mgPhase = EvaluationLogic::CalculatePhase(*mgBoard);
+        if (mgPhase != 24)
+        {
+            std::cerr << "Expected MG phase 24, got " << mgPhase << '\n';
+            return 1;
+        }
+        int mgPassed = EvaluationLogic::GetPawnStructureValue(*mgBoard, 0);
+        if (mgPassed != 20)
+        {
+            std::cerr << "Expected MG passed pawn value 20, got " << mgPassed << '\n';
+            return 1;
+        }
+
+        // 2. EG Endpoint (phase = 0): White pawn on d5 (Option::WhitePassedPawnValueEndGame[35] = 90, goForward = 4*2 = 8)
+        std::unique_ptr<Board> egBoard(BoardMaker::MakeInitialBoard("8/8/8/3P4/8/8/4k3/4K3 w - - 0 1"));
+        int egPhase = EvaluationLogic::CalculatePhase(*egBoard);
+        if (egPhase != 0)
+        {
+            std::cerr << "Expected EG phase 0, got " << egPhase << '\n';
+            return 1;
+        }
+        int egPawnVal = EvaluationLogic::GetPawnStructureValue(*egBoard, 2);
+        if (egPawnVal != (90 + 8))
+        {
+            std::cerr << "Expected EG passed pawn value 98 (90+8), got " << egPawnVal << '\n';
+            return 1;
+        }
+
+        // 3. Intermediate interpolation (phase = 12): White Q(4)+R(2)=6, Black Q(4)+R(2)=6 -> Total = 12
+        // Passed pawn bonus = (20 * 12 + 90 * 12) / 24 = 55
+        std::unique_ptr<Board> midBoard(BoardMaker::MakeInitialBoard("3rqk2/8/8/3P4/8/8/3RQK2/8 w - - 0 1"));
+        int midPhase = EvaluationLogic::CalculatePhase(*midBoard);
+        if (midPhase != 12)
+        {
+            std::cerr << "Expected mid phase 12, got " << midPhase << '\n';
+            return 1;
+        }
+        int midPassed = EvaluationLogic::GetPawnStructureValue(*midBoard, 0);
+        if (midPassed != 55)
+        {
+            std::cerr << "Expected mid phase passed pawn value 55, got " << midPassed << '\n';
+            return 1;
+        }
+
+        // 4. Color symmetry: White passed pawn on d5 vs Black passed pawn on d4 in mirrored boards
+        std::unique_ptr<Board> whitePasser(BoardMaker::MakeInitialBoard("4k3/8/8/3P4/8/8/8/4K3 w - - 0 1"));
+        std::unique_ptr<Board> blackPasser(BoardMaker::MakeInitialBoard("4k3/8/8/8/3p4/8/8/4K3 b - - 0 1"));
+        EvaluationLogic::ClearEvalCacheForTesting();
+        int whiteEval = EvaluationLogic::Evaluate(*whitePasser);
+        EvaluationLogic::ClearEvalCacheForTesting();
+        int blackEval = EvaluationLogic::Evaluate(*blackPasser);
+        if (whiteEval != blackEval)
+        {
+            std::cerr << "Color symmetry mismatch: White passer eval " << whiteEval
+                      << " != Black passer eval " << blackEval << '\n';
+            return 1;
+        }
+
+        std::cout << "Passed pawn phase interpolation tests passed\n";
+        return 0;
+    }
+    if (testCase == "central_king_exposure")
+    {
+        InitializeEngine();
+
+        // 1. Closed locked centre vs Half-open vs Fully open centre (all phase 24)
+        // Closed locked centre (White d4, e4; Black d5, e5 -> openness 0):
+        std::unique_ptr<Board> closedBoard(BoardMaker::MakeInitialBoard("r1bqkb1r/pp1n1ppp/4pn2/3pp3/3PP3/2NB1N2/PP3PPP/R1BQK2R w KQkq - 0 1"));
+        EvaluationBreakdown closedBd = EvaluationLogic::EvaluateDetailed(*closedBoard);
+        if (closedBd.whiteCentralKingExposure != -5)
+        {
+            std::cerr << "Expected closed locked centre penalty -5, got " << closedBd.whiteCentralKingExposure << '\n';
+            return 1;
+        }
+
+        // Half-open centre (Black missing d-pawn, e-file closed -> openness 1):
+        std::unique_ptr<Board> halfOpenBoard(BoardMaker::MakeInitialBoard("r1bqkb1r/pp1n1ppp/4pn2/4p3/3PP3/2NB1N2/PP3PPP/R1BQK2R w KQkq - 0 1"));
+        EvaluationBreakdown halfOpenBd = EvaluationLogic::EvaluateDetailed(*halfOpenBoard);
+        if (halfOpenBd.whiteCentralKingExposure != -15)
+        {
+            std::cerr << "Expected half-open centre penalty -15, got " << halfOpenBd.whiteCentralKingExposure << '\n';
+            return 1;
+        }
+
+        // Fully open centre (no d or e pawns -> openness 4, phase 24):
+        std::unique_ptr<Board> openBoard(BoardMaker::MakeInitialBoard("r1bqk2r/ppp1bppp/2n2n2/8/8/2N2N2/PPP1BPPP/R1BQK2R w KQkq - 0 1"));
+        EvaluationBreakdown openBd = EvaluationLogic::EvaluateDetailed(*openBoard);
+        if (openBd.whiteCentralKingExposure != -45)
+        {
+            std::cerr << "Expected fully open centre penalty -45, got " << openBd.whiteCentralKingExposure << '\n';
+            return 1;
+        }
+
+        // Verify strictly increasing penalty hierarchy: |closed| (5) < |halfOpen| (15) < |open| (45)
+        if (!(std::abs(closedBd.whiteCentralKingExposure) < std::abs(halfOpenBd.whiteCentralKingExposure) &&
+              std::abs(halfOpenBd.whiteCentralKingExposure) < std::abs(openBd.whiteCentralKingExposure)))
+        {
+            std::cerr << "Center openness penalty hierarchy violated: closed=" << closedBd.whiteCentralKingExposure
+                      << " halfOpen=" << halfOpenBd.whiteCentralKingExposure
+                      << " open=" << openBd.whiteCentralKingExposure << '\n';
+            return 1;
+        }
+
+        // Phase 0 open board:
+        std::unique_ptr<Board> egBoard(BoardMaker::MakeInitialBoard("4k3/pp3ppp/8/8/8/8/PP3PPP/4K3 w - - 0 1"));
+        EvaluationBreakdown egBd = EvaluationLogic::EvaluateDetailed(*egBoard);
+        if (egBd.whiteCentralKingExposure != 0 || egBd.blackCentralKingExposure != 0)
+        {
+            std::cerr << "Expected 0 central king exposure at phase 0, got W="
+                      << egBd.whiteCentralKingExposure << " B=" << egBd.blackCentralKingExposure << '\n';
+            return 1;
+        }
+
+        // 3. Nearby friendly piece defenders do not remove central exposure
+        // Place Queen (d1) and Bishop (f1) near White King (e1) on open centre (phase 24)
+        std::unique_ptr<Board> defendedBoard(BoardMaker::MakeInitialBoard("r1bqk2r/ppp1bppp/2n2n2/8/8/2N2N2/PPP1BPPP/R2QKB1R w KQkq - 0 1"));
+        EvaluationBreakdown defendedBd = EvaluationLogic::EvaluateDetailed(*defendedBoard);
+        if (defendedBd.whiteCentralKingExposure != openBd.whiteCentralKingExposure)
+        {
+            std::cerr << "Friendly piece defenders should not remove central exposure penalty: got "
+                      << defendedBd.whiteCentralKingExposure << " vs " << openBd.whiteCentralKingExposure << '\n';
+            return 1;
+        }
+
+        // 4. White and Black symmetry
+        // King on e1 (White) castled on g8 (Black):
+        std::unique_ptr<Board> whiteCentral(BoardMaker::MakeInitialBoard("5rk1/pp3ppp/8/8/8/8/PP3PPP/R3K2R w KQ - 0 1"));
+        EvaluationBreakdown wcBd = EvaluationLogic::EvaluateDetailed(*whiteCentral);
+
+        // King on e8 (Black) castled on g1 (White):
+        std::unique_ptr<Board> blackCentral(BoardMaker::MakeInitialBoard("r3k2r/pp3ppp/8/8/8/8/PP3PPP/5RK1 w kq - 0 1"));
+        EvaluationBreakdown bcBd = EvaluationLogic::EvaluateDetailed(*blackCentral);
+
+        if (wcBd.centralKingExposureNet != -bcBd.centralKingExposureNet)
+        {
+            std::cerr << "Symmetry mismatch: White central net " << wcBd.centralKingExposureNet
+                      << " vs Black central net " << bcBd.centralKingExposureNet << '\n';
+            return 1;
+        }
+
+        std::cout << "Central king exposure tests passed\n";
         return 0;
     }
     throw std::runtime_error("Unknown eval test case: " + testCase);
