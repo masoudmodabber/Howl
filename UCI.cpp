@@ -5,7 +5,9 @@
 
 #include "UCI.h"
 #include <iostream>
+#include <sstream>
 #include <string>
+#include <chrono>
 #include "BoardInitializer.h"
 #include "LastFourMoves.h"
 #include "ChessStringManipulation.h"
@@ -25,6 +27,7 @@ bool UCI::IsRelease = true;
 bool UCI::TestOrderAvailable = false;
 bool UCI::StartPosForTest = false;
 
+std::thread UCI::searchThread;
 Move *UCI::move1 = nullptr;
 Move *UCI::move2 = nullptr;
 Move *UCI::move3 = nullptr;
@@ -105,10 +108,16 @@ std::size_t UCI::ReleasedHistoryMoveCount()
 
 void UCI::MainSearchStart()
 {
+    if (searchThread.joinable())
+    {
+        Search::active = false;
+        searchThread.join();
+    }
     HashMemoryBudget::EnsureDefaultConfigured(std::cout);
     HashMemoryBudget::MarkSearchStarted();
-    std::thread thread(Search::MainSearch, std::ref(*move1), std::ref(*move2), std::ref(*move3), std::ref(*move4), std::ref(*thisBoard));
-    thread.detach();
+    Search::startTime = std::chrono::high_resolution_clock::now();
+    Search::active = true;
+    searchThread = std::thread(Search::MainSearch, std::ref(*move1), std::ref(*move2), std::ref(*move3), std::ref(*move4), std::ref(*thisBoard));
 }
 
 bool UCI::ApplyHashOptionCommand(const std::string& command,
@@ -136,6 +145,17 @@ bool UCI::IsTest()
 
 void UCI::MainAsync()
 {
+    Run(std::cin, std::cout);
+}
+
+void UCI::Run(std::istream& in, std::ostream& out)
+{
+    std::streambuf* oldCoutBuf = nullptr;
+    if (&out != &std::cout)
+    {
+        oldCoutBuf = std::cout.rdbuf(out.rdbuf());
+    }
+
     int savedOrdersCount = 3;
     int savedOrderToProcessNo = 0;
     bool threadContinue = true;
@@ -144,11 +164,18 @@ void UCI::MainAsync()
     {
         if (IsRelease || !TestOrderAvailable)
         {
-            std::getline(std::cin, order);
+            if (!std::getline(in, order))
+            {
+                if (searchThread.joinable())
+                {
+                    Search::active = false;
+                    searchThread.join();
+                }
+                break;
+            }
         }
         else
         {
-
             SetAutomaticOrders(savedOrderToProcessNo);
             savedOrderToProcessNo++;
             if (savedOrderToProcessNo == savedOrdersCount)
@@ -156,99 +183,119 @@ void UCI::MainAsync()
                 TestOrderAvailable = false;
             }
         }
+
+        if (order.empty())
+        {
+            continue;
+        }
+
         if (order == "uci")
         {
-            std::cout << "id name Howl5\n";
-            std::cout << "id author Masoud Modabber\n";
-            std::cout << "option name MultiPV type spin default 1 min 1 max 99\n";
-            std::cout << "option name Hash type spin min 8 max 1024 default 40\n";
-            std::cout << "uciok\n";
+            out << "id name Howl5\n";
+            out << "id author Masoud Modabber\n";
+            out << "option name MultiPV type spin default 1 min 1 max 99\n";
+            out << "option name Hash type spin min 8 max 1024 default 40\n";
+            out << "uciok\n" << std::flush;
         }
         else if (order == "isready")
         {
-            HashMemoryBudget::EnsureDefaultConfigured(std::cout);
-            std::cout << "readyok\n";
+            if (searchThread.joinable())
+            {
+                searchThread.join();
+            }
+            HashMemoryBudget::EnsureDefaultConfigured(out);
+            out << "readyok\n" << std::flush;
         }
         else if (order == "ucinewgame")
         {
-            // Do nothing
+            if (searchThread.joinable())
+            {
+                Search::active = false;
+                searchThread.join();
+            }
         }
         else if (order == "quit")
         {
+            if (searchThread.joinable())
+            {
+                Search::active = false;
+                searchThread.join();
+            }
             threadContinue = false;
         }
         else if (order == "stop")
         {
-            if (Search::active)
+            if (searchThread.joinable())
             {
-                if (!Search::ponderMove.empty())
-                {
-                    std::cout << "bestmove " << Search::bestMove << " ponder " << Search::ponderMove << '\n';
-                }
-                else
-                {
-                    std::cout << "bestmove " << Search::bestMove << '\n';
-                }
+                Search::active = false;
+                searchThread.join();
             }
-            Search::active = false;
-            threadContinue = false;
         }
         if (!threadContinue)
             continue;
-        if (order.length() > 8 && order.substr(0, 9) == "position ")
+
+        if (order.length() >= 8 && order.substr(0, 8) == "position")
         {
-            if (order.substr(9, 8) == "startpos")
+            if (searchThread.joinable())
             {
-                ReplaceCurrentBoard(BoardInitializer::beginBoard->MakeCopy());
-                thisBoard->moveNumber = 1;
-                RepetitionHistory::ResetWithRoot(thisBoard->ZobristHashCode);
-                if (order.length() > 17)
-                {
-                    LastFourMoves *lTemp = MakeMoves(order.substr(18), *thisBoard);
-                    ReplaceMoveHistory(lTemp);
-                }
-                else
-                {
-                    Move *move = new Move();
-                    LastFourMoves *replacementHistory = new LastFourMoves();
-                    replacementHistory->Move1 = MoveLogic::MoveCopy(move);
-                    replacementHistory->Move2 = MoveLogic::MoveCopy(move);
-                    replacementHistory->Move3 = MoveLogic::MoveCopy(move);
-                    replacementHistory->Move4 = MoveLogic::MoveCopy(move);
-                    delete move;
-                    ReplaceMoveHistory(replacementHistory);
-                }
+                Search::active = false;
+                searchThread.join();
             }
-            else
+            if (order.length() > 8 && order.substr(0, 9) == "position ")
             {
-                Board *replacementBoard;
-                std::string fenPart = order.substr(9);
-                if (order.substr(9, 3) == "fen")
+                if (order.substr(9, 8) == "startpos")
                 {
-                    fenPart = order.substr(13);
-                }
-                size_t movesPos = fenPart.find(" moves ");
-                if (movesPos != std::string::npos)
-                {
-                    std::string fenOnly = fenPart.substr(0, movesPos);
-                    std::string movesOnly = fenPart.substr(movesPos + 1);
-                    replacementBoard = BoardMaker::MakeInitialBoard(fenOnly);
-                    ReplaceCurrentBoard(replacementBoard);
+                    ReplaceCurrentBoard(BoardInitializer::beginBoard->MakeCopy());
+                    thisBoard->moveNumber = 1;
                     RepetitionHistory::ResetWithRoot(thisBoard->ZobristHashCode);
-                    LastFourMoves *lTemp = MakeMoves(movesOnly, *thisBoard);
-                    ReplaceMoveHistory(lTemp);
+                    if (order.length() > 17)
+                    {
+                        LastFourMoves *lTemp = MakeMoves(order.substr(18), *thisBoard);
+                        ReplaceMoveHistory(lTemp);
+                    }
+                    else
+                    {
+                        Move *move = new Move();
+                        LastFourMoves *replacementHistory = new LastFourMoves();
+                        replacementHistory->Move1 = MoveLogic::MoveCopy(move);
+                        replacementHistory->Move2 = MoveLogic::MoveCopy(move);
+                        replacementHistory->Move3 = MoveLogic::MoveCopy(move);
+                        replacementHistory->Move4 = MoveLogic::MoveCopy(move);
+                        delete move;
+                        ReplaceMoveHistory(replacementHistory);
+                    }
                 }
                 else
                 {
-                    replacementBoard = BoardMaker::MakeInitialBoard(fenPart);
-                    ReplaceCurrentBoard(replacementBoard);
-                    RepetitionHistory::ResetWithRoot(thisBoard->ZobristHashCode);
+                    Board *replacementBoard;
+                    std::string fenPart = order.substr(9);
+                    if (order.substr(9, 3) == "fen")
+                    {
+                        fenPart = order.substr(13);
+                    }
+                    size_t movesPos = fenPart.find(" moves ");
+                    if (movesPos != std::string::npos)
+                    {
+                        std::string fenOnly = fenPart.substr(0, movesPos);
+                        std::string movesOnly = fenPart.substr(movesPos + 1);
+                        replacementBoard = BoardMaker::MakeInitialBoard(fenOnly);
+                        ReplaceCurrentBoard(replacementBoard);
+                        RepetitionHistory::ResetWithRoot(thisBoard->ZobristHashCode);
+                        LastFourMoves *lTemp = MakeMoves(movesOnly, *thisBoard);
+                        ReplaceMoveHistory(lTemp);
+                    }
+                    else
+                    {
+                        replacementBoard = BoardMaker::MakeInitialBoard(fenPart);
+                        ReplaceCurrentBoard(replacementBoard);
+                        RepetitionHistory::ResetWithRoot(thisBoard->ZobristHashCode);
+                    }
                 }
             }
         }
-        bool infiniteSearch;
         if (order == "ponderhit")
         {
+            Search::startTime = std::chrono::high_resolution_clock::now();
             Search::beginTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
             Search::finiteSearch = true;
         }
@@ -256,13 +303,13 @@ void UCI::MainAsync()
         {
             if (order.compare(0, 19, "setoption name Hash") == 0)
             {
-                ApplyHashOptionCommand(order, std::cout);
+                ApplyHashOptionCommand(order, out);
                 continue;
             }
             std::string tempString = order.substr(15);
             int counter = 0;
             std::string option = "";
-            while (tempString[counter] != ' ')
+            while (counter < tempString.size() && tempString[counter] != ' ')
             {
                 option += tempString[counter];
                 counter++;
@@ -280,160 +327,149 @@ void UCI::MainAsync()
                 Option::MultiPV = std::stoi(tempString.substr(counter + 7));
             }
         }
-        if (order.length() > 2 && order.substr(0, 3) == "go ")
+        if (order == "go" || (order.length() > 2 && order.substr(0, 3) == "go "))
         {
-            int wTimeMill = 0;
-            int bTimeMill = 0;
+            int wTimeMill = -1;
+            int bTimeMill = -1;
             int wIncMill = 0;
             int bIncMill = 0;
             int remainedMoves = 0;
-            int fixedDepth = 0;
-            int fixedNodes = 0;
+            int fixedDepth = -1;
+            int64_t fixedNodes = -1;
+            int fixedTime = -1;
+            bool infiniteSearch = false;
             bool mateSearch = false;
-            int fixedTime = 0;
-            infiniteSearch = false;
+            bool ponder = false;
+
+            std::istringstream iss(order);
+            std::string goCmd;
+            iss >> goCmd;
+            std::string token;
+            while (iss >> token)
+            {
+                if (token == "searchmoves" || token == "searchMove")
+                {
+                    // TODO: searchmoves filtering
+                }
+                else if (token == "ponder")
+                {
+                    ponder = true;
+                    infiniteSearch = true;
+                }
+                else if (token == "wtime")
+                {
+                    iss >> wTimeMill;
+                }
+                else if (token == "btime")
+                {
+                    iss >> bTimeMill;
+                }
+                else if (token == "winc")
+                {
+                    iss >> wIncMill;
+                }
+                else if (token == "binc")
+                {
+                    iss >> bIncMill;
+                }
+                else if (token == "movestogo")
+                {
+                    iss >> remainedMoves;
+                }
+                else if (token == "depth")
+                {
+                    iss >> fixedDepth;
+                }
+                else if (token == "nodes")
+                {
+                    iss >> fixedNodes;
+                }
+                else if (token == "movetime")
+                {
+                    iss >> fixedTime;
+                }
+                else if (token == "mate")
+                {
+                    mateSearch = true;
+                    int mateDepth = 0;
+                    iss >> mateDepth;
+                }
+                else if (token == "infinite")
+                {
+                    infiniteSearch = true;
+                }
+            }
+
+            if (thisBoard == nullptr)
+            {
+                ReplaceCurrentBoard(BoardInitializer::beginBoard->MakeCopy());
+                thisBoard->moveNumber = 1;
+                RepetitionHistory::ResetWithRoot(thisBoard->ZobristHashCode);
+            }
+            if (move1 == nullptr)
+            {
+                Move *move = new Move();
+                LastFourMoves *replacementHistory = new LastFourMoves();
+                replacementHistory->Move1 = MoveLogic::MoveCopy(move);
+                replacementHistory->Move2 = MoveLogic::MoveCopy(move);
+                replacementHistory->Move3 = MoveLogic::MoveCopy(move);
+                replacementHistory->Move4 = MoveLogic::MoveCopy(move);
+                delete move;
+                ReplaceMoveHistory(replacementHistory);
+            }
+
+            Search::maxDepth = fixedDepth;
+            Search::maxNodes = fixedNodes;
+            Search::isMoveTime = false;
+            Search::allowedTime = 0.0;
             Search::finiteSearch = false;
-            std::string goOrder = order.substr(3);
-            std::string orderVar = "";
-            int counter = 0;
-            while (counter < goOrder.length())
-            {
-                if (counter < goOrder.length() && goOrder[counter] != ' ')
-                {
-                    orderVar += goOrder[counter];
-                    counter++;
-                }
-                else
-                {
-                    counter++;
-                    if (orderVar == "searchMove")
-                    {
-                        // TODO
-                    }
-                    else if (orderVar == "ponder")
-                    {
-                        infiniteSearch = true;
-                    }
-                    else if (orderVar == "wtime")
-                    {
-                        while (counter < goOrder.length() && goOrder[counter] != ' ')
-                        {
-                            wTimeMill = wTimeMill * 10 + goOrder[counter] - '1' + 1;
-                            counter++;
-                        }
-                    }
-                    else if (orderVar == "btime")
-                    {
-                        while (counter < goOrder.length() && goOrder[counter] != ' ')
-                        {
-                            bTimeMill = bTimeMill * 10 + goOrder[counter] - '1' + 1;
-                            counter++;
-                        }
-                    }
-                    else if (orderVar == "winc")
-                    {
-                        while (counter < goOrder.length() && goOrder[counter] != ' ')
-                        {
-                            wIncMill = wIncMill * 10 + goOrder[counter] - '1' + 1;
-                            counter++;
-                        }
-                    }
-                    else if (orderVar == "binc")
-                    {
-                        while (counter < goOrder.length() && goOrder[counter] != ' ')
-                        {
-                            bIncMill = bIncMill * 10 + goOrder[counter] - '1' + 1;
-                            counter++;
-                        }
-                    }
-                    else if (orderVar == "movestogo")
-                    {
-                        while (counter < goOrder.length() && goOrder[counter] != ' ')
-                        {
-                            remainedMoves = remainedMoves * 10 + goOrder[counter] - '1' + 1;
-                            counter++;
-                        }
-                    }
-                    else if (orderVar == "depth")
-                    {
-                        while (counter < goOrder.length() && goOrder[counter] != ' ')
-                        {
-                            fixedDepth = fixedDepth * 10 + goOrder[counter] - '1' + 1;
-                            counter++;
-                        }
-                    }
-                    else if (orderVar == "nodes")
-                    {
-                        while (counter < goOrder.length() && goOrder[counter] != ' ')
-                        {
-                            fixedNodes = fixedNodes * 10 + goOrder[counter] - '1' + 1;
-                            counter++;
-                        }
-                    }
-                    else if (orderVar == "movetime")
-                    {
-                        while (counter < goOrder.length() && goOrder[counter] != ' ')
-                        {
-                            fixedTime = fixedTime * 10 + goOrder[counter] - '1' + 1;
-                        }
-                    }
-                    else if (orderVar == "mate")
-                    {
-                        mateSearch = true;
-                    }
-                    else if (orderVar == "infinite")
-                    {
-                        infiniteSearch = true;
-                    }
-                    counter++;
-                    orderVar = "";
-                }
-            }
-            if (orderVar == "mate")
-            {
-                mateSearch = true;
-            }
-            else if (orderVar == "infinite")
-            {
-                infiniteSearch = true;
-            }
+
             if (mateSearch)
             {
                 // TODO
             }
             else if (fixedTime > 0)
             {
-                // TODO
+                Search::allowedTime = static_cast<double>(fixedTime);
+                Search::isMoveTime = true;
+                Search::finiteSearch = true;
+                MainSearchStart();
             }
-            else if (fixedDepth > 0)
+            else if (fixedDepth > 0 && fixedNodes <= 0 && wTimeMill < 0 && bTimeMill < 0)
             {
-                // TODO
+                Search::finiteSearch = true;
+                MainSearchStart();
             }
-            else if (fixedNodes > 0)
+            else if (fixedNodes > 0 && fixedDepth <= 0 && wTimeMill < 0 && bTimeMill < 0)
             {
-                // TODO
+                Search::finiteSearch = true;
+                MainSearchStart();
             }
-            else if (infiniteSearch)
+            else if (infiniteSearch || (wTimeMill < 0 && bTimeMill < 0 && fixedDepth <= 0 && fixedNodes <= 0))
             {
-                std::cout << "info depth 1 time 0 nodes 0 nps 0 pv\n" << std::flush;
+                out << "info depth 1 time 0 nodes 0 nps 0 pv\n" << std::flush;
                 MainSearchStart();
             }
             else
             {
-                if (!thisBoard->sideToMove)
-                {
-                    auto allowedTimeDuration = getAllowedTime(wTimeMill, wIncMill, remainedMoves);
-                    Search::allowedTime = std::chrono::duration_cast<std::chrono::milliseconds>(allowedTimeDuration).count();
-                }
-                else
-                {
-                    auto allowedTimeDuration = getAllowedTime(bTimeMill, bIncMill, remainedMoves);
-                    Search::allowedTime = std::chrono::duration_cast<std::chrono::milliseconds>(allowedTimeDuration).count();
-                }
+                int timeMill = (!thisBoard->sideToMove) ? (wTimeMill >= 0 ? wTimeMill : 0) : (bTimeMill >= 0 ? bTimeMill : 0);
+                int incMill = (!thisBoard->sideToMove) ? wIncMill : bIncMill;
+                auto allowedTimeDuration = getAllowedTime(timeMill, incMill, remainedMoves);
+                Search::allowedTime = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(allowedTimeDuration).count());
                 Search::finiteSearch = true;
                 MainSearchStart();
             }
         }
+    }
+
+    if (searchThread.joinable())
+    {
+        Search::active = false;
+        searchThread.join();
+    }
+    if (oldCoutBuf != nullptr)
+    {
+        std::cout.rdbuf(oldCoutBuf);
     }
 }
 
@@ -502,23 +538,27 @@ void UCI::SetAutomaticOrders(int savedOrderToProcessNo)
 
 std::chrono::nanoseconds UCI::getAllowedTime(int TimeMill, int IncMill, int remainedMoves)
 {
-    long long nanoSecs;
+    long long allocatedMs;
     if (remainedMoves != 0)
     {
         if (remainedMoves != 1)
         {
-            nanoSecs = static_cast<long long>(TimeMill * (1 + 0.01 * remainedMoves) / remainedMoves + IncMill);
+            allocatedMs = static_cast<long long>(TimeMill * (1 + 0.01 * remainedMoves) / remainedMoves + IncMill);
         }
         else
         {
-            nanoSecs = static_cast<int>(TimeMill * 0.7);
+            allocatedMs = static_cast<long long>(TimeMill * 0.7);
         }
     }
     else
     {
-        nanoSecs = static_cast<int>(TimeMill * 5.0 / 165 + IncMill);
+        allocatedMs = static_cast<long long>(TimeMill * 5.0 / 165 + IncMill);
     }
-    return std::chrono::nanoseconds(nanoSecs * 10000);
+    if (allocatedMs < 1)
+    {
+        allocatedMs = 1;
+    }
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::milliseconds(allocatedMs));
 }
 
 LastFourMoves *UCI::MakeMoves(std::string moves, Board &thisBoard)

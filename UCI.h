@@ -38,14 +38,17 @@ public:
     static std::size_t ReleasedHistoryMoveCount();
 #endif
 
+    static std::thread searchThread;
+
     static void MainAsync();
+    static void Run(std::istream& in, std::ostream& out);
     static void MainSearchStart();
     static bool IsTest();
     static bool ApplyHashOptionCommand(const std::string& command,
                                        std::ostream& diagnostics);
+    static std::chrono::nanoseconds getAllowedTime(int TimeMill, int IncMill, int remainedMoves);
 
 private:
-    static std::chrono::nanoseconds getAllowedTime(int TimeMill, int IncMill, int remainedMoves);
     static void ReleaseMoveHistory();
 #if HOWL_CORRECTNESS_TESTING
     static std::size_t releasedBoards;

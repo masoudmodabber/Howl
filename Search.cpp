@@ -23,27 +23,60 @@
 #include "PassedPawnSetup.h"
 #include "PieceMoves.h"
 
-bool Search::active = false;
-time_t Search::beginTime;
-double Search::allowedTime;
-std::string Search::bestMove;
-std::string Search::ponderMove;
-bool Search::finiteSearch;
+std::atomic<bool> Search::active{false};
+time_t Search::beginTime{0};
+std::chrono::high_resolution_clock::time_point Search::startTime;
+double Search::allowedTime{0.0};
+std::string Search::bestMove{""};
+std::string Search::ponderMove{""};
+bool Search::finiteSearch{false};
+
+int Search::maxDepth{-1};
+int64_t Search::maxNodes{-1};
+bool Search::isMoveTime{false};
 
 int Search::overAllIteration = 0;
 int Search::moveCount = 0;
 std::string Search::Score = "";
 bool Search::mated = false;
 
+void Search::PrintBestMove()
+{
+    if (bestMove.empty())
+    {
+        std::cout << "bestmove (none)\n" << std::flush;
+        return;
+    }
+    if (!ponderMove.empty())
+    {
+        std::cout << "bestmove " << bestMove << " ponder " << ponderMove << '\n' << std::flush;
+    }
+    else
+    {
+        std::cout << "bestmove " << bestMove << '\n' << std::flush;
+    }
+}
+
 void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Board &board4)
 {
+    if (!active)
+    {
+        PrintBestMove();
+        return;
+    }
     if (RepetitionHistory::Size() == 0)
     {
         RepetitionHistory::ResetWithRoot(board4.ZobristHashCode);
     }
-    auto beginTime = std::chrono::high_resolution_clock::now();
     int MultiPV = finiteSearch ? 1 : Option::MultiPV;
     MoveList moveList = MoveLogic::MoveGenerator(board4, -1, -1);
+    if (moveList.count == 0)
+    {
+        active = false;
+        PrintBestMove();
+        return;
+    }
+
     bool MATESearch;
     int turn = board4.sideToMove ? 1 : 0;
     bool firstAssign = false;
@@ -57,8 +90,41 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     {
         previousMoveWasCheck = true;
     }
-    // Update SearchDepthZero signature later if needed
-    SearchDepthZero(moveList, firstAssign, recDepth, alpha, beta, previousMoveWasCheck, move1, move2, move3, move4, board4);    active = true;
+    
+    SearchDepthZero(moveList, firstAssign, recDepth, alpha, beta, previousMoveWasCheck, move1, move2, move3, move4, board4);
+
+    if (!active || (maxDepth > 0 && maxDepth <= 1) || (maxNodes > 0 && moveCount >= maxNodes))
+    {
+        PrintBestMove();
+        finiteSearch = false;
+        active = false;
+        PVSSearch::deleteMoveList(moveList);
+        return;
+    }
+
+    if (finiteSearch && moveList.count == 1)
+    {
+        PrintBestMove();
+        finiteSearch = false;
+        active = false;
+        PVSSearch::deleteMoveList(moveList);
+        return;
+    }
+
+    if (finiteSearch && allowedTime > 0)
+    {
+        int64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
+        double limit = isMoveTime ? allowedTime : (allowedTime * 0.75);
+        if (elapsed >= limit)
+        {
+            PrintBestMove();
+            finiteSearch = false;
+            active = false;
+            PVSSearch::deleteMoveList(moveList);
+            return;
+        }
+    }
+
     recDepth = 2;
     alpha = 0;
     beta = 0;
@@ -66,21 +132,13 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
 
     MovePrintValue *MPValue = new MovePrintValue();
     MPValue->printString = "";
-    while (true)
+    bool stopRequested = false;
+
+    while (active)
     {
-        //overAllIteration++;
-        if (recDepth == 2 && finiteSearch)
+        if (maxDepth > 0 && recDepth > maxDepth)
         {
-            if (moveList.count == 1)
-            {
-                std::cout << "bestmove " << Search::bestMove << " ponder " << ponderMove << '\n';
-                finiteSearch = false;
-                Search::active = false;
-                PVSSearch::deleteMoveList(moveList);
-                delete MPValue;
-                MPValue = nullptr;
-                return;
-            }
+            break;
         }
         SearchForCheckUpdate();
 
@@ -92,13 +150,21 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
 
         for (int counter = 0; counter < moveList.count; counter++)
         {
+            if (!active)
+            {
+                stopRequested = true;
+                break;
+            }
+            if (maxNodes > 0 && moveCount >= maxNodes)
+            {
+                stopRequested = true;
+                break;
+            }
+
             Move *move = moveList.moves[counter];
             if (recDepth == 2 && move->beginPlace == 17 && move->endPlace == 53)
             {
                 overAllIteration++;
-                //std::cout << "here" << std::endl;
-                // std::cout << "Object is still in use after 15 seconds." << std::endl;
-                //  throw std::runtime_error("Object is still in use after 15 seconds.");
             }
             if (counter < MultiPV)
             {
@@ -157,7 +223,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 CalculateAndDisplayScore(moveList.moves[0]->value);
                 MovePrintValue *movePrint = new MovePrintValue();
                 movePrint->value = move->value;
-                int64_t elapsed_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - beginTime).count());
+                int64_t elapsed_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count());
                 int64_t safeMoveCount = static_cast<int64_t>(moveCount);
                 int64_t nps = (elapsed_ms > 0) ? (safeMoveCount * 1000LL / elapsed_ms) : 0;
                 if (nps < 0) {
@@ -256,7 +322,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 }
                 MovePrintValue *movePrint = new MovePrintValue();
                 movePrint->value = move->value;
-                int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - beginTime).count();
+                int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
                 int64_t nps = (elapsed_ms > 0) ? (static_cast<int64_t>(moveCount) * 1000LL / elapsed_ms) : 0;
                 movePrint->printString = "info depth " + std::to_string(recDepth) + " time " +
                     std::to_string(elapsed_ms) +
@@ -268,34 +334,43 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 {
                     KthBestValue = PrintKBest(movesPrintValue, MultiPV, finiteSearch);
                 }
-                if (Search::finiteSearch)
+            }
+
+            if (!active)
+            {
+                stopRequested = true;
+                break;
+            }
+            if (maxNodes > 0 && moveCount >= maxNodes)
+            {
+                stopRequested = true;
+                break;
+            }
+            if (finiteSearch && allowedTime > 0)
+            {
+                int64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
+                double limit = isMoveTime ? allowedTime : ((counter == moveList.count - 1) ? (allowedTime * 0.75) : (allowedTime * 0.90));
+                if (elapsed >= limit)
                 {
-                    std::chrono::duration<double> allowedTimePercent;
-                    if (counter == moveList.count - 1)
-                    {
-                        allowedTimePercent = std::chrono::duration<double>(Search::allowedTime * 0.75);
-                    }
-                    else
-                    {
-                        allowedTimePercent = std::chrono::duration<double>(Search::allowedTime * 0.9);
-                    }
-                    if (std::chrono::high_resolution_clock::now() - beginTime > allowedTimePercent)
-                    {
-                        std::cout << "bestmove " << Search::bestMove << " ponder " << ponderMove << '\n';
-                        finiteSearch = false;
-                        active = false;
-                        PVSSearch::deleteMoveList(moveList);
-                        delete MPValue;
-                        MPValue = nullptr;
-                        deleteMovesPrintValue(movesPrintValue);
-                        return;
-                    }
+                    stopRequested = true;
+                    break;
                 }
             }
+        }
+        if (stopRequested)
+        {
+            deleteMovesPrintValue(movesPrintValue);
+            break;
         }
         std::sort(moveList.moves, moveList.moves + moveList.count, [](Move *a, Move *b)
                   { return b->value < a->value; });
         deleteMovesPrintValue(movesPrintValue);
+
+        if (maxDepth > 0 && recDepth >= maxDepth)
+        {
+            break;
+        }
+
         recDepth++;
         
         if (recDepth == 114)
@@ -364,17 +439,16 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
 #endif
             exit(0);
         }
-        
-        /*if (recDepth == 7)
-        {
-            std::cout << "bestmove " << Search::bestMove << " ponder " << ponderMove << '\n';
-            finiteSearch = false;
-            active = false;
-            deleteMoveList(moveList);
-            delete MPValue;
-            MPValue = nullptr;
-            return;
-        }*/
+    }
+
+    PrintBestMove();
+    finiteSearch = false;
+    active = false;
+    PVSSearch::deleteMoveList(moveList);
+    if (MPValue != nullptr)
+    {
+        delete MPValue;
+        MPValue = nullptr;
     }
 }
 
@@ -393,6 +467,10 @@ void Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
     int turn = board4.sideToMove ? 1 : 0;
     for (int i = 0; i < moveList.count; ++i)
     {
+        if (!active)
+        {
+            break;
+        }
         Move *move = moveList.moves[i];
         auto boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
         MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
@@ -460,14 +538,13 @@ void Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
     bestMove = ChessStringManipulation::PVToString(*(moveList.moves[0]), 0, false, board4);
     CalculateAndDisplayScore(moveList.moves[0]->value);
 
-    auto now = std::chrono::high_resolution_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - std::chrono::time_point<std::chrono::high_resolution_clock>(std::chrono::seconds(beginTime))).count();
-
-    auto nps_divisor = elapsed / 100000000;
+    int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
+    int64_t safeMoveCount = static_cast<int64_t>(moveCount);
+    int64_t nps = (elapsed_ms > 0) ? (safeMoveCount * 1000LL / elapsed_ms) : 0;
     std::cout << "info depth 1 time "
-        << elapsed / 100000000
+        << elapsed_ms
         << " nodes " << moveCount
-        << " nps " << (nps_divisor ? moveCount * 1000 / nps_divisor : 0)
+        << " nps " << nps
         << " pv " << ChessStringManipulation::PVToString(*(moveList.moves[0]), 1, mated, board4)
         << " score " << Score << '\n';
 }
