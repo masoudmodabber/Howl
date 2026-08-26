@@ -37,6 +37,13 @@ if(BUILD_TESTING)
         HOWL_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     )
 
+    add_executable(howl_eval_breakdown
+        tools/EvalBreakdown.cpp
+        ${TEST_ENGINE_SOURCES}
+    )
+    target_include_directories(howl_eval_breakdown PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_definitions(howl_eval_breakdown PRIVATE HOWL_CORRECTNESS_TESTING=1)
+
     foreach(POSITION start kiwipete position3 position4 position5 position6)
         add_test(
             NAME perft_${POSITION}
@@ -55,7 +62,7 @@ if(BUILD_TESTING)
         )
     endforeach()
 
-    foreach(SEARCH_CASE mate_in_one mate_in_two forced_evasion illegal_king_capture promotion_mate returned_move_legality lmr_research_accounting lmr_promotion_exemption lmr_equal_winning_capture_exemption repetition_real_knight repetition_false_a1 repetition_castling_difference repetition_ep_difference repetition_search_line repetition_undo_restoration mate_in_1_2_3_progression mate_search_ply_propagation mate_winning_and_losing_scores mate_illegal_sentinel_distinction null_move_ep_restoration null_move_pointer_lifetime nmp_zugzwang_pawn_endgame nmp_tactical_integrity futility_pruning_quiet_move_skip tt_entry_layout_and_packed_move)
+    foreach(SEARCH_CASE mate_in_one mate_in_two forced_evasion illegal_king_capture promotion_mate returned_move_legality lmr_research_accounting lmr_promotion_exemption lmr_equal_winning_capture_exemption repetition_real_knight repetition_false_a1 repetition_castling_difference repetition_ep_difference repetition_search_line repetition_undo_restoration mate_in_1_2_3_progression mate_search_ply_propagation mate_winning_and_losing_scores mate_illegal_sentinel_distinction null_move_ep_restoration null_move_pointer_lifetime nmp_zugzwang_pawn_endgame nmp_tactical_integrity futility_pruning_quiet_move_skip tt_entry_layout_and_packed_move interrupted_iteration_bestmove single_pv_iteration_reporting)
         add_test(
             NAME search_${SEARCH_CASE}
             COMMAND howl_correctness_tests search ${SEARCH_CASE}
@@ -97,7 +104,7 @@ if(BUILD_TESTING)
         )
     endforeach()
 
-    foreach(EVAL_CASE black_en_passant black_knight_attack bishop_pair_color king_danger_sign passed_pawn_table_symmetry king_safety_table_symmetry pawn_move_center_symmetry)
+    foreach(EVAL_CASE black_en_passant black_knight_attack bishop_pair_color king_danger_sign passed_pawn_table_symmetry king_safety_table_symmetry pawn_move_center_symmetry game_phase_calculation breakdown_reconciliation passed_pawn_phase_interpolation central_king_exposure)
         add_test(
             NAME eval_${EVAL_CASE}
             COMMAND howl_correctness_tests eval ${EVAL_CASE}

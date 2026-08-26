@@ -128,24 +128,21 @@ int EvaluationLogic::RookConnectionValueForTesting(Board& board)
 }
 #endif
 
-int EvaluationLogic::Evaluate(Board &thisBoard)
+int EvaluationLogic::CalculatePhase(const Board &thisBoard)
+{
+    const auto &pieces = thisBoard.pieces;
+    int phase = pieces[2].size() * 1 + pieces[3].size() * 1 + pieces[4].size() * 2 + pieces[5].size() * 4
+              + pieces[10].size() * 1 + pieces[11].size() * 1 + pieces[12].size() * 2 + pieces[13].size() * 4;
+    return std::clamp(phase, 0, 24);
+}
+
+namespace
+{
+int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
 {
     long long piecesBinary = thisBoard.whitePieces | thisBoard.blackPieces;
-    const std::uint64_t evaluationKey =
-        static_cast<std::uint64_t>(thisBoard.ZobristHashCode);
-    std::optional<std::int32_t> cacheEvalResult = EvalCache.getFromCache(evaluationKey);
-
-    if (cacheEvalResult.has_value())
-    {
-        return cacheEvalResult.value();
-    }
     MyList (&pieces)[15] = thisBoard.pieces;
-    // if (thisBoard.fiftyMoveRule > 100)
-    //{
-    //     return 0;
-    // }
-    int evaluation;
-    // Piece Evaluation
+
     int whitePieceEvaluation = pieces[1].size() * Option::PawnValue + pieces[2].size() * Option::KnightValue + pieces[3].size() * (Option::BishopValue + (8 - (pieces[1].size() + pieces[9].size())) * 2) + pieces[4].size() * Option::RookValue + pieces[5].size() * Option::QueenValue;
 
     int blackPieceEvaluation = pieces[9].size() * Option::PawnValue + pieces[10].size() * Option::KnightValue + pieces[11].size() * (Option::BishopValue + (8 - (pieces[1].size() + pieces[9].size())) * 2) + pieces[12].size() * Option::RookValue + pieces[13].size() * Option::QueenValue;
@@ -184,15 +181,18 @@ int EvaluationLogic::Evaluate(Board &thisBoard)
 
     int pieceEvaluation = (int)((whitePieceEvaluation - blackPieceEvaluation) * pieceBalance);
     // Bishop pair
-    int bishopPairVaue = 0;
+    int whiteBishopPair = 0;
+    int blackBishopPair = 0;
     if (pieces[3].size() == 2 && ((pieces[3][0] / 8 + pieces[3][0] % 8) % 2) != ((pieces[3][1] / 8 + pieces[3][1] % 8) % 2))    
     {
-        bishopPairVaue += 50;
+        whiteBishopPair = 50;
     }
     if (pieces[11].size() == 2 && ((pieces[11][0] / 8 + pieces[11][0] % 8) % 2) != ((pieces[11][1] / 8 + pieces[11][1] % 8) % 2))
     {
-        bishopPairVaue -= 50;
+        blackBishopPair = 50;
     }
+    int bishopPairVaue = whiteBishopPair - blackBishopPair;
+
     // Movement
     int state = 0;
     if (whitePieceEvaluation <= 1700 || blackPieceEvaluation <= 1700 || whitePieceEvaluation + blackPieceEvaluation <= 4400)
@@ -200,32 +200,65 @@ int EvaluationLogic::Evaluate(Board &thisBoard)
         state = 2;
     }
 
-    int *movementAndKingSafety = PieceMoveCount(thisBoard, state);
+    int *movementAndKingSafety = EvaluationLogic::PieceMoveCount(thisBoard, state);
     int movement = movementAndKingSafety[0];
     int kingSafety = movementAndKingSafety[1];
     int center = movementAndKingSafety[2];
     delete[] movementAndKingSafety;
 
-    kingSafety += Option::WhiteKingPlaceSafetyMiddleGame[pieces[6].front()];
-    kingSafety -= Option::BlackKingPlaceSafetyMiddleGame[pieces[14].front()];
+    int phase = EvaluationLogic::CalculatePhase(thisBoard);
 
+    int kingAttackBase = kingSafety;
+    int kingAttackTapered = (kingAttackBase * phase) / 24;
+
+    int whiteKingPlacement = Option::WhiteKingPlaceSafetyMiddleGame[pieces[6].front()];
+    int blackKingPlacement = Option::BlackKingPlaceSafetyMiddleGame[pieces[14].front()];
+    int kingPlacementNet = whiteKingPlacement - blackKingPlacement;
+
+    int whitePawnShield = 0;
     for (int item : KingSetup::WhiteKingInFront[pieces[6].front()])
     {
         if (std::find(pieces[1].begin(), pieces[1].end(), item) == pieces[1].end())
         {
-            kingSafety += Option::WhiteKingPlacePawnShieldMiddleGame[item];
+            whitePawnShield += Option::WhiteKingPlacePawnShieldMiddleGame[item];
         }
     }
+    int blackPawnShield = 0;
     for (int item : KingSetup::BlackKingInFront[pieces[14].front()])
     {
         if (std::find(pieces[9].begin(), pieces[9].end(), item) == pieces[9].end())
         {
-            kingSafety -= Option::BlackKingPlacePawnShieldMiddleGame[item];
+            blackPawnShield -= Option::BlackKingPlacePawnShieldMiddleGame[item];
         }
     }
+    int whitePawnShieldTapered = (whitePawnShield * phase) / 24;
+    int blackPawnShieldTapered = (blackPawnShield * phase) / 24;
+    int pawnShieldNet = whitePawnShieldTapered + blackPawnShieldTapered;
+
+    // Central King Exposure (d1=3, e1=4 for White; d8=59, e8=60 for Black)
+    constexpr long long dFileMask = 0x0808080808080808ULL;
+    constexpr long long eFileMask = 0x1010101010101010ULL;
+    bool whiteHasD = (thisBoard.whitePawns & dFileMask) != 0;
+    bool blackHasD = (thisBoard.blackPawns & dFileMask) != 0;
+    bool whiteHasE = (thisBoard.whitePawns & eFileMask) != 0;
+    bool blackHasE = (thisBoard.blackPawns & eFileMask) != 0;
+
+    int dOpenness = (!whiteHasD && !blackHasD) ? 2 : ((!whiteHasD || !blackHasD) ? 1 : 0);
+    int eOpenness = (!whiteHasE && !blackHasE) ? 2 : ((!whiteHasE || !blackHasE) ? 1 : 0);
+    int centralOpenness = dOpenness + eOpenness;
+
+    int whiteKingSq = pieces[6].front();
+    int blackKingSq = pieces[14].front();
+    int whiteExposureBase = 5 + 10 * centralOpenness;
+    int blackExposureBase = 5 + 10 * centralOpenness;
+    int whiteCentralPenalty = (whiteKingSq == 3 || whiteKingSq == 4) ? (whiteExposureBase * phase) / 24 : 0;
+    int blackCentralPenalty = (blackKingSq == 59 || blackKingSq == 60) ? (blackExposureBase * phase) / 24 : 0;
+    int centralKingExposureNet = -whiteCentralPenalty + blackCentralPenalty;
+
+    kingSafety = kingAttackTapered + kingPlacementNet + pawnShieldNet + centralKingExposureNet;
 
     // Pawn Structure
-    int pawnStructure = GetPawnStructureValue(thisBoard, state);
+    int pawnStructure = EvaluationLogic::GetPawnStructureValue(thisBoard, state);
 
     // Rook Connection
     int rookValue = RookConnectionValue(pieces, piecesBinary);
@@ -233,26 +266,13 @@ int EvaluationLogic::Evaluate(Board &thisBoard)
     int temp = 0;
     if (state == 0)
     {
-        if (!thisBoard.sideToMove)
-        {
-            temp = 24;
-        }
-        else
-        {
-            temp = -24;
-        }
+        temp = (!thisBoard.sideToMove) ? 24 : -24;
     }
-    if (state == 2)
+    else if (state == 2)
     {
-        if (!thisBoard.sideToMove)
-        {
-            temp = 11;
-        }
-        else
-        {
-            temp = -11;
-        }
+        temp = (!thisBoard.sideToMove) ? 11 : -11;
     }
+
     double oppositeColorBishop = 1;
     if (pieces[3].size() == 1 && pieces[11].size() == 1 && ((pieces[3].front() / 8 + pieces[3].front() % 8) % 2) != ((pieces[11].front() / 8 + pieces[11].front() % 8) % 2))
     {
@@ -266,17 +286,20 @@ int EvaluationLogic::Evaluate(Board &thisBoard)
         }
     }
 
-    // SUM
-    evaluation = (int)((pieceEvaluation + bishopPairVaue + movement + pawnStructure + kingSafety + rookValue + center + temp) * oppositeColorBishop); 
+    int unscaled = pieceEvaluation + bishopPairVaue + movement + pawnStructure + kingSafety + rookValue + center + temp;
+    int evaluation = (int)(unscaled * oppositeColorBishop); 
+    bool drawAdjustment = false;
     if (evaluation > 0)
     {
         if (pieces[1].size() == 0 && pieces[3].size() == 0 && pieces[4].size() == 0 && pieces[5].size() == 0)
         {
             evaluation = 30;
+            drawAdjustment = true;
         }
         else if (pieces[1].size() == 0 && pieces[2].size() == 0 && pieces[3].size() < 2 && pieces[4].size() == 0 && pieces[5].size() == 0)
         {
             evaluation = 30;
+            drawAdjustment = true;
         }
     }
     else if (evaluation < 0)
@@ -284,22 +307,82 @@ int EvaluationLogic::Evaluate(Board &thisBoard)
         if (pieces[9].size() == 0 && pieces[11].size() == 0 && pieces[12].size() == 0 && pieces[13].size() == 0)
         {
             evaluation = -30;
+            drawAdjustment = true;
         }
         else if (pieces[9].size() == 0 && pieces[10].size() == 0 && pieces[11].size() < 2 && pieces[12].size() == 0 && pieces[13].size() == 0)
         {
             evaluation = -30;
+            drawAdjustment = true;
         }
     }
-    if (!thisBoard.sideToMove)
+
+    if (breakdown != nullptr)
     {
-        EvalCache.addToCache(evaluationKey, static_cast<std::int32_t>(evaluation));
-        return evaluation;
+        breakdown->phase = phase;
+        breakdown->state = state;
+        breakdown->whiteMaterial = whitePieceEvaluation;
+        breakdown->blackMaterial = blackPieceEvaluation;
+        breakdown->materialNet = whitePieceEvaluation - blackPieceEvaluation;
+        breakdown->pieceBalance = pieceBalance;
+        breakdown->pieceEvaluation = pieceEvaluation;
+
+        breakdown->whiteBishopPair = whiteBishopPair;
+        breakdown->blackBishopPair = blackBishopPair;
+        breakdown->bishopPairNet = bishopPairVaue;
+
+        breakdown->mobilityNet = movement;
+        breakdown->centerNet = center;
+
+        breakdown->kingAttackNet = kingAttackTapered;
+        breakdown->whiteKingPlacement = whiteKingPlacement;
+        breakdown->blackKingPlacement = blackKingPlacement;
+        breakdown->kingPlacementNet = kingPlacementNet;
+        breakdown->whitePawnShield = whitePawnShieldTapered;
+        breakdown->blackPawnShield = -blackPawnShieldTapered;
+        breakdown->pawnShieldNet = pawnShieldNet;
+        breakdown->whiteCentralKingExposure = -whiteCentralPenalty;
+        breakdown->blackCentralKingExposure = -blackCentralPenalty;
+        breakdown->centralKingExposureNet = centralKingExposureNet;
+        breakdown->kingSafetyTotal = kingSafety;
+
+        breakdown->pawnStructureNet = pawnStructure;
+        breakdown->rookConnectionNet = rookValue;
+        breakdown->tempoNet = temp;
+
+        breakdown->oppositeColorBishopScale = oppositeColorBishop;
+        breakdown->unscaledTotal = unscaled;
+        breakdown->scaledTotal = (int)(unscaled * oppositeColorBishop);
+        breakdown->drawAdjustmentApplied = drawAdjustment;
+        breakdown->whitePerspectiveTotal = evaluation;
+        breakdown->sideToMoveTotal = thisBoard.sideToMove ? -evaluation : evaluation;
     }
-    else
+
+    return evaluation;
+}
+}
+
+int EvaluationLogic::Evaluate(Board &thisBoard)
+{
+    const std::uint64_t evaluationKey =
+        static_cast<std::uint64_t>(thisBoard.ZobristHashCode);
+    std::optional<std::int32_t> cacheEvalResult = EvalCache.getFromCache(evaluationKey);
+
+    if (cacheEvalResult.has_value())
     {
-        EvalCache.addToCache(evaluationKey, static_cast<std::int32_t>(-evaluation));
-        return -evaluation;
+        return cacheEvalResult.value();
     }
+
+    int evaluation = EvaluateInternal(thisBoard, nullptr);
+    int finalScore = (!thisBoard.sideToMove) ? evaluation : -evaluation;
+    EvalCache.addToCache(evaluationKey, static_cast<std::int32_t>(finalScore));
+    return finalScore;
+}
+
+EvaluationBreakdown EvaluationLogic::EvaluateDetailed(Board &thisBoard)
+{
+    EvaluationBreakdown breakdown{};
+    EvaluateInternal(thisBoard, &breakdown);
+    return breakdown;
 }
 
 int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int state)
@@ -315,6 +398,7 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int state)
         blackPawnPerColumn[counter] = std::vector<int>();
     }
 
+    int phase = CalculatePhase(thisBoard);
     int whitePawnSum;
     std::optional<int> calculatedPawnEval = PawnEvalCache.GetFromCache(whitePawns, 0, state);
     if (calculatedPawnEval.has_value())
@@ -340,14 +424,9 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int state)
         {
             if ((PassedPawnSetup::WhitePassedMask[pawnPlace] & blackPawns) == 0)
             {
-                if (state == 0)
-                {
-                    singlePastWhite += Option::WhitePassedPawnValueMiddleGam[pawnPlace];
-                }
-                else if (state == 2)
-                {
-                    singlePastWhite += Option::WhitePassedPawnValueEndGame[pawnPlace];
-                }
+                int mgVal = Option::WhitePassedPawnValueMiddleGam[pawnPlace];
+                int egVal = Option::WhitePassedPawnValueEndGame[pawnPlace];
+                singlePastWhite += (mgVal * phase + egVal * (24 - phase)) / 24;
             }
         }
         int goForwardPawnWhite = 0;
@@ -387,14 +466,9 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int state)
         {
             if ((PassedPawnSetup::BlackPassedMask[pawnPlace] & whitePawns) == 0)
             {
-                if (state == 0)
-                {
-                    singlePastBlack += Option::BlackPassedPawnValueMiddleGam[pawnPlace];
-                }
-                else if (state == 2)
-                {
-                    singlePastBlack += Option::BlackPassedPawnValueEndGam[pawnPlace];
-                }
+                int mgVal = Option::BlackPassedPawnValueMiddleGam[pawnPlace];
+                int egVal = Option::BlackPassedPawnValueEndGam[pawnPlace];
+                singlePastBlack += (mgVal * phase + egVal * (24 - phase)) / 24;
             }
         }
         int goForwardPawnBlack = 0;
