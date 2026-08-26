@@ -104,8 +104,8 @@ if(BUILD_TESTING)
         )
     endforeach()
     add_test(
-        NAME search_tt_lmr_reduced_depth_provenance
-        COMMAND howl_correctness_tests search tt_lmr_reduced_depth_provenance
+        NAME search_multipv_correctness
+        COMMAND howl_correctness_tests search multipv_correctness
     )
 endif()
 
