@@ -392,6 +392,20 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         }
         std::sort(moveList.moves, moveList.moves + moveList.count, [](Move *a, Move *b)
                   { return b->value < a->value; });
+        if (!bestMove.empty())
+        {
+            for (int i = 0; i < moveList.count; ++i)
+            {
+                if (ChessStringManipulation::PVToString(*moveList.moves[i], 0, false, board4) == bestMove)
+                {
+                    if (i != 0)
+                    {
+                        std::swap(moveList.moves[0], moveList.moves[i]);
+                    }
+                    break;
+                }
+            }
+        }
         deleteMovesPrintValue(movesPrintValue);
 
         if (maxDepth > 0 && recDepth >= maxDepth)

@@ -887,12 +887,46 @@ int RunBenchmark(const std::filesystem::path& executable, const std::string& tit
     WriteResult(results, title, selected, samples, selectedIndex + 1);
     return 0;
 }
+
+int RunE4ReplyDiagnosis()
+{
+    InitializeEngine(true);
+    UCI::ReleaseCurrentPosition();
+    UCI::ReplaceCurrentBoard(BoardMaker::MakeInitialBoard("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"));
+    Board& b = *UCI::thisBoard;
+    MoveList ml = MoveLogic::MoveGenerator(b, -1, -1);
+    std::cout << "=================================================================\n";
+    std::cout << "STATIC EVALS AND INDEPENDENT SEARCHES AFTER 1. e2e4 (Depth 9 for Black):\n";
+    std::cout << "=================================================================\n";
+    for (int i = 0; i < ml.count; ++i) {
+        Move m = *ml.moves[i];
+        std::string uci = ChessStringManipulation::PVToString(m, 0, false, b);
+        if (uci == "g8f6" || uci == "b8c6" || uci == "e7e5" || uci == "c7c5" || uci == "d7d5" || uci == "b8a6" || uci == "e7e6") {
+            MissingInfoAboutPrevStateFromMove undo(b);
+            GameLogic::DoMove(b, m, m, -1, -1);
+            int se = EvaluationLogic::Evaluate(b);
+            Search::moveCount = 0;
+            Move sm2{}, sm3{}, sm4{};
+            MovePrintValue* mpv = PVSSearch::PVS(true, -200000, 200000, 9, m, sm2, sm3, sm4, b, false, true, 1, false, false);
+            std::cout << "Move " << uci << ": static_eval=" << se << " cp, searched_score=" << (-mpv->value)
+                      << " cp, nodes=" << Search::moveCount << ", PV=" << uci << " " << mpv->printString << "\n";
+            delete mpv;
+            GameLogic::UndoMove(b, m, undo);
+        }
+    }
+    PVSSearch::deleteMoveList(ml);
+    return 0;
+}
 }
 
 int main(int argc, char* argv[])
 {
     try
     {
+        if (argc >= 2 && std::string(argv[1]) == "--diagnose-e4-reply")
+        {
+            return RunE4ReplyDiagnosis();
+        }
         if (!HOWL_BENCHMARK_RELEASE)
         {
             throw std::runtime_error("Howl benchmark must be built in Release configuration");
