@@ -2662,13 +2662,226 @@ int RunIGGDepthMappingCoverage()
     std::cout << "Production PVS bypasses the unsafe IGG depth lookup\n";
     return 0;
 }
+
+int RunUCIMovetime()
+{
+    UCI::IsRelease = true;
+    std::stringstream in;
+    in << "uci\n"
+       << "isready\n"
+       << "position startpos\n"
+       << "go movetime 150\n"
+       << "isready\n"
+       << "quit\n";
+    std::stringstream out;
+    auto start = std::chrono::high_resolution_clock::now();
+    UCI::Run(in, out);
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count();
+    std::string response = out.str();
+    if (response.find("bestmove") == std::string::npos)
+    {
+        std::cerr << "UCI movetime failed: no bestmove found\nOutput:\n" << response << '\n';
+        return 1;
+    }
+    if (duration < 50 || duration > 3000)
+    {
+        std::cerr << "UCI movetime duration out of expected bounds: " << duration << " ms\n";
+        return 1;
+    }
+    std::cout << "UCI movetime completed in " << duration << " ms\n";
+    return 0;
+}
+
+int RunUCIDepth()
+{
+    UCI::IsRelease = true;
+    std::stringstream in;
+    in << "uci\n"
+       << "isready\n"
+       << "position startpos\n"
+       << "go depth 2\n"
+       << "isready\n"
+       << "quit\n";
+    std::stringstream out;
+    UCI::Run(in, out);
+    std::string response = out.str();
+    if (response.find("bestmove") == std::string::npos)
+    {
+        std::cerr << "UCI depth failed: no bestmove found\nOutput:\n" << response << '\n';
+        return 1;
+    }
+    if (response.find("info depth 2") == std::string::npos)
+    {
+        std::cerr << "UCI depth failed: did not reach depth 2\nOutput:\n" << response << '\n';
+        return 1;
+    }
+    if (response.find("info depth 3") != std::string::npos)
+    {
+        std::cerr << "UCI depth failed: exceeded depth 2\nOutput:\n" << response << '\n';
+        return 1;
+    }
+    std::cout << "UCI depth limit respected\n";
+    return 0;
+}
+
+int RunUCINodes()
+{
+    UCI::IsRelease = true;
+    std::stringstream in;
+    in << "uci\n"
+       << "isready\n"
+       << "position startpos\n"
+       << "go nodes 100\n"
+       << "isready\n"
+       << "quit\n";
+    std::stringstream out;
+    UCI::Run(in, out);
+    std::string response = out.str();
+    if (response.find("bestmove") == std::string::npos)
+    {
+        std::cerr << "UCI nodes failed: no bestmove found\nOutput:\n" << response << '\n';
+        return 1;
+    }
+    std::cout << "UCI nodes limit completed with bestmove\n";
+    return 0;
+}
+
+int RunUCIStop()
+{
+    UCI::IsRelease = true;
+    std::stringstream in;
+    in << "uci\n"
+       << "isready\n"
+       << "position startpos\n"
+       << "go infinite\n"
+       << "stop\n"
+       << "isready\n"
+       << "position startpos\n"
+       << "go depth 1\n"
+       << "isready\n"
+       << "quit\n";
+    std::stringstream out;
+    UCI::Run(in, out);
+    std::string response = out.str();
+    size_t firstBestMove = response.find("bestmove");
+    if (firstBestMove == std::string::npos)
+    {
+        std::cerr << "UCI stop failed: first bestmove not found\nOutput:\n" << response << '\n';
+        return 1;
+    }
+    size_t readyok = response.find("readyok", firstBestMove);
+    if (readyok == std::string::npos)
+    {
+        std::cerr << "UCI stop failed: readyok not found after stop\nOutput:\n" << response << '\n';
+        return 1;
+    }
+    size_t secondBestMove = response.find("bestmove", readyok);
+    if (secondBestMove == std::string::npos)
+    {
+        std::cerr << "UCI stop failed: second bestmove not found after loop continuation\nOutput:\n" << response << '\n';
+        return 1;
+    }
+    std::cout << "UCI stop stopped search and kept loop alive\n";
+    return 0;
+}
+
+int RunUCIQuit()
+{
+    UCI::IsRelease = true;
+    std::stringstream in;
+    in << "uci\n"
+       << "isready\n"
+       << "position startpos\n"
+       << "go infinite\n"
+       << "quit\n";
+    std::stringstream out;
+    UCI::Run(in, out);
+    std::cout << "UCI quit terminated cleanly\n";
+    return 0;
+}
+
+int RunUCITimeControl()
+{
+    UCI::IsRelease = true;
+    auto dur1 = UCI::getAllowedTime(60000, 1000, 0);
+    auto ms1 = std::chrono::duration_cast<std::chrono::milliseconds>(dur1).count();
+    if (ms1 != 2818)
+    {
+        std::cerr << "getAllowedTime sudden death mismatch: expected 2818 ms, got " << ms1 << " ms\n";
+        return 1;
+    }
+
+    auto dur2 = UCI::getAllowedTime(10000, 0, 1);
+    auto ms2 = std::chrono::duration_cast<std::chrono::milliseconds>(dur2).count();
+    if (ms2 != 7000)
+    {
+        std::cerr << "getAllowedTime 1 move to go mismatch: expected 7000 ms, got " << ms2 << " ms\n";
+        return 1;
+    }
+
+    auto dur3 = UCI::getAllowedTime(60000, 500, 40);
+    auto ms3 = std::chrono::duration_cast<std::chrono::milliseconds>(dur3).count();
+    if (ms3 != 2600)
+    {
+        std::cerr << "getAllowedTime movestogo mismatch: expected 2600 ms, got " << ms3 << " ms\n";
+        return 1;
+    }
+
+    std::stringstream in;
+    in << "uci\n"
+       << "isready\n"
+       << "position startpos\n"
+       << "go wtime 1000 btime 1000\n"
+       << "isready\n"
+       << "quit\n";
+    std::stringstream out;
+    auto start = std::chrono::high_resolution_clock::now();
+    UCI::Run(in, out);
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count();
+    std::string response = out.str();
+    if (response.find("bestmove") == std::string::npos)
+    {
+        std::cerr << "UCI wtime/btime search failed: no bestmove found\nOutput:\n" << response << '\n';
+        return 1;
+    }
+    std::cout << "UCI time control search completed in " << duration << " ms\n";
+    return 0;
+}
+
+int RunUCI(const std::string& testCase)
+{
+    if (testCase == "movetime")
+        return RunUCIMovetime();
+    if (testCase == "depth")
+        return RunUCIDepth();
+    if (testCase == "nodes")
+        return RunUCINodes();
+    if (testCase == "stop")
+        return RunUCIStop();
+    if (testCase == "quit")
+        return RunUCIQuit();
+    if (testCase == "time_control")
+        return RunUCITimeControl();
+    throw std::runtime_error("Unknown UCI test case: " + testCase);
+}
+
+void CleanupEngine()
+{
+    AttackPlaces::Cleanup();
+    BoardInitializer::Cleanup();
+    PieceMoves::Cleanup();
+    MoveLogic::Cleanup();
+    KingSetup::Cleanup();
+    PassedPawnSetup::Cleanup();
+    UCI::ReleaseCurrentPosition();
+}
 }
 
 int main(int argc, char* argv[])
 {
     if (argc != 3)
     {
-        std::cerr << "Usage: howl_correctness_tests <perft|restoration|zobrist|search|qsearch|cache|lifecycle|memory> <case>\n";
+        std::cerr << "Usage: howl_correctness_tests <perft|restoration|zobrist|search|qsearch|cache|lifecycle|memory|uci> <case>\n";
         return 2;
     }
 
@@ -2676,48 +2889,63 @@ int main(int argc, char* argv[])
     {
         InitializeEngine();
         std::string testType = argv[1];
+        int result = 0;
 
         if (testType == "zobrist")
         {
-            return RunZobrist(argv[2]);
+            result = RunZobrist(argv[2]);
         }
-        if (testType == "search")
+        else if (testType == "search")
         {
             if (std::string(argv[2]) == "igg_depth_mapping")
             {
-                return RunIGGDepthMappingCoverage();
+                result = RunIGGDepthMappingCoverage();
             }
-            return RunSearch(argv[2]);
+            else
+            {
+                result = RunSearch(argv[2]);
+            }
         }
-        if (testType == "qsearch")
+        else if (testType == "qsearch")
         {
-            return RunQSearch(argv[2]);
+            result = RunQSearch(argv[2]);
         }
-        if (testType == "cache")
+        else if (testType == "cache")
         {
-            return RunCache(argv[2]);
+            result = RunCache(argv[2]);
         }
-        if (testType == "lifecycle" && std::string(argv[2]) == "fen_replacement")
+        else if (testType == "lifecycle" && std::string(argv[2]) == "fen_replacement")
         {
-            return RunFenReplacementLifecycle();
+            result = RunFenReplacementLifecycle();
         }
-        if (testType == "memory" && std::string(argv[2]) == "hash_budget")
+        else if (testType == "memory" && std::string(argv[2]) == "hash_budget")
         {
-            return RunHashMemoryBudgetCoverage();
+            result = RunHashMemoryBudgetCoverage();
+        }
+        else if (testType == "uci")
+        {
+            result = RunUCI(argv[2]);
+        }
+        else
+        {
+            const PerftPosition& position = FindPosition(argv[2]);
+
+            if (testType == "perft")
+            {
+                result = RunPerft(position);
+            }
+            else if (testType == "restoration")
+            {
+                result = RunRestoration(position);
+            }
+            else
+            {
+                throw std::runtime_error("Unknown test type: " + testType);
+            }
         }
 
-        const PerftPosition& position = FindPosition(argv[2]);
-
-        if (testType == "perft")
-        {
-            return RunPerft(position);
-        }
-        if (testType == "restoration")
-        {
-            return RunRestoration(position);
-        }
-
-        throw std::runtime_error("Unknown test type: " + testType);
+        CleanupEngine();
+        return result;
     }
     catch (const std::exception& error)
     {
@@ -2725,3 +2953,5 @@ int main(int argc, char* argv[])
         return 1;
     }
 }
+
+

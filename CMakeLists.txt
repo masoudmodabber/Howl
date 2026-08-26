@@ -89,4 +89,12 @@ if(BUILD_TESTING)
         NAME memory_hash_budget
         COMMAND howl_correctness_tests memory hash_budget
     )
+
+    foreach(UCI_CASE movetime depth nodes stop quit time_control)
+        add_test(
+            NAME uci_${UCI_CASE}
+            COMMAND howl_correctness_tests uci ${UCI_CASE}
+        )
+    endforeach()
 endif()
+
