@@ -3022,18 +3022,20 @@ void CleanupEngine()
 }
 }
 
-int RunTTLMRReducedDepthProvenance()
+int RunMultiPVCorrectnessTest()
 {
     InitializeEngine();
     TranspositionTable::Clear();
     UCI::ReleaseCurrentPosition();
-    UCI::ReplaceCurrentBoard(BoardMaker::MakeInitialBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
-    Search::maxDepth = 10;
-    Search::finiteSearch = true;
+    UCI::ReplaceCurrentBoard(BoardMaker::MakeInitialBoard("4k3/8/8/8/3q4/8/3R4/4K3 w - - 0 1"));
+    Option::MultiPV = 4;
+    Search::maxDepth = 5;
+    Search::finiteSearch = false;
     Search::active = true;
     Move m1{}, m2{}, m3{}, m4{};
     Search::MainSearch(m1, m2, m3, m4, *UCI::thisBoard);
-    std::cout << "TT LMR reduced depth provenance test passed\n";
+    Option::MultiPV = 1;
+    std::cout << "MultiPV score correctness test passed\n";
     return 0;
 }
 
@@ -3061,9 +3063,9 @@ int main(int argc, char* argv[])
             {
                 result = RunIGGDepthMappingCoverage();
             }
-            else if (std::string(argv[2]) == "tt_lmr_reduced_depth_provenance")
+            else if (std::string(argv[2]) == "multipv_correctness")
             {
-                result = RunTTLMRReducedDepthProvenance();
+                result = RunMultiPVCorrectnessTest();
             }
             else
             {

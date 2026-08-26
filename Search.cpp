@@ -275,7 +275,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     MPValue = PVSSearch::PVS(tempPVNode, -KthBestValue - Option::nullWindowSize, -KthBestValue, recDepth - 1, *move, move2, move3, move4, board4, MATESearch, true, 1, false, true);
                     value = -MPValue->value;
                     move->value = value;
-                    if ((value > KthBestValue /* && value < beta*/) || move->value > 159800 || move->value < -159800)
+                    if ((value > KthBestValue /* && value < beta*/) || move->value > 159800 || move->value < -159800 || (!finiteSearch && Option::MultiPV > 1))
                     {
                         delete MPValue;
                         MPValue = PVSSearch::PVS(true, -beta, -KthBestValue, recDepth - 1, *move, move2, move3, move4, board4, MATESearch, true, 1, false, false);
