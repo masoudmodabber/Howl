@@ -8,13 +8,13 @@
 #include <cstdint>
 
 struct MoveList {
-    Move* moves[80];
+    Move* moves[256];
     int count = 0;
 };
 
 struct AttackerState {
-    std::uint32_t* pieceCounts;
-    int* orderingScores;
+    std::uint32_t pieceCounts[64] = {};
+    int orderingScores[64] = {};
 };
 
 class MoveLogic

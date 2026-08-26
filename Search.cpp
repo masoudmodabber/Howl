@@ -147,6 +147,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         value = -200000;
         std::vector<MovePrintValue *> movesPrintValue;
         int KthBestValue = -200000;
+        bool pvPrintedThisDepth = false;
 
         for (int counter = 0; counter < moveList.count; counter++)
         {
@@ -235,7 +236,19 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     std::to_string(nps) +
                     " pv " + ChessStringManipulation::PVToString(*move, 1, mated, board4) + ' ' + MPValue->printString + " score " + Score;
                 movesPrintValue.push_back(movePrint);
-                KthBestValue = PrintKBest(movesPrintValue, MultiPV, finiteSearch);
+                if (!finiteSearch && Option::MultiPV > 1)
+                {
+                    KthBestValue = PrintKBest(movesPrintValue, MultiPV, finiteSearch);
+                }
+                else if (moveList.count == 1)
+                {
+                    KthBestValue = PrintKBest(movesPrintValue, MultiPV, finiteSearch);
+                    pvPrintedThisDepth = true;
+                }
+                else
+                {
+                    KthBestValue = value;
+                }
             }
             else
             {
@@ -330,9 +343,20 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     std::to_string(nps) +
                     " pv " + ChessStringManipulation::PVToString(*move, 1, mated, board4) + ' ' + MPValue->printString + " score " + Score;
                 movesPrintValue.push_back(movePrint);
-                if (move->value > KthBestValue)
+                if (!finiteSearch && Option::MultiPV > 1)
                 {
-                    KthBestValue = PrintKBest(movesPrintValue, MultiPV, finiteSearch);
+                    if (move->value > KthBestValue)
+                    {
+                        KthBestValue = PrintKBest(movesPrintValue, MultiPV, finiteSearch);
+                    }
+                }
+                else
+                {
+                    if (value > KthBestValue)
+                    {
+                        KthBestValue = PrintKBest(movesPrintValue, MultiPV, finiteSearch);
+                        pvPrintedThisDepth = true;
+                    }
                 }
             }
 
@@ -356,6 +380,10 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     break;
                 }
             }
+        }
+        if (!stopRequested && !pvPrintedThisDepth && !movesPrintValue.empty())
+        {
+            PrintKBest(movesPrintValue, MultiPV, finiteSearch);
         }
         if (stopRequested)
         {

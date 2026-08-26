@@ -1,4 +1,4 @@
-﻿#ifdef _WIN32
+#ifdef _WIN32
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
 #endif
@@ -15,7 +15,7 @@ int Option::reductiondepth = 4;
 int Option::futilityMargin = 20;
 int Option::extendedFutilityMargin = 40;
 int Option::superExtendedFutilityMargin = 80;
-int Option::PawnValue = 10;
+int Option::PawnValue = 100;
 int Option::KnightValue = 350;
 int Option::BishopValue = 350;
 int Option::RookValue = 550;
@@ -31,7 +31,7 @@ int Option::WhitePassedPawnValueMiddleGam[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                40, 50, 60, 70, 70, 60, 50, 40,
                                                50, 60, 70, 80, 80, 70, 60, 50,
                                                60, 70, 80, 90, 90, 80, 70, 60,
-                                               70, 80, 90, 10, 10, 90, 80, 70,
+                                               70, 80, 90, 100, 100, 90, 80, 70,
                                                0, 0, 0, 0, 0, 0, 0, 0};
 
 int Option::PawnInValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
@@ -424,7 +424,7 @@ int Option::WhiteQueenAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 2
 int Option::WhiteKingAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 int Option::BlackPawnAttackValueMovement[16] = {0, 35, 10, 10, 20, 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-int Option::BlackKnightAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int Option::BlackKnightAttackValueMovement[16] = {0, 15, 50, 50, 10, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int Option::BlackBishopAttackValueMovement[16] = {0, 15, 50, 50, 10, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int Option::BlackRookAttackValueMovement[16] = {0, 10, 25, 35, 50, 150, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int Option::BlackQueenAttackValueMovement[16] = {0, 5, 20, 35, 50, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -434,9 +434,9 @@ int Option::WhitePassedPawnValueEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                              30, 50, 70, 60, 60, 70, 50, 30,
                                              40, 60, 80, 70, 70, 80, 60, 40,
                                              50, 70, 90, 80, 80, 90, 70, 50,
-                                             60, 80, 10, 90, 90, 10, 80, 60,
-                                             70, 90, 110, 10, 10, 110, 90, 70,
-                                             80, 10, 120, 110, 110, 120, 10, 80,
+                                             60, 80, 100, 90, 90, 100, 80, 60,
+                                             70, 90, 110, 100, 100, 110, 90, 70,
+                                             80, 100, 120, 110, 110, 120, 100, 80,
                                              0, 0, 0, 0, 0, 0, 0, 0};
 
 int Option::PawnInValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
@@ -634,7 +634,7 @@ int Option::PawnMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 2, 4, 4, 2, 0, 0,
-                                          0, 0, 3, 7, 7, 0, 0, 0,
+                                          0, 0, 3, 7, 7, 3, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0};
@@ -773,7 +773,7 @@ int Option::PieceAttackArroundTheKingEndGame[16] = {0, 1, 3, 3, 5, 9, 0, 0, 0, 1
 
 int Option::WhiteKingPlaceSafetyMiddleGame[] = {-4, -0, -6, -20, -15, -6, -0, -4,
                                                 -8, -6, -12, -20, -20, -12, -6, -8,
-                                                -18, -18, -22, -30, -30, -18, -18, -22,
+                                                -18, -18, -22, -30, -30, -22, -18, -18,
                                                 -35, -35, -35, -35, -35, -35, -35, -35,
                                                 -35, -35, -35, -35, -35, -35, -35, -35,
                                                 -35, -35, -35, -35, -35, -35, -35, -35,
