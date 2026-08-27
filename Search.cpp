@@ -22,6 +22,7 @@
 #include "KingSetup.h"
 #include "PassedPawnSetup.h"
 #include "PieceMoves.h"
+#include "DiagnosticLogger.h"
 
 std::atomic<bool> Search::active{false};
 time_t Search::beginTime{0};
@@ -47,18 +48,24 @@ void Search::PrintBestMove()
     const std::string& outBest = !completedBestMove.empty() ? completedBestMove : bestMove;
     const std::string& outPonder = !completedBestMove.empty() ? completedPonderMove : ponderMove;
 
+    uint64_t sId = DiagnosticLogger::currentSearchId.load();
     if (outBest.empty())
     {
+        DiagnosticLogger::Log("EMIT_BESTMOVE", "bestmove (none)", sId);
         std::cout << "bestmove (none)\n" << std::flush;
         return;
     }
     if (!outPonder.empty())
     {
-        std::cout << "bestmove " << outBest << " ponder " << outPonder << '\n' << std::flush;
+        std::string bmStr = "bestmove " + outBest + " ponder " + outPonder;
+        DiagnosticLogger::Log("EMIT_BESTMOVE", bmStr, sId);
+        std::cout << bmStr << '\n' << std::flush;
     }
     else
     {
-        std::cout << "bestmove " << outBest << '\n' << std::flush;
+        std::string bmStr = "bestmove " + outBest;
+        DiagnosticLogger::Log("EMIT_BESTMOVE", bmStr, sId);
+        std::cout << bmStr << '\n' << std::flush;
     }
 }
 
@@ -395,6 +402,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                         KthBestValue = value;
                         if (!bestPVString.empty())
                         {
+                            DiagnosticLogger::Log("EMIT_INFO", bestPVString, DiagnosticLogger::currentSearchId.load());
                             std::cout << bestPVString << '\n';
                             pvPrintedThisDepth = true;
                         }
@@ -434,10 +442,12 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             }
             else if (!bestPVString.empty())
             {
+                DiagnosticLogger::Log("EMIT_INFO", bestPVString, DiagnosticLogger::currentSearchId.load());
                 std::cout << bestPVString << '\n';
             }
             else if (!movesPrintValue.empty())
             {
+                DiagnosticLogger::Log("EMIT_INFO", movesPrintValue[0]->printString, DiagnosticLogger::currentSearchId.load());
                 std::cout << movesPrintValue[0]->printString << '\n';
             }
         }
@@ -641,12 +651,9 @@ void Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
     int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
     int64_t safeMoveCount = static_cast<int64_t>(moveCount);
     int64_t nps = (elapsed_ms > 0) ? (safeMoveCount * 1000LL / elapsed_ms) : 0;
-    std::cout << "info depth 1 time "
-        << elapsed_ms
-        << " nodes " << moveCount
-        << " nps " << nps
-        << " pv " << ChessStringManipulation::PVToString(*(moveList.moves[0]), 1, mated, board4)
-        << " score " << Score << '\n';
+    std::string infoStr = "info depth 1 time " + std::to_string(elapsed_ms) + " nodes " + std::to_string(moveCount) + " nps " + std::to_string(nps) + " pv " + ChessStringManipulation::PVToString(*(moveList.moves[0]), 1, mated, board4) + " score " + Score;
+    DiagnosticLogger::Log("EMIT_INFO", infoStr, DiagnosticLogger::currentSearchId.load());
+    std::cout << infoStr << '\n';
 }
 
 void Search::SearchForCheckUpdate()

@@ -17,6 +17,8 @@
 #include "HashMemoryBudget.h"
 #include "RepetitionHistory.h"
 
+#include "DiagnosticLogger.h"
+
 // Correctness tests retain the make/undo board-copy assertions. Normal engine
 // execution starts in production mode and avoids those diagnostic allocations.
 #if HOWL_CORRECTNESS_TESTING
@@ -71,15 +73,18 @@ void UCI::ReleaseMoveHistory()
 void UCI::ReplaceMoveHistory(LastFourMoves *replacementHistory)
 {
     ReleaseMoveHistory();
-    move1 = replacementHistory->Move1;
-    move2 = replacementHistory->Move2;
-    move3 = replacementHistory->Move3;
-    move4 = replacementHistory->Move4;
-    replacementHistory->Move1 = nullptr;
-    replacementHistory->Move2 = nullptr;
-    replacementHistory->Move3 = nullptr;
-    replacementHistory->Move4 = nullptr;
-    delete replacementHistory;
+    if (replacementHistory != nullptr)
+    {
+        move1 = replacementHistory->Move1;
+        move2 = replacementHistory->Move2;
+        move3 = replacementHistory->Move3;
+        move4 = replacementHistory->Move4;
+        replacementHistory->Move1 = nullptr;
+        replacementHistory->Move2 = nullptr;
+        replacementHistory->Move3 = nullptr;
+        replacementHistory->Move4 = nullptr;
+        delete replacementHistory;
+    }
 }
 
 void UCI::ReleaseCurrentPosition()
@@ -108,15 +113,21 @@ std::size_t UCI::ReleasedHistoryMoveCount()
 
 void UCI::MainSearchStart()
 {
+    uint64_t prevId = DiagnosticLogger::currentSearchId.load();
     if (searchThread.joinable())
     {
+        DiagnosticLogger::Log("JOIN_BEGIN", "MainSearchStart joining previous searchThread", prevId);
         Search::active = false;
         searchThread.join();
+        DiagnosticLogger::Log("JOIN_END", "MainSearchStart joined previous searchThread", prevId);
     }
     HashMemoryBudget::EnsureDefaultConfigured(std::cout);
     HashMemoryBudget::MarkSearchStarted();
     Search::startTime = std::chrono::high_resolution_clock::now();
     Search::active = true;
+    uint64_t searchId = ++DiagnosticLogger::currentSearchId;
+    std::string fenBeforeGo = DiagnosticLogger::BoardToFen(thisBoard);
+    DiagnosticLogger::Log("SEARCH_START", "Spawning search thread with FEN: " + fenBeforeGo, searchId);
     searchThread = std::thread(Search::MainSearch, std::ref(*move1), std::ref(*move2), std::ref(*move3), std::ref(*move4), std::ref(*thisBoard));
 }
 
@@ -168,8 +179,10 @@ void UCI::Run(std::istream& in, std::ostream& out)
             {
                 if (searchThread.joinable())
                 {
+                    DiagnosticLogger::Log("JOIN_BEGIN", "EOF on stdin, joining searchThread", DiagnosticLogger::currentSearchId.load());
                     Search::active = false;
                     searchThread.join();
+                    DiagnosticLogger::Log("JOIN_END", "EOF on stdin, joined searchThread", DiagnosticLogger::currentSearchId.load());
                 }
                 break;
             }
@@ -189,6 +202,8 @@ void UCI::Run(std::istream& in, std::ostream& out)
             continue;
         }
 
+        DiagnosticLogger::Log("UCI_CMD", order, DiagnosticLogger::currentSearchId.load());
+
         if (order == "uci")
         {
             out << "id name Howl 1\n";
@@ -201,7 +216,9 @@ void UCI::Run(std::istream& in, std::ostream& out)
         {
             if (searchThread.joinable())
             {
+                DiagnosticLogger::Log("JOIN_BEGIN", "isready joining searchThread", DiagnosticLogger::currentSearchId.load());
                 searchThread.join();
+                DiagnosticLogger::Log("JOIN_END", "isready joined searchThread", DiagnosticLogger::currentSearchId.load());
             }
             HashMemoryBudget::EnsureDefaultConfigured(out);
             out << "readyok\n" << std::flush;
@@ -210,16 +227,22 @@ void UCI::Run(std::istream& in, std::ostream& out)
         {
             if (searchThread.joinable())
             {
+                DiagnosticLogger::Log("STOP_REQUEST", "ucinewgame stopping search", DiagnosticLogger::currentSearchId.load());
                 Search::active = false;
+                DiagnosticLogger::Log("JOIN_BEGIN", "ucinewgame joining searchThread", DiagnosticLogger::currentSearchId.load());
                 searchThread.join();
+                DiagnosticLogger::Log("JOIN_END", "ucinewgame joined searchThread", DiagnosticLogger::currentSearchId.load());
             }
         }
         else if (order == "quit")
         {
             if (searchThread.joinable())
             {
+                DiagnosticLogger::Log("STOP_REQUEST", "quit stopping search", DiagnosticLogger::currentSearchId.load());
                 Search::active = false;
+                DiagnosticLogger::Log("JOIN_BEGIN", "quit joining searchThread", DiagnosticLogger::currentSearchId.load());
                 searchThread.join();
+                DiagnosticLogger::Log("JOIN_END", "quit joined searchThread", DiagnosticLogger::currentSearchId.load());
             }
             threadContinue = false;
         }
@@ -227,8 +250,11 @@ void UCI::Run(std::istream& in, std::ostream& out)
         {
             if (searchThread.joinable())
             {
+                DiagnosticLogger::Log("STOP_REQUEST", "stop command received", DiagnosticLogger::currentSearchId.load());
                 Search::active = false;
+                DiagnosticLogger::Log("JOIN_BEGIN", "stop joining searchThread", DiagnosticLogger::currentSearchId.load());
                 searchThread.join();
+                DiagnosticLogger::Log("JOIN_END", "stop joined searchThread", DiagnosticLogger::currentSearchId.load());
             }
         }
         if (!threadContinue)
@@ -238,9 +264,13 @@ void UCI::Run(std::istream& in, std::ostream& out)
         {
             if (searchThread.joinable())
             {
+                DiagnosticLogger::Log("STOP_REQUEST", "position stopping search", DiagnosticLogger::currentSearchId.load());
                 Search::active = false;
+                DiagnosticLogger::Log("JOIN_BEGIN", "position joining searchThread", DiagnosticLogger::currentSearchId.load());
                 searchThread.join();
+                DiagnosticLogger::Log("JOIN_END", "position joined searchThread", DiagnosticLogger::currentSearchId.load());
             }
+            DiagnosticLogger::Log("POSITION_BEGIN", order, DiagnosticLogger::currentSearchId.load());
             if (order.length() > 8 && order.substr(0, 9) == "position ")
             {
                 if (order.substr(9, 8) == "startpos")
@@ -292,6 +322,7 @@ void UCI::Run(std::istream& in, std::ostream& out)
                     }
                 }
             }
+            DiagnosticLogger::Log("POSITION_END", "Final FEN: " + DiagnosticLogger::BoardToFen(thisBoard), DiagnosticLogger::currentSearchId.load());
         }
         if (order == "ponderhit")
         {
