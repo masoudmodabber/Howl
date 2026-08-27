@@ -121,8 +121,9 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         MPValue = nullptr;
         return retValue;
     }
+    int valueTemp2 = -200000;
     if (!checkChecked && !currentSideInCheck) {
-        int valueTemp2 = EvaluationLogic::Evaluate(board4);
+        valueTemp2 = EvaluationLogic::Evaluate(board4);
         if (valueTemp2 >= beta) {
             retValue->value = valueTemp2;
             delete MPValue;
@@ -140,7 +141,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
 #endif
     std::string SelectedPV = "";
     int availMoves = 0;
-    int standPot = EvaluationLogic::Evaluate(board4);
+    int standPot = (!checkChecked && !currentSideInCheck) ? valueTemp2 : EvaluationLogic::Evaluate(board4);
     bool firstMove = true;
     for (int i = 0; i < moveList.count; ++i) {
         Move* move = moveList.moves[i];
