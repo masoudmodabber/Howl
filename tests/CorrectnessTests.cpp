@@ -2808,6 +2808,7 @@ int RunMoveOrderingStatsDiagnostic()
         PVSSearch::ResetMoveOrderingStatsForTesting();
         PVSSearch::ResetLMRStatsForTesting();
         PVSSearch::ResetFutilityStatsForTesting();
+        PVSSearch::ResetNullMoveStatsForTesting();
 
         std::stringstream in;
         in << "uci\n"
@@ -2822,6 +2823,7 @@ int RunMoveOrderingStatsDiagnostic()
         PVSSearch::PrintMoveOrderingStatsForTesting();
         PVSSearch::PrintLMRStatsForTesting();
         PVSSearch::PrintFutilityStatsForTesting();
+        PVSSearch::PrintNullMoveStatsForTesting();
     }
     return 0;
 }

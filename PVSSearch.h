@@ -199,6 +199,56 @@ public:
     static FutilityStats GetFutilityStatsForTesting();
     static void ResetFutilityStatsForTesting();
     static void PrintFutilityStatsForTesting();
+
+    struct NullMoveBucket {
+        uint64_t attempts = 0;
+        uint64_t failLow = 0;
+        uint64_t cutoffs = 0;
+        uint64_t verifiedCutoffs = 0;
+        uint64_t falseCutoffs = 0;
+
+        void recordAttempt(bool isCutoff, bool isVerified) {
+            attempts++;
+            if (isCutoff) {
+                cutoffs++;
+                if (isVerified) verifiedCutoffs++;
+                else falseCutoffs++;
+            } else {
+                failLow++;
+            }
+        }
+    };
+
+    struct NullMoveStats {
+        uint64_t totalAttempts = 0;
+        uint64_t totalFailLow = 0;
+        uint64_t totalCutoffs = 0;
+        uint64_t totalVerifiedCutoffs = 0;
+        uint64_t totalFalseCutoffs = 0;
+
+        NullMoveBucket depth4;
+        NullMoveBucket depth5To6;
+        NullMoveBucket depth7To8;
+        NullMoveBucket depth9Plus;
+
+        NullMoveBucket matQueen;
+        NullMoveBucket matRookNoQueen;
+        NullMoveBucket matMinorsOnly;
+        NullMoveBucket matSinglePiece;
+        NullMoveBucket matMultiPiece;
+
+        NullMoveBucket margin0To49;
+        NullMoveBucket margin50To149;
+        NullMoveBucket margin150To299;
+        NullMoveBucket margin300Plus;
+
+        NullMoveBucket r3;
+        NullMoveBucket r4;
+    };
+
+    static NullMoveStats GetNullMoveStatsForTesting();
+    static void ResetNullMoveStatsForTesting();
+    static void PrintNullMoveStatsForTesting();
 #endif
 
 private:

@@ -462,6 +462,112 @@ void PVSSearch::PrintFutilityStatsForTesting()
     PrintFutilityBucketRow("Gap 300 to 499:", g_futilityStats.gap300To499);
     PrintFutilityBucketRow("Gap 500+:", g_futilityStats.gap500Plus);
 }
+
+PVSSearch::NullMoveStats g_nullMoveStats;
+
+void RecordNullMoveAttempt(int depth, int R, int staticMargin, const Board &board, int turn, bool isCutoff, bool isVerified)
+{
+    g_nullMoveStats.totalAttempts++;
+    if (isCutoff) {
+        g_nullMoveStats.totalCutoffs++;
+        if (isVerified) g_nullMoveStats.totalVerifiedCutoffs++;
+        else g_nullMoveStats.totalFalseCutoffs++;
+    } else {
+        g_nullMoveStats.totalFailLow++;
+    }
+
+    // Depth
+    if (depth == 4) g_nullMoveStats.depth4.recordAttempt(isCutoff, isVerified);
+    else if (depth >= 5 && depth <= 6) g_nullMoveStats.depth5To6.recordAttempt(isCutoff, isVerified);
+    else if (depth >= 7 && depth <= 8) g_nullMoveStats.depth7To8.recordAttempt(isCutoff, isVerified);
+    else if (depth >= 9) g_nullMoveStats.depth9Plus.recordAttempt(isCutoff, isVerified);
+
+    // Reduction R
+    if (R == 3) g_nullMoveStats.r3.recordAttempt(isCutoff, isVerified);
+    else if (R == 4) g_nullMoveStats.r4.recordAttempt(isCutoff, isVerified);
+
+    // Margin
+    if (staticMargin < 50) g_nullMoveStats.margin0To49.recordAttempt(isCutoff, isVerified);
+    else if (staticMargin < 150) g_nullMoveStats.margin50To149.recordAttempt(isCutoff, isVerified);
+    else if (staticMargin < 300) g_nullMoveStats.margin150To299.recordAttempt(isCutoff, isVerified);
+    else g_nullMoveStats.margin300Plus.recordAttempt(isCutoff, isVerified);
+
+    // Material Class
+    int knights = board.pieces[turn * 8 + 2].size();
+    int bishops = board.pieces[turn * 8 + 3].size();
+    int rooks = board.pieces[turn * 8 + 4].size();
+    int queens = board.pieces[turn * 8 + 5].size();
+    int totalNonPawnCount = knights + bishops + rooks + queens;
+
+    if (queens > 0) g_nullMoveStats.matQueen.recordAttempt(isCutoff, isVerified);
+    else if (rooks > 0) g_nullMoveStats.matRookNoQueen.recordAttempt(isCutoff, isVerified);
+    else g_nullMoveStats.matMinorsOnly.recordAttempt(isCutoff, isVerified);
+
+    if (totalNonPawnCount == 1) g_nullMoveStats.matSinglePiece.recordAttempt(isCutoff, isVerified);
+    else if (totalNonPawnCount >= 2) g_nullMoveStats.matMultiPiece.recordAttempt(isCutoff, isVerified);
+}
+
+void PrintNullBucketRow(const char *label, const PVSSearch::NullMoveBucket &b)
+{
+    double flPct = (b.attempts > 0) ? (100.0 * b.failLow / static_cast<double>(b.attempts)) : 0.0;
+    double cutPct = (b.attempts > 0) ? (100.0 * b.cutoffs / static_cast<double>(b.attempts)) : 0.0;
+    double verPct = (b.cutoffs > 0) ? (100.0 * b.verifiedCutoffs / static_cast<double>(b.cutoffs)) : 0.0;
+    double falsePct = (b.cutoffs > 0) ? (100.0 * b.falseCutoffs / static_cast<double>(b.cutoffs)) : 0.0;
+
+    char buf[256];
+    snprintf(buf, sizeof(buf), "  %-24s Attempts: %6lu | Fail-low: %6lu (%5.1f%%) | Cutoffs: %6lu (%5.1f%%) | Confirmed: %6lu (%5.1f%%) | False: %4lu (%4.1f%%)\n",
+             label, (unsigned long)b.attempts, (unsigned long)b.failLow, flPct, (unsigned long)b.cutoffs, cutPct, (unsigned long)b.verifiedCutoffs, verPct, (unsigned long)b.falseCutoffs, falsePct);
+    std::cout << buf;
+}
+
+PVSSearch::NullMoveStats PVSSearch::GetNullMoveStatsForTesting()
+{
+    return g_nullMoveStats;
+}
+
+void PVSSearch::ResetNullMoveStatsForTesting()
+{
+    g_nullMoveStats = NullMoveStats{};
+}
+
+void PVSSearch::PrintNullMoveStatsForTesting()
+{
+    std::cout << "=== Null Move Pruning (NMP) Safety Stats (Recursive PVS) ===\n";
+    std::cout << "Total null move attempts: " << g_nullMoveStats.totalAttempts << "\n";
+
+    double flPct = (g_nullMoveStats.totalAttempts > 0) ? (100.0 * g_nullMoveStats.totalFailLow / static_cast<double>(g_nullMoveStats.totalAttempts)) : 0.0;
+    double cutPct = (g_nullMoveStats.totalAttempts > 0) ? (100.0 * g_nullMoveStats.totalCutoffs / static_cast<double>(g_nullMoveStats.totalAttempts)) : 0.0;
+    double verPct = (g_nullMoveStats.totalCutoffs > 0) ? (100.0 * g_nullMoveStats.totalVerifiedCutoffs / static_cast<double>(g_nullMoveStats.totalCutoffs)) : 0.0;
+    double falsePct = (g_nullMoveStats.totalCutoffs > 0) ? (100.0 * g_nullMoveStats.totalFalseCutoffs / static_cast<double>(g_nullMoveStats.totalCutoffs)) : 0.0;
+
+    char buf[256];
+    snprintf(buf, sizeof(buf), "  Null move fail-lows:           %6lu (%5.1f%%)\n  Null move cutoffs:             %6lu (%5.1f%%)\n  Confirmed genuine cutoffs:     %6lu (%5.1f%% of cutoffs)\n  False cutoffs (failed verify): %6lu (%5.1f%% of cutoffs)\n",
+             (unsigned long)g_nullMoveStats.totalFailLow, flPct, (unsigned long)g_nullMoveStats.totalCutoffs, cutPct, (unsigned long)g_nullMoveStats.totalVerifiedCutoffs, verPct, (unsigned long)g_nullMoveStats.totalFalseCutoffs, falsePct);
+    std::cout << buf;
+
+    std::cout << "\n[By Remaining Depth]\n";
+    PrintNullBucketRow("Depth 4:", g_nullMoveStats.depth4);
+    PrintNullBucketRow("Depth 5-6:", g_nullMoveStats.depth5To6);
+    PrintNullBucketRow("Depth 7-8:", g_nullMoveStats.depth7To8);
+    PrintNullBucketRow("Depth 9+:", g_nullMoveStats.depth9Plus);
+
+    std::cout << "\n[By Reduction R]\n";
+    PrintNullBucketRow("R = 3:", g_nullMoveStats.r3);
+    PrintNullBucketRow("R = 4:", g_nullMoveStats.r4);
+
+    std::cout << "\n[By Side-to-Move Material Class]\n";
+    PrintNullBucketRow("Queen present:", g_nullMoveStats.matQueen);
+    PrintNullBucketRow("Rook (no queen):", g_nullMoveStats.matRookNoQueen);
+    PrintNullBucketRow("Minor pieces only:", g_nullMoveStats.matMinorsOnly);
+    PrintNullBucketRow("Single non-pawn piece:", g_nullMoveStats.matSinglePiece);
+    PrintNullBucketRow(">=2 non-pawn pieces:", g_nullMoveStats.matMultiPiece);
+
+    std::cout << "\n[By Static Margin (staticEval - beta)]\n";
+    PrintNullBucketRow("Margin 0 to 49:", g_nullMoveStats.margin0To49);
+    PrintNullBucketRow("Margin 50 to 149:", g_nullMoveStats.margin50To149);
+    PrintNullBucketRow("Margin 150 to 299:", g_nullMoveStats.margin150To299);
+    PrintNullBucketRow("Margin 300+:", g_nullMoveStats.margin300Plus);
+}
 #endif
 
 MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch)
@@ -538,6 +644,24 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     }
 
                     GameLogic::UndoMove(board4, nullMove, undoInfo);
+
+#if HOWL_CORRECTNESS_TESTING
+                    bool isCutoff = (nullScore >= beta);
+                    bool isVerified = false;
+                    if (isCutoff)
+                    {
+                        // In instrumentation mode only: perform normal verification search
+                        // from the original position without null move to check if value >= beta
+                        MovePrintValue *verMP = PVS(false, beta - 1, beta, depth, prevMove, move1, move2, move3, board4, MAtESearch, false, depthGone, previousMoveWasCheck, true);
+                        int verVal = verMP->value;
+                        if (verVal >= beta)
+                        {
+                            isVerified = true;
+                        }
+                        delete verMP;
+                    }
+                    RecordNullMoveAttempt(depth, R, staticEval - beta, board4, turn, isCutoff, isVerified);
+#endif
 
                     if (nullScore >= beta)
                     {
