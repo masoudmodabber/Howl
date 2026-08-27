@@ -149,6 +149,45 @@ public:
         LMRBucket idx4To7_losingCapture;
     };
 
+    struct FutilityBucket {
+        uint64_t total = 0;
+        uint64_t failLow = 0;
+        uint64_t pv = 0;
+        uint64_t cutoff = 0;
+
+        void record(int val, int alpha, int beta) {
+            total++;
+            if (val <= alpha) failLow++;
+            else if (val < beta) pv++;
+            else cutoff++;
+        }
+    };
+
+    struct FutilityStats {
+        uint64_t totalCandidates = 0;
+        uint64_t candidatesFailLow = 0;
+        uint64_t candidatesPV = 0;
+        uint64_t candidatesBetaCutoff = 0;
+
+        FutilityBucket depth1;
+        FutilityBucket depth2;
+
+        FutilityBucket idx1;
+        FutilityBucket idx2;
+        FutilityBucket idx3;
+        FutilityBucket idx4To7;
+        FutilityBucket idx8Plus;
+
+        FutilityBucket ordinaryQuiet;
+        FutilityBucket killerQuiet;
+        FutilityBucket quietGivingCheck;
+
+        FutilityBucket gap0To149;
+        FutilityBucket gap150To299;
+        FutilityBucket gap300To499;
+        FutilityBucket gap500Plus;
+    };
+
     static MoveOrderingStats GetMoveOrderingStatsForTesting();
     static void ResetMoveOrderingStatsForTesting();
     static void PrintMoveOrderingStatsForTesting();
@@ -156,6 +195,10 @@ public:
     static LMRStats GetLMRStatsForTesting();
     static void ResetLMRStatsForTesting();
     static void PrintLMRStatsForTesting();
+
+    static FutilityStats GetFutilityStatsForTesting();
+    static void ResetFutilityStatsForTesting();
+    static void PrintFutilityStatsForTesting();
 #endif
 
 private:

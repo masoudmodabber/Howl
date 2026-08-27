@@ -368,6 +368,100 @@ void PVSSearch::PrintLMRStatsForTesting()
     PrintLMRBucketRow("Killer quiet:",     g_lmrStats.idx4To7_killer);
     PrintLMRBucketRow("Losing capture:",   g_lmrStats.idx4To7_losingCapture);
 }
+
+PVSSearch::FutilityStats g_futilityStats;
+
+void RecordFutilityCandidate(int moveIndex, int depth, int ply, const Move &move, int staticEval, int origAlpha, int origBeta, int actualValue, bool givesCheck)
+{
+    g_futilityStats.totalCandidates++;
+    if (actualValue <= origAlpha)
+        g_futilityStats.candidatesFailLow++;
+    else if (actualValue < origBeta)
+        g_futilityStats.candidatesPV++;
+    else
+        g_futilityStats.candidatesBetaCutoff++;
+
+    if (depth == 1) g_futilityStats.depth1.record(actualValue, origAlpha, origBeta);
+    else if (depth == 2) g_futilityStats.depth2.record(actualValue, origAlpha, origBeta);
+
+    if (moveIndex == 1) g_futilityStats.idx1.record(actualValue, origAlpha, origBeta);
+    else if (moveIndex == 2) g_futilityStats.idx2.record(actualValue, origAlpha, origBeta);
+    else if (moveIndex == 3) g_futilityStats.idx3.record(actualValue, origAlpha, origBeta);
+    else if (moveIndex >= 4 && moveIndex <= 7) g_futilityStats.idx4To7.record(actualValue, origAlpha, origBeta);
+    else g_futilityStats.idx8Plus.record(actualValue, origAlpha, origBeta);
+
+    bool isKiller = (ply >= 0 && ply < PVSSearch::MaxKillerPly && (PVSSearch::killers[ply][0] == move || PVSSearch::killers[ply][1] == move));
+    if (givesCheck)
+        g_futilityStats.quietGivingCheck.record(actualValue, origAlpha, origBeta);
+    else if (isKiller)
+        g_futilityStats.killerQuiet.record(actualValue, origAlpha, origBeta);
+    else
+        g_futilityStats.ordinaryQuiet.record(actualValue, origAlpha, origBeta);
+
+    int staticGap = origAlpha - staticEval;
+    if (staticGap < 150) g_futilityStats.gap0To149.record(actualValue, origAlpha, origBeta);
+    else if (staticGap < 300) g_futilityStats.gap150To299.record(actualValue, origAlpha, origBeta);
+    else if (staticGap < 500) g_futilityStats.gap300To499.record(actualValue, origAlpha, origBeta);
+    else g_futilityStats.gap500Plus.record(actualValue, origAlpha, origBeta);
+}
+
+void PrintFutilityBucketRow(const char *label, const PVSSearch::FutilityBucket &b)
+{
+    double flPct = (b.total > 0) ? (100.0 * b.failLow / static_cast<double>(b.total)) : 0.0;
+    double pvPct = (b.total > 0) ? (100.0 * b.pv / static_cast<double>(b.total)) : 0.0;
+    double cutPct = (b.total > 0) ? (100.0 * b.cutoff / static_cast<double>(b.total)) : 0.0;
+    char buf[256];
+    snprintf(buf, sizeof(buf), "  %-24s Total: %7lu | <=alpha: %7lu (%5.1f%%) | PV: %5lu (%4.1f%%) | >=beta: %5lu (%4.1f%%)\n",
+             label, (unsigned long)b.total, (unsigned long)b.failLow, flPct, (unsigned long)b.pv, pvPct, (unsigned long)b.cutoff, cutPct);
+    std::cout << buf;
+}
+
+PVSSearch::FutilityStats PVSSearch::GetFutilityStatsForTesting()
+{
+    return g_futilityStats;
+}
+
+void PVSSearch::ResetFutilityStatsForTesting()
+{
+    g_futilityStats = FutilityStats{};
+}
+
+void PVSSearch::PrintFutilityStatsForTesting()
+{
+    std::cout << "=== Futility Pruning Safety Stats (Recursive PVS) ===\n";
+    std::cout << "Total futility candidates evaluated: " << g_futilityStats.totalCandidates << "\n";
+
+    double flPct = (g_futilityStats.totalCandidates > 0) ? (100.0 * g_futilityStats.candidatesFailLow / static_cast<double>(g_futilityStats.totalCandidates)) : 0.0;
+    double pvPct = (g_futilityStats.totalCandidates > 0) ? (100.0 * g_futilityStats.candidatesPV / static_cast<double>(g_futilityStats.totalCandidates)) : 0.0;
+    double cutPct = (g_futilityStats.totalCandidates > 0) ? (100.0 * g_futilityStats.candidatesBetaCutoff / static_cast<double>(g_futilityStats.totalCandidates)) : 0.0;
+
+    char buf[256];
+    snprintf(buf, sizeof(buf), "  Overall <= original alpha (safe to prune): %7lu (%5.1f%%)\n  Overall > alpha and < beta (would improve PV): %7lu (%5.1f%%)\n  Overall >= beta (would cause cutoff):       %7lu (%5.1f%%)\n",
+             (unsigned long)g_futilityStats.candidatesFailLow, flPct, (unsigned long)g_futilityStats.candidatesPV, pvPct, (unsigned long)g_futilityStats.candidatesBetaCutoff, cutPct);
+    std::cout << buf;
+
+    std::cout << "\n[By Remaining Depth]\n";
+    PrintFutilityBucketRow("Depth 1:", g_futilityStats.depth1);
+    PrintFutilityBucketRow("Depth 2:", g_futilityStats.depth2);
+
+    std::cout << "\n[By Move Index]\n";
+    PrintFutilityBucketRow("Index 1:", g_futilityStats.idx1);
+    PrintFutilityBucketRow("Index 2:", g_futilityStats.idx2);
+    PrintFutilityBucketRow("Index 3:", g_futilityStats.idx3);
+    PrintFutilityBucketRow("Indices 4-7:", g_futilityStats.idx4To7);
+    PrintFutilityBucketRow("Index 8+:", g_futilityStats.idx8Plus);
+
+    std::cout << "\n[By Move Type]\n";
+    PrintFutilityBucketRow("Ordinary quiet:", g_futilityStats.ordinaryQuiet);
+    PrintFutilityBucketRow("Killer quiet:", g_futilityStats.killerQuiet);
+    PrintFutilityBucketRow("Quiet giving check:", g_futilityStats.quietGivingCheck);
+
+    std::cout << "\n[By Static Evaluation Gap (alpha - staticEval)]\n";
+    PrintFutilityBucketRow("Gap 0 to 149:", g_futilityStats.gap0To149);
+    PrintFutilityBucketRow("Gap 150 to 299:", g_futilityStats.gap150To299);
+    PrintFutilityBucketRow("Gap 300 to 499:", g_futilityStats.gap300To499);
+    PrintFutilityBucketRow("Gap 500+:", g_futilityStats.gap500Plus);
+}
 #endif
 
 MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch)
@@ -646,6 +740,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             else
             {
                 if (!isPVNode && depth <= 2 && availMoves > 0 && move->endPiece == 0 && move->promotionPiece <= 0 &&
+                    (move->CastleFlag & 15) == 0 &&
                     alpha > -159800 && beta < 159800)
                 {
                     if (staticEval == -200000)
@@ -667,6 +762,39 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                             futilityPrunedCount++;
 #if HOWL_CORRECTNESS_TESTING
                             g_futilityPruningSkippedQuietMoves++;
+
+                            // Measure futility pruning safety in instrumentation mode:
+                            MissingInfoAboutPrevStateFromMove *diagMissing = new MissingInfoAboutPrevStateFromMove(board4);
+                            GameLogic::DoMove(board4, *move, prevMove, depth, depthGone);
+                            int diagValue = 0;
+                            if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
+                            {
+                                diagValue = 0;
+                            }
+                            else
+                            {
+                                bool oppInCheck = BoardLogic::UnderAttack(board4, board4.pieces[(!board4.sideToMove) * 8 + 6].front(), board4.sideToMove);
+                                MovePrintValue *diagMP = PVS(false, -alpha - Option::nullWindowSize, -alpha, depth - 1, *move, move2, move3, prevMove, board4, MAtESearch, true, depthGone + 1, oppInCheck, true);
+                                diagValue = -diagMP->value;
+                                if (diagValue > 159800 && diagValue != 160000) diagValue--;
+                                else if (diagValue < -159800 && diagValue != -160000) diagValue++;
+                                std::string pvStr = diagMP->printString;
+                                if (diagValue > alpha)
+                                {
+                                    delete diagMP;
+                                    diagMP = PVS(false, -beta, -alpha, depth - 1, *move, move2, move3, prevMove, board4, MAtESearch, true, depthGone + 1, oppInCheck, nullWindowSearch);
+                                    diagValue = -diagMP->value;
+                                    if (diagValue > 159800 && diagValue != 160000) diagValue--;
+                                    else if (diagValue < -159800 && diagValue != -160000) diagValue++;
+                                    pvStr = diagMP->printString;
+                                }
+                                delete diagMP;
+                            }
+                            bool givesCheck = BoardLogic::UnderAttack(board4, board4.pieces[(!board4.sideToMove) * 8 + 6].front(), board4.sideToMove);
+                            GameLogic::UndoMove(board4, *move, *diagMissing);
+                            delete diagMissing;
+
+                            RecordFutilityCandidate(i, depth, depthGone, *move, staticEval, alpha, beta, diagValue, givesCheck);
 #endif
                             continue;
                         }
