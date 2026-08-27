@@ -3159,6 +3159,41 @@ int RunUCITimeControl()
     return 0;
 }
 
+int RunUCIPositionFenMoves()
+{
+    UCI::IsRelease = true;
+    std::stringstream in;
+    in << "uci\n"
+       << "isready\n"
+       << "position fen rnbqkb1r/pp2pppp/3p1n2/8/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 1 5 moves f1b5\n"
+       << "go depth 2\n"
+       << "isready\n"
+       << "position fen rnbqkb1r/pp2pppp/3p1n2/8/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 1 5 moves f1b5 c8d7\n"
+       << "go depth 2\n"
+       << "isready\n"
+       << "position fen rnbqkb1r/pp2pppp/3p1n2/8/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 1 5 moves f1b5 c8d7 b5d7\n"
+       << "go depth 2\n"
+       << "isready\n"
+       << "quit\n";
+    std::stringstream out;
+    UCI::Run(in, out);
+    std::string response = out.str();
+    size_t count = 0;
+    size_t pos = 0;
+    while ((pos = response.find("bestmove", pos)) != std::string::npos)
+    {
+        count++;
+        pos += 8;
+    }
+    if (count < 3)
+    {
+        std::cerr << "UCI position fen moves test failed: expected 3 bestmoves, got " << count << "\nOutput:\n" << response << '\n';
+        return 1;
+    }
+    std::cout << "UCI position fen moves ownership regression passed (" << count << " bestmoves)\n";
+    return 0;
+}
+
 int RunUCI(const std::string& testCase)
 {
     if (testCase == "movetime")
@@ -3173,6 +3208,8 @@ int RunUCI(const std::string& testCase)
         return RunUCIQuit();
     if (testCase == "time_control")
         return RunUCITimeControl();
+    if (testCase == "position_fen_moves")
+        return RunUCIPositionFenMoves();
     throw std::runtime_error("Unknown UCI test case: " + testCase);
 }
 
