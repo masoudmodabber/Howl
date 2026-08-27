@@ -12,6 +12,13 @@ struct MoveList {
     int count = 0;
 };
 
+struct DeferredMove {
+    const Move* templateMove = nullptr;
+    int endPiece = 0;
+    int customValue = 0;
+    bool hasCustomValue = false;
+};
+
 struct AttackerState {
     std::uint32_t pieceCounts[64] = {};
     int orderingScores[64] = {};
@@ -22,6 +29,9 @@ class MoveLogic
 public:
     static void Initialize();
     static MoveList MoveGenerator(Board &thisBoard, int depth, int depthGone, bool onlyCapturesAndChecks = false);
+    static MoveList QSearchStage1Generator(Board &thisBoard, int depth, int depthGone, DeferredMove* deferredMoves, int& deferredCount);
+    static MoveList MaterializeStage2(Board &thisBoard, int depth, int depthGone, const DeferredMove* deferredMoves, int deferredCount);
+    static void ScoreAndSortMoves(Board& thisBoard, MoveList& moveList, int depth, int depthGone, const AttackerState& whiteAttacker, const AttackerState& blackAttacker);
     static AttackerState SetWhiteAttacker(Board &thisBoard);
     static AttackerState SetBlackAttacker(Board &thisBoard);
     static Move *MoveCopy(Move *move);

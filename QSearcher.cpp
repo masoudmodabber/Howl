@@ -132,171 +132,109 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         }
     }
     int bestMoveValue = -200000;
-    moveList = MoveLogic::MoveGenerator(board4, depth, depthGone, !currentSideInCheck);
+    DeferredMove deferredMoves[256];
+    int deferredCount = 0;
+    bool hasDeferredStage2 = false;
+
+    if (!currentSideInCheck) {
+        moveList = MoveLogic::QSearchStage1Generator(board4, depth, depthGone, deferredMoves, deferredCount);
+        hasDeferredStage2 = (deferredCount > 0);
+    } else {
+        moveList = MoveLogic::MoveGenerator(board4, depth, depthGone, false);
+    }
+
 #ifdef HOWL_CORRECTNESS_TESTING
     const bool testRootNode = depthGone == 0 && depthQuisStarted == 0;
     if (testRootNode) {
-        qSearchTestStatistics.rootGeneratedMoves = moveList.count;
+        qSearchTestStatistics.rootGeneratedMoves = moveList.count + deferredCount;
     }
 #endif
     std::string SelectedPV = "";
     int availMoves = 0;
     int standPot = (!checkChecked && !currentSideInCheck) ? valueTemp2 : EvaluationLogic::Evaluate(board4);
     bool firstMove = true;
-    for (int i = 0; i < moveList.count; ++i) {
-        Move* move = moveList.moves[i];
-        boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
-        MissingInfoAboutPrevStateFromMove* missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
-        GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone);
 
-        bool legalMove = !BoardLogic::UnderAttack(
-            board4,
-            board4.pieces[turn * 8 + 6].front(),
-            board4.sideToMove);
-        if (!legalMove) {
+    int currentStage = 1;
+    while (true) {
+        for (int i = 0; i < moveList.count; ++i) {
+            Move* move = moveList.moves[i];
+            boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
+            MissingInfoAboutPrevStateFromMove* missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
+
+            GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone);
+            bool legalMove = !BoardLogic::UnderAttack(
+                board4,
+                board4.pieces[turn * 8 + 6].front(),
+                board4.sideToMove);
+
+            if (!legalMove) {
 #ifdef HOWL_CORRECTNESS_TESTING
-            if (testRootNode && firstMove) {
-                qSearchTestStatistics.rootIllegalMovesBeforeFirstSearch++;
-            }
+                if (testRootNode && firstMove) {
+                    qSearchTestStatistics.rootIllegalMovesBeforeFirstSearch++;
+                }
 #endif
-            GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
-            delete missingInfoAboutPrevStateFromMove;
-            missingInfoAboutPrevStateFromMove = nullptr;
-            if (UCI::IsTest()) {
-                Board::AreBoardsEqual(board4, *boardCopy);
-                delete boardCopy;
-                boardCopy = nullptr;
+                GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
+                delete missingInfoAboutPrevStateFromMove;
+                missingInfoAboutPrevStateFromMove = nullptr;
+                if (UCI::IsTest()) {
+                    Board::AreBoardsEqual(board4, *boardCopy);
+                    delete boardCopy;
+                    boardCopy = nullptr;
+                }
+                continue;
             }
-            continue;
-        }
 
-        availMoves++;
-#ifdef HOWL_CORRECTNESS_TESTING
-        if (testRootNode) {
-            qSearchTestStatistics.rootLegalMoves++;
-        }
-#endif
-        bool moveGivesCheck = BoardLogic::UnderAttack(
-            board4,
-            board4.pieces[(1 - turn) * 8 + 6].front(),
-            !board4.sideToMove);
-
-        int pieceValueTemp = pieceValue100[move->endPiece];
-        int promotionGain = (move->promotionPiece > 0)
-            ? (pieceValue100[move->promotionPiece] - pieceValue100[1])
-            : 0;
-
-        if (!currentSideInCheck && !moveGivesCheck &&
-            Option::SafetyMargin + standPot + pieceValueTemp + promotionGain <= alpha) {
-            move->value = Option::SafetyMargin + standPot + pieceValueTemp + promotionGain - 1;
-            if (move->value > bestMoveValue) {
-                bestMoveValue = move->value;
-                SelectedMove = move;
-                SelectedPV = "";
-            }
-            GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
-            delete missingInfoAboutPrevStateFromMove;
-            missingInfoAboutPrevStateFromMove = nullptr;
-            if (UCI::IsTest()) {
-                Board::AreBoardsEqual(board4, *boardCopy);
-                delete boardCopy;
-                boardCopy = nullptr;
-            }
-            continue;
-        }
-        if (firstMove) {
+            availMoves++;
 #ifdef HOWL_CORRECTNESS_TESTING
             if (testRootNode) {
-                qSearchTestStatistics.firstLegalSearchedMoveUsedFullWindow = true;
+                qSearchTestStatistics.rootLegalMoves++;
             }
 #endif
-            int value;
-            std::string movePV = "";
-            if (RepetitionHistory::IsRepetition(board4.ZobristHashCode)) {
-                value = 0;
-                move->value = 0;
-            } else {
-                if (move->endPiece > 0 || move->promotionPiece > 0) {
-                    delete MPValue;
-                    MPValue = QSearch(isPVNode, -beta, -alpha, *move, depthGone + 1, nextLastCheck, true, depth - 1, move2, move3, prevMove, board4, false, depthQuisStarted, nullWindowSearch);
-                    value = -MPValue->value;
-                    movePV = MPValue->printString;
-                } else {
-                    delete MPValue;
-                    MPValue = QSearch(isPVNode, -beta, -alpha, *move, depthGone + 1, nextLastCheck, false, depth - 1, move2, move3, prevMove, board4, false, depthQuisStarted, nullWindowSearch);
-                    value = -MPValue->value;
-                    movePV = MPValue->printString;
+            bool moveGivesCheck = BoardLogic::UnderAttack(
+                board4,
+                board4.pieces[(1 - turn) * 8 + 6].front(),
+                !board4.sideToMove);
+
+            int pieceValueTemp = pieceValue100[move->endPiece];
+            int promotionGain = (move->promotionPiece > 0)
+                ? (pieceValue100[move->promotionPiece] - pieceValue100[1])
+                : 0;
+
+            bool isDeltaPruned = (!currentSideInCheck && !moveGivesCheck &&
+                Option::SafetyMargin + standPot + pieceValueTemp + promotionGain <= alpha);
+
+            if (isDeltaPruned) {
+                move->value = Option::SafetyMargin + standPot + pieceValueTemp + promotionGain - 1;
+                if (move->value > bestMoveValue) {
+                    bestMoveValue = move->value;
+                    SelectedMove = move;
+                    SelectedPV = "";
                 }
-                if (value > 159800 && value != 160000) {
-                    value--;
-                } else if (value < -159800 && value != -160000) {
-                    value++;
+                GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
+                delete missingInfoAboutPrevStateFromMove;
+                missingInfoAboutPrevStateFromMove = nullptr;
+                if (UCI::IsTest()) {
+                    Board::AreBoardsEqual(board4, *boardCopy);
+                    delete boardCopy;
+                    boardCopy = nullptr;
                 }
-                move->value = value;
+                continue;
             }
-            if (value > bestMoveValue) {
-                bestMoveValue = value;
-                SelectedMove = move;
-                SelectedPV = movePV;
-            }
-            GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
-            delete missingInfoAboutPrevStateFromMove;
-            missingInfoAboutPrevStateFromMove = nullptr;
-            if (UCI::IsTest()) {
-                Board::AreBoardsEqual(board4, *boardCopy);
-                delete boardCopy;
-                boardCopy = nullptr;
-            }
-            firstMove = false;
-            if (value > alpha) {
-                if (value >= beta && ((value < 159800 && value > -159800) || !MAtESearch)) {
-                    retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + movePV;
-                    retValue->value = value;
-                    deleteMoveList(moveList);
-                    delete MPValue;
-                    MPValue = nullptr;
-                    return retValue;
-                }
-                alpha = value;
-            }
-        }
-        else
-        {
-            bool tempRepeat = false;
-            int value;
-            std::string movePV = "";
-            if (RepetitionHistory::IsRepetition(board4.ZobristHashCode)) {
-                tempRepeat = true;
-                value = 0;
-                move->value = 0;
-            } else {
-                if (move->endPiece > 0 || move->promotionPiece > 0) {
-                    delete MPValue;
-                    MPValue = QSearch(false, -alpha - Option::nullWindowSize, -alpha, *move, depthGone + 1, nextLastCheck, true, depth - 1, move2, move3, prevMove, board4, false, depthQuisStarted, nullWindowSearch);
-                    value = -MPValue->value;
-                    movePV = MPValue->printString;
-                } else {
-                    delete MPValue;
-                    MPValue = QSearch(false, -alpha - Option::nullWindowSize, -alpha, *move, depthGone + 1, nextLastCheck, false, depth - 1, move2, move3, prevMove, board4, false, depthQuisStarted, nullWindowSearch);
-                    value = -MPValue->value;
-                    movePV = MPValue->printString;
-                }
-                if (value > 159800 && value != 160000) {
-                    value--;
-                } else if (value < -159800 && value != -160000) {
-                    value++;
-                }
-                move->value = value;
-            }
-            if (value > alpha /* && value < beta */) {
-                if (!tempRepeat) {
+
+            if (firstMove) {
 #ifdef HOWL_CORRECTNESS_TESTING
-                    if (testRootNode) {
-                        qSearchTestStatistics.rootFullWindowResearches++;
-                    }
+                if (testRootNode) {
+                    qSearchTestStatistics.firstLegalSearchedMoveUsedFullWindow = true;
+                }
 #endif
+                int value;
+                std::string movePV = "";
+                if (RepetitionHistory::IsRepetition(board4.ZobristHashCode)) {
+                    value = 0;
+                    move->value = 0;
+                } else {
                     if (move->endPiece > 0 || move->promotionPiece > 0) {
-                        delete MPValue; 
+                        delete MPValue;
                         MPValue = QSearch(isPVNode, -beta, -alpha, *move, depthGone + 1, nextLastCheck, true, depth - 1, move2, move3, prevMove, board4, false, depthQuisStarted, nullWindowSearch);
                         value = -MPValue->value;
                         movePV = MPValue->printString;
@@ -313,33 +251,135 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                     }
                     move->value = value;
                 }
+                if (value > bestMoveValue) {
+                    bestMoveValue = value;
+                    SelectedMove = move;
+                    SelectedPV = movePV;
+                }
+                GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
+                delete missingInfoAboutPrevStateFromMove;
+                missingInfoAboutPrevStateFromMove = nullptr;
+                if (UCI::IsTest()) {
+                    Board::AreBoardsEqual(board4, *boardCopy);
+                    delete boardCopy;
+                    boardCopy = nullptr;
+                }
+                firstMove = false;
                 if (value > alpha) {
+                    if (value >= beta && ((value < 159800 && value > -159800) || !MAtESearch)) {
+                        retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + movePV;
+                        retValue->value = value;
+                        deleteMoveList(moveList);
+                        if (hasDeferredStage2 && currentStage == 1) {
+                            for (int d = 0; d < deferredCount; ++d) {
+                                delete deferredMoves[d].templateMove;
+                            }
+                        }
+                        delete MPValue;
+                        MPValue = nullptr;
+                        return retValue;
+                    }
                     alpha = value;
                 }
             }
-            GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
-            delete missingInfoAboutPrevStateFromMove;
-            missingInfoAboutPrevStateFromMove = nullptr;
-            if (UCI::IsTest()) {
-                Board::AreBoardsEqual(board4, *boardCopy);
-                delete boardCopy;
-                boardCopy = nullptr;
-            }
-            if (value > bestMoveValue) {
-                if (value >= beta && ((value < 159800 && value > -159800) || !MAtESearch)) {
-                    retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + movePV;
-                    retValue->value = value;
-                    deleteMoveList(moveList);
-                    delete MPValue;
-                    MPValue = nullptr;
-                    return retValue;
+            else
+            {
+                bool tempRepeat = false;
+                int value;
+                std::string movePV = "";
+                if (RepetitionHistory::IsRepetition(board4.ZobristHashCode)) {
+                    tempRepeat = true;
+                    value = 0;
+                    move->value = 0;
+                } else {
+                    if (move->endPiece > 0 || move->promotionPiece > 0) {
+                        delete MPValue;
+                        MPValue = QSearch(false, -alpha - Option::nullWindowSize, -alpha, *move, depthGone + 1, nextLastCheck, true, depth - 1, move2, move3, prevMove, board4, false, depthQuisStarted, nullWindowSearch);
+                        value = -MPValue->value;
+                        movePV = MPValue->printString;
+                    } else {
+                        delete MPValue;
+                        MPValue = QSearch(false, -alpha - Option::nullWindowSize, -alpha, *move, depthGone + 1, nextLastCheck, false, depth - 1, move2, move3, prevMove, board4, false, depthQuisStarted, nullWindowSearch);
+                        value = -MPValue->value;
+                        movePV = MPValue->printString;
+                    }
+                    if (value > 159800 && value != 160000) {
+                        value--;
+                    } else if (value < -159800 && value != -160000) {
+                        value++;
+                    }
+                    move->value = value;
                 }
-                bestMoveValue = value;
-                SelectedMove = move;
-                SelectedPV = movePV;
+                if (value > alpha /* && value < beta */) {
+                    if (!tempRepeat) {
+#ifdef HOWL_CORRECTNESS_TESTING
+                        if (testRootNode) {
+                            qSearchTestStatistics.rootFullWindowResearches++;
+                        }
+#endif
+                        if (move->endPiece > 0 || move->promotionPiece > 0) {
+                            delete MPValue; 
+                            MPValue = QSearch(isPVNode, -beta, -alpha, *move, depthGone + 1, nextLastCheck, true, depth - 1, move2, move3, prevMove, board4, false, depthQuisStarted, nullWindowSearch);
+                            value = -MPValue->value;
+                            movePV = MPValue->printString;
+                        } else {
+                            delete MPValue;
+                            MPValue = QSearch(isPVNode, -beta, -alpha, *move, depthGone + 1, nextLastCheck, false, depth - 1, move2, move3, prevMove, board4, false, depthQuisStarted, nullWindowSearch);
+                            value = -MPValue->value;
+                            movePV = MPValue->printString;
+                        }
+                        if (value > 159800 && value != 160000) {
+                            value--;
+                        } else if (value < -159800 && value != -160000) {
+                            value++;
+                        }
+                        move->value = value;
+                    }
+                    if (value > alpha) {
+                        alpha = value;
+                    }
+                }
+                GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
+                delete missingInfoAboutPrevStateFromMove;
+                missingInfoAboutPrevStateFromMove = nullptr;
+                if (UCI::IsTest()) {
+                    Board::AreBoardsEqual(board4, *boardCopy);
+                    delete boardCopy;
+                    boardCopy = nullptr;
+                }
+                if (value > bestMoveValue) {
+                    if (value >= beta && ((value < 159800 && value > -159800) || !MAtESearch)) {
+                        retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + movePV;
+                        retValue->value = value;
+                        deleteMoveList(moveList);
+                        if (hasDeferredStage2 && currentStage == 1) {
+                            for (int d = 0; d < deferredCount; ++d) {
+                                delete deferredMoves[d].templateMove;
+                            }
+                        }
+                        delete MPValue;
+                        MPValue = nullptr;
+                        return retValue;
+                    }
+                    bestMoveValue = value;
+                    SelectedMove = move;
+                    SelectedPV = movePV;
+                }
             }
         }
+
+        // If Stage 1 completed without beta cutoff, materialize Stage 2
+        if (currentStage == 1 && hasDeferredStage2) {
+            deleteMoveList(moveList);
+            moveList = MoveLogic::MaterializeStage2(board4, depth, depthGone, deferredMoves, deferredCount);
+            currentStage = 2;
+            hasDeferredStage2 = false;
+            continue;
+        }
+
+        break;
     }
+
 #ifdef HOWL_CORRECTNESS_TESTING
     if (testRootNode) {
         qSearchTestStatistics.rootAvailableMoves = availMoves;
@@ -364,7 +404,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         return retValue;
     } else {
         retValue->value = bestMoveValue;
-        retValue->printString = ChessStringManipulation::PVToString(*SelectedMove, 0, false, board4) + ' ' + SelectedPV;
+        retValue->printString = (SelectedMove != nullptr) ? (ChessStringManipulation::PVToString(*SelectedMove, 0, false, board4) + ' ' + SelectedPV) : "";
         deleteMoveList(moveList);
         delete MPValue;
         MPValue = nullptr;
