@@ -49,6 +49,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
 {
     MoveList moveList;
     Move* SelectedMove = nullptr;
+    Move selectedMoveStorage{};
     Board* boardCopy;
     int extention = Option::checkExtensionNonPV;
     if (isPVNode) {
@@ -370,6 +371,10 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
 
         // If Stage 1 completed without beta cutoff, materialize Stage 2
         if (currentStage == 1 && hasDeferredStage2) {
+            if (SelectedMove != nullptr) {
+                selectedMoveStorage = *SelectedMove;
+                SelectedMove = &selectedMoveStorage;
+            }
             deleteMoveList(moveList);
             moveList = MoveLogic::MaterializeStage2(board4, depth, depthGone, deferredMoves, deferredCount);
             currentStage = 2;
