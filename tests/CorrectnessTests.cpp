@@ -3841,10 +3841,32 @@ int RunQSearchMoveGenCorrectnessTest()
                 return 1;
             }
         }
-
         for (int i = 0; i < stage1.count; ++i) delete stage1.moves[i];
         for (int i = 0; i < stage2.count; ++i) delete stage2.moves[i];
         for (int i = 0; i < fullList.count; ++i) delete fullList.moves[i];
+    }
+
+    // 6. Test Stage 1 to Stage 2 selected move lifetime & PV serialization
+    {
+        // Italian Game position where Stage 1 captures are searched, no cutoff occurs, and Stage 2 runs
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard("r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"));
+        Move prevMove{};
+        Move dummy1{}, dummy2{}, dummy3{};
+        MovePrintValue* mpv = QSearcher::QSearch(true, -200000, 200000, prevMove, 0, 0, false, 0, dummy1, dummy2, dummy3, *b, false, 0, false);
+        if (mpv != nullptr)
+        {
+            // Verify that PV string does not contain non-ASCII / corrupted bytes
+            for (unsigned char c : mpv->printString)
+            {
+                if (c >= 128)
+                {
+                    std::cerr << "Corrupted character detected in QSearch PV string: " << static_cast<int>(c) << "\n";
+                    delete mpv;
+                    return 1;
+                }
+            }
+            delete mpv;
+        }
     }
 
     std::cout << "QSearch move generator mode correctly preserves normal search, captures, promotions, direct/discovered checks, and in-check full generation\n";
