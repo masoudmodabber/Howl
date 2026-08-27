@@ -203,3 +203,12 @@ howl.dSYM/Contents/Resources/Relocations/aarch64/howl.yml
 howl2
 Howl.zip
 benchmarks/results.md
+
+# Python / Match Harness
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+match-engines/
+*.pgn

@@ -68,6 +68,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     ponderMove = "";
     completedBestMove = "";
     completedPonderMove = "";
+    PVSSearch::ResetKillers();
 
     if (!active)
     {

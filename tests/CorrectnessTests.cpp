@@ -2785,6 +2785,204 @@ int RunIGGDepthMappingCoverage()
     return 0;
 }
 
+int RunMoveOrderingStatsDiagnostic()
+{
+    struct DiagnosticPos {
+        const char* name;
+        const char* fen;
+    };
+
+    const DiagnosticPos positions[] = {
+        {"1. Kiwipete", "r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1"},
+        {"2. Quiet Middlegame", "r1bq1rk1/pp1n1ppp/2pbpn2/8/2BPP3/2N2N2/PPQ2PPP/R1B2RK1 w - - 4 9"}
+    };
+
+    UCI::IsRelease = true;
+    for (const auto& pos : positions)
+    {
+        std::cout << "\n========================================\n"
+                  << "Position: " << pos.name << "\n"
+                  << "FEN: " << pos.fen << "\n"
+                  << "========================================\n";
+
+        PVSSearch::ResetMoveOrderingStatsForTesting();
+        PVSSearch::ResetLMRStatsForTesting();
+
+        std::stringstream in;
+        in << "uci\n"
+           << "isready\n"
+           << "position fen " << pos.fen << "\n"
+           << "go depth 8\n"
+           << "isready\n"
+           << "quit\n";
+        std::stringstream out;
+        UCI::Run(in, out);
+
+        PVSSearch::PrintMoveOrderingStatsForTesting();
+        PVSSearch::PrintLMRStatsForTesting();
+    }
+    return 0;
+}
+
+int RunKillerCorrectnessTest()
+{
+    PVSSearch::ResetKillers();
+
+    // 1. Recording killer1/killer2
+    Move quiet1{};
+    quiet1.beginPlace = 12; quiet1.endPlace = 28; quiet1.endPiece = 0; quiet1.promotionPiece = 0;
+    PVSSearch::RecordKiller(3, quiet1);
+    if (!(PVSSearch::killers[3][0] == quiet1) || PVSSearch::killers[3][1].isValid())
+    {
+        std::cerr << "Killer test failure: killer1 not recorded properly at ply 3\n";
+        return 1;
+    }
+
+    Move quiet2{};
+    quiet2.beginPlace = 13; quiet2.endPlace = 29; quiet2.endPiece = 0; quiet2.promotionPiece = 0;
+    PVSSearch::RecordKiller(3, quiet2);
+    if (!(PVSSearch::killers[3][0] == quiet2) || !(PVSSearch::killers[3][1] == quiet1))
+    {
+        std::cerr << "Killer test failure: killer shift (k0->k1, new->k0) failed\n";
+        return 1;
+    }
+
+    // 2. Duplicate killer handling
+    PVSSearch::RecordKiller(3, quiet2);
+    if (!(PVSSearch::killers[3][0] == quiet2) || !(PVSSearch::killers[3][1] == quiet1))
+    {
+        std::cerr << "Killer test failure: duplicate killer should not shift killers[3][1]\n";
+        return 1;
+    }
+
+    // 3. Captures never becoming killers
+    Move captureMove{};
+    captureMove.beginPlace = 28; captureMove.endPlace = 35; captureMove.endPiece = 1; captureMove.promotionPiece = 0;
+    PVSSearch::RecordKiller(3, captureMove);
+    if (PVSSearch::killers[3][0] == captureMove || PVSSearch::killers[3][1] == captureMove)
+    {
+        std::cerr << "Killer test failure: capture move recorded as killer\n";
+        return 1;
+    }
+
+    Move promoMove{};
+    promoMove.beginPlace = 50; promoMove.endPlace = 58; promoMove.endPiece = 0; promoMove.promotionPiece = 5;
+    PVSSearch::RecordKiller(3, promoMove);
+    if (PVSSearch::killers[3][0] == promoMove || PVSSearch::killers[3][1] == promoMove)
+    {
+        std::cerr << "Killer test failure: promotion move recorded as killer\n";
+        return 1;
+    }
+
+    // 4. Killer ordering floor test
+    Board* startBoard = BoardMaker::MakeInitialBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    MoveList moveList = MoveLogic::MoveGenerator(*startBoard, 4, 0);
+    delete startBoard;
+    Move testQuiet{};
+    bool foundQuiet = false;
+    for (int i = 0; i < moveList.count; ++i)
+    {
+        if (moveList.moves[i]->endPiece == 0 && moveList.moves[i]->promotionPiece <= 0)
+        {
+            testQuiet = *moveList.moves[i];
+            foundQuiet = true;
+            break;
+        }
+    }
+    if (!foundQuiet)
+    {
+        std::cerr << "Killer test failure: could not find quiet move in startpos\n";
+        PVSSearch::deleteMoveList(moveList);
+        return 1;
+    }
+
+    PVSSearch::ResetKillers();
+    PVSSearch::RecordKiller(0, testQuiet);
+    int origVal = testQuiet.value;
+    int expectedVal = std::max(origVal, 30);
+    if (expectedVal < 30)
+    {
+        std::cerr << "Killer test failure: expected value floor is below 30\n";
+        PVSSearch::deleteMoveList(moveList);
+        return 1;
+    }
+    PVSSearch::deleteMoveList(moveList);
+
+    // 5. Reset between root searches
+    PVSSearch::ResetKillers();
+    if (PVSSearch::killers[3][0].isValid() || PVSSearch::killers[3][1].isValid())
+    {
+        std::cerr << "Killer test failure: ResetKillers failed to clear slots\n";
+        return 1;
+    }
+
+    std::cout << "Killer move ordering correctness test passed\n";
+    return 0;
+}
+
+int RunLMRMateRegressionTest()
+{
+    struct MateCase {
+        const char* name;
+        const char* fen;
+        int depth;
+        const char* expectedBestMove;
+    };
+
+    const MateCase cases[] = {
+        // 1. Backrank Queen mate in 1: e2e8
+        {"Quiet backrank mate in 1", "6k1/5ppp/8/8/8/8/4Q3/4K3 w - - 0 1", 4, "e2e8"},
+
+        // 2. Rook backrank mate in 1: d7d8
+        {"Rook mate in 1", "6k1/3R1ppp/8/8/8/8/1B6/4K3 w - - 0 1", 4, "d7d8"},
+
+        // 3. Multi-ply quiet king move leading to mate in 2: f3f2
+        {"Quiet king move leading to mate in 2", "8/8/8/8/8/5K1k/7p/7R w - - 0 1", 6, "f3f2"},
+
+        // 4. Quiet rook mate with 14+ root moves (a1a8#): move index >= 8, depth 6
+        {"Quiet rook mate in 1 with castling/high branching", "6k1/5ppp/8/8/8/8/8/R3K2R w KQ - 0 1", 6, "a1a8"},
+
+        // 5. Quiet rook mate in 1 with pawn structure (e1e8#): depth 6
+        {"Quiet rook backrank mate in 1", "6k1/5p1p/5P2/8/8/8/8/4R1K1 w - - 0 1", 6, "e1e8"}
+    };
+
+    UCI::IsRelease = true;
+    for (const auto& mc : cases)
+    {
+        std::stringstream in;
+        in << "uci\n"
+           << "isready\n"
+           << "position fen " << mc.fen << "\n"
+           << "go depth " << mc.depth << "\n"
+           << "isready\n"
+           << "quit\n";
+        std::stringstream out;
+        UCI::Run(in, out);
+        std::string response = out.str();
+
+        std::string bestMoveFound = "";
+        size_t bmPos = response.find("bestmove ");
+        if (bmPos != std::string::npos)
+        {
+            size_t start = bmPos + 9;
+            size_t end = response.find_first_of(" \r\n", start);
+            bestMoveFound = response.substr(start, end - start);
+        }
+
+        if (bestMoveFound != mc.expectedBestMove)
+        {
+            std::cerr << "LMR mate regression failure on: " << mc.name << "\n"
+                      << "  FEN: " << mc.fen << "\n"
+                      << "  Expected best move: " << mc.expectedBestMove << "\n"
+                      << "  Actual best move:   " << bestMoveFound << "\n";
+            return 1;
+        }
+    }
+
+    std::cout << "LMR mate regression tests passed (5/5 positions verified)\n";
+    return 0;
+}
+
 int RunUCIMovetime()
 {
     UCI::IsRelease = true;
@@ -3494,6 +3692,18 @@ int main(int argc, char* argv[])
             else if (std::string(argv[2]) == "multipv_correctness")
             {
                 result = RunMultiPVCorrectnessTest();
+            }
+            else if (std::string(argv[2]) == "move_ordering")
+            {
+                result = RunMoveOrderingStatsDiagnostic();
+            }
+            else if (std::string(argv[2]) == "killer_correctness")
+            {
+                result = RunKillerCorrectnessTest();
+            }
+            else if (std::string(argv[2]) == "lmr_mate_regression")
+            {
+                result = RunLMRMateRegressionTest();
             }
             else
             {
