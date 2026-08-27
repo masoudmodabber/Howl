@@ -36,6 +36,23 @@ int PVSSearch::moveOrderingDepth[20] = {
     9,
     10};
 
+#if HOWL_CORRECTNESS_TESTING
+namespace
+{
+    int g_futilityPruningSkippedQuietMoves = 0;
+}
+
+int PVSSearch::FutilityPruningSkippedQuietMovesForTesting()
+{
+    return g_futilityPruningSkippedQuietMoves;
+}
+
+void PVSSearch::ResetFutilityPruningSkippedQuietMovesForTesting()
+{
+    g_futilityPruningSkippedQuietMoves = 0;
+}
+#endif
+
 MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch)
 {
     Move *SelectedMove = nullptr;
@@ -298,6 +315,9 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                         if (staticEval + futilityMargin <= alpha)
                         {
                             futilityPrunedCount++;
+#if HOWL_CORRECTNESS_TESTING
+                            g_futilityPruningSkippedQuietMoves++;
+#endif
                             continue;
                         }
                     }
