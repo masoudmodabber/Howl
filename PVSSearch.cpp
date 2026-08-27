@@ -682,11 +682,45 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
     }
     TTEntry ttEntry{};
     bool ttHit = TranspositionTable::Probe(board4.ZobristHashCode, ttEntry);
+#if HOWL_CORRECTNESS_TESTING
+    TTTelemetryStats &ttStats = TranspositionTable::TelemetryStats();
+    ttStats.eligibleProbes++;
+    TTTelemetryBucket *depthBucket = nullptr;
+    if (depth <= 2) depthBucket = &ttStats.depth1To2;
+    else if (depth <= 5) depthBucket = &ttStats.depth3To5;
+    else if (depth <= 8) depthBucket = &ttStats.depth6To8;
+    else depthBucket = &ttStats.depth9Plus;
+
+    if (depthBucket) depthBucket->probes++;
+
+    if (ttHit)
+    {
+        ttStats.hits++;
+        if (depthBucket) depthBucket->hits++;
+
+        if (ttEntry.depth >= depth) ttStats.hitsSufficientDepth++;
+        else ttStats.hitsInsufficientDepth++;
+
+        uint8_t baseFlag = TTBaseFlag(ttEntry.flag);
+        if (baseFlag == TT_EXACT) ttStats.hitsExact++;
+        else if (baseFlag == TT_LOWER_BOUND) ttStats.hitsLower++;
+        else if (baseFlag == TT_UPPER_BOUND) ttStats.hitsUpper++;
+    }
+    else
+    {
+        ttStats.misses++;
+    }
+#endif
     if (TranspositionTable::CutoffsEnabled() && !isPVNode && ttHit && ttEntry.depth >= depth && TTFlagIsRigorous(ttEntry.flag))
     {
         if (ttEntry.flag == TT_EXACT)
         {
             TranspositionTable::RecordCutoff();
+#if HOWL_CORRECTNESS_TESTING
+            ttStats.cutoffsExact++;
+            ttStats.totalCutoffs++;
+            if (depthBucket) depthBucket->cutoffs++;
+#endif
             retValue->value = ttEntry.score;
             deleteMoveList(moveList);
             delete MPValue;
@@ -696,6 +730,11 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
         else if (ttEntry.flag == TT_LOWER_BOUND && ttEntry.score >= beta)
         {
             TranspositionTable::RecordCutoff();
+#if HOWL_CORRECTNESS_TESTING
+            ttStats.cutoffsLower++;
+            ttStats.totalCutoffs++;
+            if (depthBucket) depthBucket->cutoffs++;
+#endif
             retValue->value = ttEntry.score;
             deleteMoveList(moveList);
             delete MPValue;
@@ -705,6 +744,11 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
         else if (ttEntry.flag == TT_UPPER_BOUND && ttEntry.score <= alpha)
         {
             TranspositionTable::RecordCutoff();
+#if HOWL_CORRECTNESS_TESTING
+            ttStats.cutoffsUpper++;
+            ttStats.totalCutoffs++;
+            if (depthBucket) depthBucket->cutoffs++;
+#endif
             retValue->value = ttEntry.score;
             deleteMoveList(moveList);
             delete MPValue;
@@ -742,6 +786,10 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
         int ttFrom = TTMoveHelper::UnpackFrom(ttEntry.bestMove);
         int ttTo = TTMoveHelper::UnpackTo(ttEntry.bestMove);
         int ttPromo = TTMoveHelper::UnpackPromotion(ttEntry.bestMove);
+#if HOWL_CORRECTNESS_TESTING
+        ttStats.ttMoveFoundNoCutoff++;
+        bool matchedGenerated = false;
+#endif
         for (int i = 0; i < moveList.count; ++i)
         {
             Move *m = moveList.moves[i];
@@ -749,6 +797,9 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                 (ttPromo == 0 ? (m->promotionPiece <= 0) : (m->promotionPiece == ttPromo)))
             {
                 hasTTMove = true;
+#if HOWL_CORRECTNESS_TESTING
+                matchedGenerated = true;
+#endif
                 TranspositionTable::RecordHitStats(true, i == 0);
                 if (i != 0)
                 {
@@ -757,6 +808,10 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                 break;
             }
         }
+#if HOWL_CORRECTNESS_TESTING
+        if (matchedGenerated) ttStats.ttMoveMatchedLegal++;
+        else ttStats.ttMoveMissingFromGenerated++;
+#endif
     }
     int inCheck = -1;
     int staticEval = -200000;
@@ -1234,22 +1289,24 @@ double PVSSearch::NullMoveReduction(bool isPVNode, int alpha, int beta, int dept
 
 MovePrintValue *PVSSearch::StartQSearch(bool isPVNode, int alpha, int beta, Move &prevMove, int depthGone, Move &move1, Move &move2, Move &move3, Board &board4, bool nullWindowSearch, bool previousMoveWasCheck)
 {
+    MovePrintValue *res = nullptr;
     if (previousMoveWasCheck)
     {
-        return QSearcher::QSearch(isPVNode, alpha, beta, prevMove, depthGone, 1, false, 1, move1, move2, move3, board4, false, depthGone, nullWindowSearch);
+        res = QSearcher::QSearch(isPVNode, alpha, beta, prevMove, depthGone, 1, false, 1, move1, move2, move3, board4, false, depthGone, nullWindowSearch);
     }
     // else if (evaluate(recDepth) > beta && isNullMoveAllowed)
     //{
     //     return evaluate(recDepth);
     // }
-    if (prevMove.endPiece != 0 || prevMove.promotionPiece > 0)
+    else if (prevMove.endPiece != 0 || prevMove.promotionPiece > 0)
     {
-        return QSearcher::QSearch(isPVNode, alpha, beta, prevMove, depthGone, 0, true, 0, move1, move2, move3, board4, false, depthGone, nullWindowSearch);
+        res = QSearcher::QSearch(isPVNode, alpha, beta, prevMove, depthGone, 0, true, 0, move1, move2, move3, board4, false, depthGone, nullWindowSearch);
     }
     else
     {
-        return QSearcher::QSearch(isPVNode, alpha, beta, prevMove, depthGone, 0, false, 0, move1, move2, move3, board4, false, depthGone, nullWindowSearch);
+        res = QSearcher::QSearch(isPVNode, alpha, beta, prevMove, depthGone, 0, false, 0, move1, move2, move3, board4, false, depthGone, nullWindowSearch);
     }
+    return res;
 }
 
 void PVSSearch::IGG(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool lastCheck, bool nullWindowSearch, MoveList moveList)

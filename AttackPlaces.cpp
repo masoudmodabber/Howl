@@ -5,6 +5,7 @@
 
 #include "AttackPlaces.h"
 #include "Option.h"
+#include <cmath>
 
 long long AttackPlaces::WhitePawnAttackPlaces[64] = {0};
 long long AttackPlaces::BlackPawnAttackPlaces[64] = {0};
@@ -13,6 +14,7 @@ long long AttackPlaces::KingAttackPlaces[64] = {0};
 long long AttackPlaces::BishopAttack[64][64] = {{0}};
 long long AttackPlaces::RookAttack[64][64] = {{0}};
 long long AttackPlaces::QueenAttack[64][64] = {{0}};
+long long AttackPlaces::LineMask[64][64] = {{0}};
 
 void AttackPlaces::Initialize()
 {
@@ -25,6 +27,7 @@ void AttackPlaces::Initialize()
         SetBishopAttackPlaces();
         SetRookAttackPlaces();
         SetQueenAttackPlaces();
+        SetLineMasks();
         initialized = true;
     }
 }
@@ -292,6 +295,57 @@ void AttackPlaces::SetQueenAttackPlaces()
     }
 }
 
+void AttackPlaces::SetLineMasks()
+{
+    // LineMask[sq1][sq2] contains the entire ray through sq1 and sq2 if they share a rank, file, or diagonal
+    for (int sq1 = 0; sq1 < 64; sq1++)
+    {
+        for (int sq2 = 0; sq2 < 64; sq2++)
+        {
+            if (sq1 == sq2)
+            {
+                LineMask[sq1][sq2] = 0;
+                continue;
+            }
+            int r1 = sq1 / 8, c1 = sq1 % 8;
+            int r2 = sq2 / 8, c2 = sq2 % 8;
+            int dr = r2 - r1;
+            int dc = c2 - c1;
+            int stepR = (dr == 0) ? 0 : (dr > 0 ? 1 : -1);
+            int stepC = (dc == 0) ? 0 : (dc > 0 ? 1 : -1);
+
+            // Check if they are on same rank, file, or diagonal
+            if (dr == 0 || dc == 0 || std::abs(dr) == std::abs(dc))
+            {
+                long long mask = 0;
+                // Extend forwards from sq1
+                int currR = r1 + stepR, currC = c1 + stepC;
+                while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8)
+                {
+                    mask |= Option::PowerTwo[currR * 8 + currC];
+                    currR += stepR;
+                    currC += stepC;
+                }
+                // Extend backwards from sq1
+                currR = r1 - stepR;
+                currC = c1 - stepC;
+                while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8)
+                {
+                    mask |= Option::PowerTwo[currR * 8 + currC];
+                    currR -= stepR;
+                    currC -= stepC;
+                }
+                mask |= Option::PowerTwo[sq1];
+                LineMask[sq1][sq2] = mask;
+            }
+            else
+            {
+                LineMask[sq1][sq2] = 0;
+            }
+        }
+    }
+}
+
 void AttackPlaces::Cleanup()
 {
     // Reset all attack places to zero
@@ -306,6 +360,7 @@ void AttackPlaces::Cleanup()
             BishopAttack[i][j] = 0;
             RookAttack[i][j] = 0;
             QueenAttack[i][j] = 0;
+            LineMask[i][j] = 0;
         }
     }
 }

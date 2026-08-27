@@ -21,7 +21,7 @@ class MoveLogic
 {
 public:
     static void Initialize();
-    static MoveList MoveGenerator(Board &thisBoard, int depth, int depthGone);
+    static MoveList MoveGenerator(Board &thisBoard, int depth, int depthGone, bool onlyCapturesAndChecks = false);
     static AttackerState SetWhiteAttacker(Board &thisBoard);
     static AttackerState SetBlackAttacker(Board &thisBoard);
     static Move *MoveCopy(Move *move);

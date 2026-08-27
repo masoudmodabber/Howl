@@ -84,6 +84,50 @@ struct TTStats
     long long cutoffs = 0;
 };
 
+#if HOWL_CORRECTNESS_TESTING
+struct TTTelemetryBucket
+{
+    uint64_t probes = 0;
+    uint64_t hits = 0;
+    uint64_t cutoffs = 0;
+};
+
+struct TTTelemetryStats
+{
+    uint64_t eligibleProbes = 0;
+    uint64_t hits = 0;
+    uint64_t misses = 0;
+
+    uint64_t hitsSufficientDepth = 0;
+    uint64_t hitsInsufficientDepth = 0;
+
+    uint64_t hitsExact = 0;
+    uint64_t hitsLower = 0;
+    uint64_t hitsUpper = 0;
+
+    uint64_t cutoffsExact = 0;
+    uint64_t cutoffsLower = 0;
+    uint64_t cutoffsUpper = 0;
+    uint64_t totalCutoffs = 0;
+
+    uint64_t ttMoveFoundNoCutoff = 0;
+    uint64_t ttMoveMatchedLegal = 0;
+    uint64_t ttMoveMissingFromGenerated = 0;
+
+    uint64_t stores = 0;
+    uint64_t emptySlotStores = 0;
+    uint64_t overwriteSameKey = 0;
+    uint64_t replacementCollisions = 0;
+    uint64_t replacementGreaterDepthOverwritten = 0;
+    uint64_t hashKeyMismatchOnProbe = 0; // Slot occupied by different key
+
+    TTTelemetryBucket depth1To2;
+    TTTelemetryBucket depth3To5;
+    TTTelemetryBucket depth6To8;
+    TTTelemetryBucket depth9Plus;
+};
+#endif
+
 class TranspositionTable
 {
 public:
@@ -106,6 +150,9 @@ public:
 
 #if HOWL_CORRECTNESS_TESTING
     static void SetAllocationFailureThresholdForTesting(std::size_t thresholdBytes);
+    static TTTelemetryStats& TelemetryStats();
+    static void ResetTelemetryStats();
+    static void PrintTelemetryStats();
 #endif
 
 private:
