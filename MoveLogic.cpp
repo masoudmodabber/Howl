@@ -8,6 +8,7 @@
 #include "Search.h"
 #include "Option.h"
 #include "PieceMoves.h"
+#include "AttackPlaces.h"
 #include <algorithm>
 #include <cstdint>
 
@@ -112,7 +113,7 @@ void MoveLogic::Initialize()
     }
 }
 
-MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
+MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone, bool onlyCapturesAndChecks)
 {
     MoveList moveList;
     Move* complicatedMoves[256];
@@ -128,6 +129,27 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
     int *mainBoard = thisBoard.mainBoard;
     long long wholeBoard = whitePieces | blackPieces;
 
+    int enemyKingPos = -1;
+    long long enemyKingBit = 0;
+    long long friendlySliderRayMask = 0;
+    if (onlyCapturesAndChecks)
+    {
+        int enemyKingIndex = (!thisBoard.sideToMove ? 14 : 6);
+        if (thisBoard.pieces[enemyKingIndex].count > 0)
+        {
+            enemyKingPos = thisBoard.pieces[enemyKingIndex].front();
+            enemyKingBit = Option::PowerTwo[enemyKingPos];
+            int offset = (!thisBoard.sideToMove ? 0 : 8);
+            for (int p = 3; p <= 5; ++p)
+            {
+                for (int pos : thisBoard.pieces[p + offset])
+                {
+                    friendlySliderRayMask |= AttackPlaces::LineMask[pos][enemyKingPos];
+                }
+            }
+        }
+    }
+
     if (!thisBoard.sideToMove)
     {
         for (int pieceCounter = 1; pieceCounter < 7; pieceCounter++)
@@ -138,27 +160,36 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
             case 1:
                 for (int piecePosition : thisBoard.pieces[piece])
                 {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     if (PieceMoves::WhitePawnMoves[piecePosition][0] != nullptr)
                     {
-                        Move *newMove = MoveCopy(PieceMoves::WhitePawnMoves[piecePosition][0]);
-                        if ((PieceMoves::pawnTwoMove[piecePosition] & wholeBoard) == 0)
+                        int endPlace = piecePosition + 16;
+                        if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::WhitePawnAttackPlaces[endPlace] & enemyKingBit) != 0)
                         {
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            newMove->value = ExchangeWithoutBeginPiece(whiteAttacker.pieceCounts[newMove->endPlace], blackAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
-                            complicatedMoves[complicatedCount++] = newMove;
-                        }
-                        else
-                        {
-                            delete newMove;
-                            newMove = nullptr;
+                            Move *newMove = MoveCopy(PieceMoves::WhitePawnMoves[piecePosition][0]);
+                            if ((PieceMoves::pawnTwoMove[piecePosition] & wholeBoard) == 0)
+                            {
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                newMove->value = ExchangeWithoutBeginPiece(whiteAttacker.pieceCounts[newMove->endPlace], blackAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
+                                complicatedMoves[complicatedCount++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                     }
                     if (PieceMoves::WhitePawnMoves[piecePosition][1] != nullptr && (Option::PowerTwo[piecePosition + 8] & wholeBoard) == 0)
                     {
-                        Move *newMove = MoveCopy(PieceMoves::WhitePawnMoves[piecePosition][1]);
-                        newMove->endPiece = mainBoard[newMove->endPlace];
-                        newMove->value = ExchangeWithoutBeginPiece(whiteAttacker.pieceCounts[newMove->endPlace], blackAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
-                        complicatedMoves[complicatedCount++] = newMove;
+                        int endPlace = piecePosition + 8;
+                        if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::WhitePawnAttackPlaces[endPlace] & enemyKingBit) != 0)
+                        {
+                            Move *newMove = MoveCopy(PieceMoves::WhitePawnMoves[piecePosition][1]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            newMove->value = ExchangeWithoutBeginPiece(whiteAttacker.pieceCounts[newMove->endPlace], blackAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
+                            complicatedMoves[complicatedCount++] = newMove;
+                        }
                     }
                     if (PieceMoves::WhitePawnMoves[piecePosition][2] != nullptr && (Option::PowerTwo[piecePosition + 8] & wholeBoard) == 0)
                     {
@@ -217,14 +248,18 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
             case 2:
                 for (int piecePosition : thisBoard.pieces[piece])
                 {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     int endPlace = piecePosition + 17;
                     if (PieceMoves::KnightMoves[piecePosition][0] != nullptr)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][0]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][0]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -238,9 +273,12 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][2]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][2]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -254,9 +292,12 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][4]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][4]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -270,9 +311,12 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][6]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][6]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -286,9 +330,12 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][8]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][8]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -302,9 +349,12 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][10]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][10]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -318,9 +368,12 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][12]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][12]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -334,9 +387,12 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][14]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][14]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -350,12 +406,21 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
             case 3:
                 for (int piecePosition : thisBoard.pieces[piece])
                 {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][0].size(); counter++)
                     {
                         Move *newMove = MoveCopy(PieceMoves::BishopMoves[piecePosition][0][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
@@ -377,7 +442,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::BishopMoves[piecePosition][2][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
@@ -399,7 +472,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::BishopMoves[piecePosition][4][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
@@ -421,7 +502,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::BishopMoves[piecePosition][6][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
@@ -443,12 +532,21 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
             case 4:
                 for (int piecePosition : thisBoard.pieces[piece])
                 {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][0].size(); counter++)
                     {
                         Move *newMove = MoveCopy(PieceMoves::RookMoves[piecePosition][0][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
@@ -470,7 +568,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::RookMoves[piecePosition][2][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
@@ -492,7 +598,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::RookMoves[piecePosition][4][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
@@ -514,7 +628,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::RookMoves[piecePosition][6][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
@@ -536,12 +658,21 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
             case 5:
                 for (int piecePosition : thisBoard.pieces[piece])
                 {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][0].size(); counter++)
                     {
                         Move *newMove = MoveCopy(PieceMoves::QueenMoves[piecePosition][0][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
@@ -563,7 +694,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::QueenMoves[piecePosition][2][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
@@ -585,7 +724,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::QueenMoves[piecePosition][4][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
@@ -607,7 +754,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::QueenMoves[piecePosition][6][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
@@ -629,7 +784,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::QueenMoves[piecePosition][8][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
@@ -651,7 +814,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::QueenMoves[piecePosition][10][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
@@ -673,7 +844,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::QueenMoves[piecePosition][12][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
@@ -695,7 +874,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::QueenMoves[piecePosition][14][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
@@ -717,14 +904,18 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
             case 6:
                 for (int piecePosition : thisBoard.pieces[piece])
                 {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     int endPlace;
                     endPlace = piecePosition + 7;
                     if (PieceMoves::WhiteKingMoves[piecePosition][0] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][0]);
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][0]);
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -738,8 +929,11 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][2]);
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][2]);
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -753,8 +947,11 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][4]);
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][4]);
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -768,8 +965,11 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][6]);
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][6]);
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -783,8 +983,11 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][8]);
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][8]);
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -798,8 +1001,11 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][10]);
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][10]);
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -813,8 +1019,11 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][12]);
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][12]);
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -828,8 +1037,11 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][14]);
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][14]);
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -838,13 +1050,13 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                             moveList.moves[moveList.count++] = newMove;
                         }
                     }
-                    if (thisBoard.whiteSmallCastle && blackAttacker.pieceCounts[4] == 0 && blackAttacker.pieceCounts[5] == 0 && blackAttacker.pieceCounts[6] == 0 && mainBoard[5] == 0 && mainBoard[6] == 0)
+                    if (thisBoard.whiteSmallCastle && (!onlyCapturesAndChecks || AttackPlaces::LineMask[5][enemyKingPos] != 0 || AttackPlaces::LineMask[6][enemyKingPos] != 0) && blackAttacker.pieceCounts[4] == 0 && blackAttacker.pieceCounts[5] == 0 && blackAttacker.pieceCounts[6] == 0 && mainBoard[5] == 0 && mainBoard[6] == 0)
                     {
                         Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][16]);
                         newMove->value = 50;
                         complicatedMoves[complicatedCount++] = newMove;
                     }
-                    if (thisBoard.whiteBigCastle && blackAttacker.pieceCounts[4] == 0 && blackAttacker.pieceCounts[3] == 0 && blackAttacker.pieceCounts[2] == 0 && mainBoard[3] == 0 && mainBoard[2] == 0 && mainBoard[1] == 0)
+                    if (thisBoard.whiteBigCastle && (!onlyCapturesAndChecks || AttackPlaces::LineMask[3][enemyKingPos] != 0 || AttackPlaces::LineMask[2][enemyKingPos] != 0) && blackAttacker.pieceCounts[4] == 0 && blackAttacker.pieceCounts[3] == 0 && blackAttacker.pieceCounts[2] == 0 && mainBoard[3] == 0 && mainBoard[2] == 0 && mainBoard[1] == 0)
                     {
                         Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][17]);
                         newMove->value = 50;
@@ -865,23 +1077,32 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
             case 9:
                 for (int piecePosition : thisBoard.pieces[piece])
                 {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     int exchangeInPlace = -ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[piecePosition], whiteAttacker.pieceCounts[piecePosition], piecePosition, piece - 8, 0, 0);
                     if (PieceMoves::BlackPawnMoves[piecePosition][0] != nullptr)
                     {
-                        if ((PieceMoves::pawnTwoMove[piecePosition] & wholeBoard) == 0)
+                        int endPlace = piecePosition - 16;
+                        if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::BlackPawnAttackPlaces[endPlace] & enemyKingBit) != 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::BlackPawnMoves[piecePosition][0]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            newMove->value = ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[newMove->endPlace], whiteAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
-                            complicatedMoves[complicatedCount++] = newMove;
+                            if ((PieceMoves::pawnTwoMove[piecePosition] & wholeBoard) == 0)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::BlackPawnMoves[piecePosition][0]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                newMove->value = ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[newMove->endPlace], whiteAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
+                                complicatedMoves[complicatedCount++] = newMove;
+                            }
                         }
                     }
                     if (PieceMoves::BlackPawnMoves[piecePosition][1] != nullptr && (Option::PowerTwo[piecePosition - 8] & wholeBoard) == 0)
                     {
-                        Move *newMove = MoveCopy(PieceMoves::BlackPawnMoves[piecePosition][1]);
-                        newMove->endPiece = mainBoard[newMove->endPlace];
-                        newMove->value = ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[newMove->endPlace], whiteAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
-                        complicatedMoves[complicatedCount++] = newMove;
+                        int endPlace = piecePosition - 8;
+                        if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::BlackPawnAttackPlaces[endPlace] & enemyKingBit) != 0)
+                        {
+                            Move *newMove = MoveCopy(PieceMoves::BlackPawnMoves[piecePosition][1]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            newMove->value = ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[newMove->endPlace], whiteAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
+                            complicatedMoves[complicatedCount++] = newMove;
+                        }
                     }
                     if (PieceMoves::BlackPawnMoves[piecePosition][2] != nullptr && (Option::PowerTwo[piecePosition - 8] & wholeBoard) == 0)
                     {
@@ -940,14 +1161,18 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
             case 10:
                 for (int piecePosition : thisBoard.pieces[piece])
                 {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     int endPlace = piecePosition + 17;
                     if (PieceMoves::KnightMoves[piecePosition][0] != nullptr)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][0]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][0]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -961,9 +1186,12 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][2]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][2]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -977,9 +1205,12 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][4]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][4]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -993,9 +1224,12 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][6]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][6]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -1009,9 +1243,12 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][8]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][8]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -1025,9 +1262,12 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][10]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][10]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -1041,9 +1281,12 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][12]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][12]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -1057,9 +1300,12 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][14]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::KnightMoves[piecePosition][14]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -1073,12 +1319,21 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
             case 11:
                 for (int piecePosition : thisBoard.pieces[piece])
                 {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][0].size(); counter++)
                     {
                         Move *newMove = MoveCopy(PieceMoves::BishopMoves[piecePosition][0][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
@@ -1100,7 +1355,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::BishopMoves[piecePosition][2][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
@@ -1122,7 +1385,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::BishopMoves[piecePosition][4][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
@@ -1144,7 +1415,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::BishopMoves[piecePosition][6][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
@@ -1166,12 +1445,21 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
             case 12:
                 for (int piecePosition : thisBoard.pieces[piece])
                 {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][0].size(); counter++)
                     {
                         Move *newMove = MoveCopy(PieceMoves::RookMoves[piecePosition][0][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
@@ -1193,7 +1481,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::RookMoves[piecePosition][2][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
@@ -1215,7 +1511,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::RookMoves[piecePosition][4][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
@@ -1237,7 +1541,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::RookMoves[piecePosition][6][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
@@ -1259,12 +1571,21 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
             case 13:
                 for (int piecePosition : thisBoard.pieces[piece])
                 {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][0].size(); counter++)
                     {
                         Move *newMove = MoveCopy(PieceMoves::QueenMoves[piecePosition][0][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
@@ -1286,7 +1607,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::QueenMoves[piecePosition][2][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
@@ -1308,7 +1637,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::QueenMoves[piecePosition][4][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
@@ -1330,7 +1667,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::QueenMoves[piecePosition][6][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
@@ -1352,7 +1697,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::QueenMoves[piecePosition][8][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
@@ -1374,7 +1727,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::QueenMoves[piecePosition][10][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
@@ -1396,7 +1757,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::QueenMoves[piecePosition][12][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
@@ -1418,7 +1787,15 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                         Move *newMove = MoveCopy(PieceMoves::QueenMoves[piecePosition][14][counter]);
                         if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0))
+                            {
+                                moveList.moves[moveList.count++] = newMove;
+                            }
+                            else
+                            {
+                                delete newMove;
+                                newMove = nullptr;
+                            }
                         }
                         else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
@@ -1440,14 +1817,18 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
             case 14:
                 for (int piecePosition : thisBoard.pieces[piece])
                 {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     int endPlace;
                     endPlace = piecePosition + 7;
                     if (PieceMoves::BlackKingMoves[piecePosition][0] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][0]);
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][0]);
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -1461,8 +1842,11 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][2]);
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][2]);
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -1476,8 +1860,11 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][4]);
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][4]);
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -1491,8 +1878,11 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][6]);
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][6]);
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -1506,8 +1896,11 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][8]);
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][8]);
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -1521,8 +1914,11 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][10]);
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][10]);
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -1536,8 +1932,11 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][12]);
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][12]);
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -1551,8 +1950,11 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                     {
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
-                            Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][14]);
-                            moveList.moves[moveList.count++] = newMove;
+                            if (!onlyCapturesAndChecks || srcOnRay)
+                            {
+                                Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][14]);
+                                moveList.moves[moveList.count++] = newMove;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -1561,13 +1963,13 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone)
                             moveList.moves[moveList.count++] = newMove;
                         }
                     }
-                    if (thisBoard.blackSmallCastle && whiteAttacker.pieceCounts[60] == 0 && whiteAttacker.pieceCounts[61] == 0 && whiteAttacker.pieceCounts[62] == 0 && mainBoard[61] == 0 && mainBoard[62] == 0)
+                    if (thisBoard.blackSmallCastle && (!onlyCapturesAndChecks || AttackPlaces::LineMask[61][enemyKingPos] != 0 || AttackPlaces::LineMask[62][enemyKingPos] != 0) && whiteAttacker.pieceCounts[60] == 0 && whiteAttacker.pieceCounts[61] == 0 && whiteAttacker.pieceCounts[62] == 0 && mainBoard[61] == 0 && mainBoard[62] == 0)
                     {
                         Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][16]);
                         newMove->value = 25;
                         complicatedMoves[complicatedCount++] = newMove;
                     }
-                    if (thisBoard.blackBigCastle && whiteAttacker.pieceCounts[60] == 0 && whiteAttacker.pieceCounts[59] == 0 && whiteAttacker.pieceCounts[58] == 0 && mainBoard[59] == 0 && mainBoard[58] == 0 && mainBoard[57] == 0)
+                    if (thisBoard.blackBigCastle && (!onlyCapturesAndChecks || AttackPlaces::LineMask[59][enemyKingPos] != 0 || AttackPlaces::LineMask[58][enemyKingPos] != 0) && whiteAttacker.pieceCounts[60] == 0 && whiteAttacker.pieceCounts[59] == 0 && whiteAttacker.pieceCounts[58] == 0 && mainBoard[59] == 0 && mainBoard[58] == 0 && mainBoard[57] == 0)
                     {
                         Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][17]);
                         newMove->value = 25;

@@ -131,7 +131,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         }
     }
     int bestMoveValue = -200000;
-    moveList = MoveLogic::MoveGenerator(board4, depth, depthGone);
+    moveList = MoveLogic::MoveGenerator(board4, depth, depthGone, !currentSideInCheck);
 #ifdef HOWL_CORRECTNESS_TESTING
     const bool testRootNode = depthGone == 0 && depthQuisStarted == 0;
     if (testRootNode) {

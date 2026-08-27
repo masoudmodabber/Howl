@@ -11,6 +11,7 @@ public:
     static long long BishopAttack[64][64];
     static long long RookAttack[64][64];
     static long long QueenAttack[64][64];
+    static long long LineMask[64][64];
 
     static void Initialize();
     static void Cleanup();
@@ -21,6 +22,7 @@ public:
     static void SetBishopAttackPlaces();
     static void SetRookAttackPlaces();
     static void SetQueenAttackPlaces();
+    static void SetLineMasks();
 };
 
 #endif

@@ -2809,6 +2809,7 @@ int RunMoveOrderingStatsDiagnostic()
         PVSSearch::ResetLMRStatsForTesting();
         PVSSearch::ResetFutilityStatsForTesting();
         PVSSearch::ResetNullMoveStatsForTesting();
+        TranspositionTable::ResetTelemetryStats();
 
         std::stringstream in;
         in << "uci\n"
@@ -2824,6 +2825,7 @@ int RunMoveOrderingStatsDiagnostic()
         PVSSearch::PrintLMRStatsForTesting();
         PVSSearch::PrintFutilityStatsForTesting();
         PVSSearch::PrintNullMoveStatsForTesting();
+        TranspositionTable::PrintTelemetryStats();
     }
     return 0;
 }
@@ -3697,6 +3699,161 @@ int RunMultiPVCorrectnessTest()
     return 0;
 }
 
+int RunQSearchMoveGenCorrectnessTest()
+{
+    // 1. Verify normal MoveGenerator output is completely unchanged across positions
+    for (const auto& pos : Positions)
+    {
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard(pos.fen));
+        MoveList normalList = MoveLogic::MoveGenerator(*b, 1, 0, false);
+        MoveList defaultList = MoveLogic::MoveGenerator(*b, 1, 0);
+        if (normalList.count != defaultList.count)
+        {
+            std::cerr << "Normal MoveGenerator default param mismatch for " << pos.name << '\n';
+            for (int i = 0; i < normalList.count; ++i) delete normalList.moves[i];
+            for (int i = 0; i < defaultList.count; ++i) delete defaultList.moves[i];
+            return 1;
+        }
+        for (int i = 0; i < normalList.count; ++i)
+        {
+            if (normalList.moves[i]->beginPlace != defaultList.moves[i]->beginPlace ||
+                normalList.moves[i]->endPlace != defaultList.moves[i]->endPlace ||
+                normalList.moves[i]->promotionPiece != defaultList.moves[i]->promotionPiece)
+            {
+                std::cerr << "Normal move list mismatch at index " << i << '\n';
+                for (int j = 0; j < normalList.count; ++j) delete normalList.moves[j];
+                for (int j = 0; j < defaultList.count; ++j) delete defaultList.moves[j];
+                return 1;
+            }
+        }
+        for (int i = 0; i < normalList.count; ++i) delete normalList.moves[i];
+        for (int i = 0; i < defaultList.count; ++i) delete defaultList.moves[i];
+    }
+
+    // 2. Test quiet position: verifies captures, promotions, and quiet checks are preserved while non-checking quiets are skipped
+    {
+        // Kiwipete: has captures, promotions, quiet checks, and ordinary quiets
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard("r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1"));
+        MoveList fullList = MoveLogic::MoveGenerator(*b, 1, 0, false);
+        MoveList qList = MoveLogic::MoveGenerator(*b, 1, 0, true);
+
+        // Every move in qList must be in fullList
+        int capturesInQ = 0, promotionsInQ = 0, quietChecksInQ = 0;
+        int capturesInFull = 0, promotionsInFull = 0, quietChecksInFull = 0;
+
+        int movingTurn = b->sideToMove ? 1 : 0;
+        int enemyKingIndex = (!b->sideToMove ? 14 : 6);
+
+        for (int i = 0; i < fullList.count; ++i)
+        {
+            Move* m = fullList.moves[i];
+            bool isCap = (m->endPiece > 0);
+            bool isPromo = (m->promotionPiece > 0);
+            MissingInfoAboutPrevStateFromMove missing(*b);
+            Move prev{};
+            GameLogic::DoMove(*b, *m, prev, 0, 0);
+            bool legal = !BoardLogic::UnderAttack(*b, b->pieces[movingTurn * 8 + 6].front(), b->sideToMove);
+            bool givesCheck = legal && BoardLogic::UnderAttack(*b, b->pieces[enemyKingIndex].front(), !b->sideToMove);
+            GameLogic::UndoMove(*b, *m, missing);
+
+            if (isCap) capturesInFull++;
+            if (isPromo) promotionsInFull++;
+            if (!isCap && !isPromo && givesCheck) quietChecksInFull++;
+        }
+
+        for (int i = 0; i < qList.count; ++i)
+        {
+            Move* m = qList.moves[i];
+            bool isCap = (m->endPiece > 0);
+            bool isPromo = (m->promotionPiece > 0);
+            MissingInfoAboutPrevStateFromMove missing(*b);
+            Move prev{};
+            GameLogic::DoMove(*b, *m, prev, 0, 0);
+            bool legal = !BoardLogic::UnderAttack(*b, b->pieces[movingTurn * 8 + 6].front(), b->sideToMove);
+            bool givesCheck = legal && BoardLogic::UnderAttack(*b, b->pieces[enemyKingIndex].front(), !b->sideToMove);
+            GameLogic::UndoMove(*b, *m, missing);
+
+            if (isCap) capturesInQ++;
+            if (isPromo) promotionsInQ++;
+            if (!isCap && !isPromo && givesCheck) quietChecksInQ++;
+        }
+
+        if (capturesInQ != capturesInFull)
+        {
+            std::cerr << "Capture preservation failure: full has " << capturesInFull << ", QSearch has " << capturesInQ << '\n';
+            return 1;
+        }
+        if (promotionsInQ != promotionsInFull)
+        {
+            std::cerr << "Promotion preservation failure: full has " << promotionsInFull << ", QSearch has " << promotionsInQ << '\n';
+            return 1;
+        }
+        if (quietChecksInQ != quietChecksInFull)
+        {
+            std::cerr << "Quiet check preservation failure: full has " << quietChecksInFull << ", QSearch has " << quietChecksInQ << '\n';
+            return 1;
+        }
+        if (qList.count >= fullList.count)
+        {
+            std::cerr << "QSearch move list failed to filter ordinary quiet moves: qList.count=" << qList.count << ", fullList.count=" << fullList.count << '\n';
+            return 1;
+        }
+
+        for (int i = 0; i < fullList.count; ++i) delete fullList.moves[i];
+        for (int i = 0; i < qList.count; ++i) delete qList.moves[i];
+    }
+
+    // 3. Test Discovered check preservation specifically
+    {
+        // 4k3/8/8/8/8/8/4N3/4R2K w - - 0 1: e2c3 / e2f4 / e2g3 / e2d4 unmasks rook discovered check
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard("4k3/8/8/8/8/8/4N3/4R2K w - - 0 1"));
+        MoveList qList = MoveLogic::MoveGenerator(*b, 1, 0, true);
+        bool foundDiscoveredCheck = false;
+        for (int i = 0; i < qList.count; ++i)
+        {
+            Move* m = qList.moves[i];
+            if (m->beginPlace == 12) // e2 knight
+            {
+                foundDiscoveredCheck = true;
+                break;
+            }
+        }
+        for (int i = 0; i < qList.count; ++i) delete qList.moves[i];
+        if (!foundDiscoveredCheck)
+        {
+            std::cerr << "Discovered check was not preserved in restricted QSearch mode\n";
+            return 1;
+        }
+    }
+
+    // 4. Test In-check full generation
+    {
+        // 7k/8/5K2/8/8/8/8/7R b - - 0 1: Black is in check
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard("7k/8/5K2/8/8/8/8/7R b - - 0 1"));
+        int turn = b->sideToMove ? 1 : 0;
+        bool inCheck = BoardLogic::UnderAttack(*b, b->pieces[turn * 8 + 6].front(), !b->sideToMove);
+        if (!inCheck)
+        {
+            std::cerr << "Board should be in check\n";
+            return 1;
+        }
+        MoveList fullList = MoveLogic::MoveGenerator(*b, 1, 0, false);
+        MoveList checkGenList = MoveLogic::MoveGenerator(*b, 1, 0, !inCheck);
+        if (fullList.count != checkGenList.count)
+        {
+            std::cerr << "In-check QSearch did not use full move generation\n";
+            for (int i = 0; i < fullList.count; ++i) delete fullList.moves[i];
+            for (int i = 0; i < checkGenList.count; ++i) delete checkGenList.moves[i];
+            return 1;
+        }
+        for (int i = 0; i < fullList.count; ++i) delete fullList.moves[i];
+        for (int i = 0; i < checkGenList.count; ++i) delete checkGenList.moves[i];
+    }
+
+    std::cout << "QSearch move generator mode correctly preserves normal search, captures, promotions, direct/discovered checks, and in-check full generation\n";
+    return 0;
+}
+
 int main(int argc, char* argv[])
 {
     if (argc != 3)
@@ -3748,7 +3905,14 @@ int main(int argc, char* argv[])
         }
         else if (testType == "qsearch")
         {
-            result = RunQSearch(argv[2]);
+            if (std::string(argv[2]) == "movegen_correctness")
+            {
+                result = RunQSearchMoveGenCorrectnessTest();
+            }
+            else
+            {
+                result = RunQSearch(argv[2]);
+            }
         }
         else if (testType == "cache")
         {
