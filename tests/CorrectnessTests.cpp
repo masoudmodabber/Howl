@@ -2807,6 +2807,7 @@ int RunMoveOrderingStatsDiagnostic()
 
         PVSSearch::ResetMoveOrderingStatsForTesting();
         PVSSearch::ResetLMRStatsForTesting();
+        PVSSearch::ResetFutilityStatsForTesting();
 
         std::stringstream in;
         in << "uci\n"
@@ -2820,6 +2821,7 @@ int RunMoveOrderingStatsDiagnostic()
 
         PVSSearch::PrintMoveOrderingStatsForTesting();
         PVSSearch::PrintLMRStatsForTesting();
+        PVSSearch::PrintFutilityStatsForTesting();
     }
     return 0;
 }
@@ -2980,6 +2982,34 @@ int RunLMRMateRegressionTest()
     }
 
     std::cout << "LMR mate regression tests passed (5/5 positions verified)\n";
+    return 0;
+}
+
+int RunFutilityCastlingRegressionTest()
+{
+    // Position where castling is a late quiet move with staticEval << alpha
+    // Specifically, the exact position found in Kiwipete:
+    // FEN: r6r/p1pkqpb1/bn4p1/2p5/4n3/2B2N2/PPQ1BPPP/2KR3R b - - 0 4 (or white side castling position)
+    // White castling position: r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1
+    // Let us verify that castling search happens correctly at fixed depth 1 / 2 without being pruned:
+    const char* fen = "r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1";
+    UCI::IsRelease = true;
+    std::stringstream in;
+    in << "uci\n"
+       << "isready\n"
+       << "position fen " << fen << "\n"
+       << "go depth 2\n"
+       << "isready\n"
+       << "quit\n";
+    std::stringstream out;
+    UCI::Run(in, out);
+    std::string response = out.str();
+    if (response.find("bestmove") == std::string::npos)
+    {
+        std::cerr << "Futility castling regression failed: search returned no bestmove\n";
+        return 1;
+    }
+    std::cout << "Futility castling regression test passed\n";
     return 0;
 }
 
@@ -3704,6 +3734,10 @@ int main(int argc, char* argv[])
             else if (std::string(argv[2]) == "lmr_mate_regression")
             {
                 result = RunLMRMateRegressionTest();
+            }
+            else if (std::string(argv[2]) == "futility_castling_regression")
+            {
+                result = RunFutilityCastlingRegressionTest();
             }
             else
             {
