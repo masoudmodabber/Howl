@@ -1543,15 +1543,17 @@ int RunSearch(const std::string& testCase)
     {
         // Quiet middlegame test position
         TranspositionTable::Clear();
+        PVSSearch::ResetFutilityPruningSkippedQuietMovesForTesting();
         std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard("rnbq1rk1/ppp2pbp/3p1np1/4p3/4P3/3P1NP1/PPPN1PBP/R1BQ1RK1 b - - 0 7"));
         Move prevMove{}, m1{}, m2{}, m3{};
         std::unique_ptr<MovePrintValue> res(PVSSearch::PVS(true, -200000, 200000, 4, prevMove, m1, m2, m3, *b, false, true, 0, false, false));
-        if (res->value != 65 && res->value != 39 && res->value != 47 && res->value != 59)
+        const int skippedQuietMoves = PVSSearch::FutilityPruningSkippedQuietMovesForTesting();
+        if (skippedQuietMoves <= 0)
         {
-            std::cerr << "Futility pruning quiet middlegame root score unexpected: " << res->value << '\n';
+            std::cerr << "Expected at least one quiet move skipped by futility pruning, got " << skippedQuietMoves << '\n';
             return 1;
         }
-        std::cout << "Futility pruning quiet move skip verified (score=" << res->value << ")\n";
+        std::cout << "Futility pruning quiet move skip verified (skippedCount=" << skippedQuietMoves << ", rootScore=" << res->value << ")\n";
         return 0;
     }
     if (testCase == "tt_entry_layout_and_packed_move")
@@ -3398,15 +3400,70 @@ int RunMultiPVCorrectnessTest()
     InitializeEngine();
     TranspositionTable::Clear();
     UCI::ReleaseCurrentPosition();
-    UCI::ReplaceCurrentBoard(BoardMaker::MakeInitialBoard("4k3/8/8/8/3q4/8/3R4/4K3 w - - 0 1"));
-    Option::MultiPV = 4;
-    Search::maxDepth = 5;
+    // Position where distinct moves (e.g. e2e4, d2d4, g1f3) have genuinely different exact scores
+    UCI::ReplaceCurrentBoard(BoardMaker::MakeInitialBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
+    Option::MultiPV = 3;
+    Search::maxDepth = 3;
     Search::finiteSearch = false;
     Search::active = true;
+    Search::startTime = std::chrono::high_resolution_clock::now();
+
+    std::ostringstream buffer;
+    std::streambuf* oldCout = std::cout.rdbuf(buffer.rdbuf());
+
     Move m1{}, m2{}, m3{}, m4{};
     Search::MainSearch(m1, m2, m3, m4, *UCI::thisBoard);
+
+    std::cout.rdbuf(oldCout);
     Option::MultiPV = 1;
-    std::cout << "MultiPV score correctness test passed\n";
+
+    std::string out = buffer.str();
+    std::istringstream iss(out);
+    std::string line;
+    std::vector<int> scores;
+    std::vector<std::string> pvs;
+
+    while (std::getline(iss, line))
+    {
+        if (line.find("info depth 3 ") != std::string::npos && line.find("multipv ") != std::string::npos)
+        {
+            size_t scorePos = line.find(" score cp ");
+            size_t pvPos = line.find(" pv ");
+            size_t multiPos = line.find(" multipv ");
+            if (scorePos != std::string::npos && multiPos != std::string::npos)
+            {
+                int sc = std::stoi(line.substr(scorePos + 10, multiPos - (scorePos + 10)));
+                std::string pv = line.substr(pvPos + 4, scorePos - (pvPos + 4));
+                scores.push_back(sc);
+                pvs.push_back(pv);
+            }
+        }
+    }
+
+    if (scores.size() < 3)
+    {
+        std::cerr << "Expected at least 3 MultiPV depth 3 lines, got " << scores.size() << '\n';
+        return 1;
+    }
+
+    // Take the final 3 lines corresponding to the completed depth 3 iteration
+    int s1 = scores[scores.size() - 3];
+    int s2 = scores[scores.size() - 2];
+    int s3 = scores[scores.size() - 1];
+
+    if (s1 < s2 || s2 < s3)
+    {
+        std::cerr << "MultiPV lines not sorted in descending order: " << s1 << ", " << s2 << ", " << s3 << '\n';
+        return 1;
+    }
+
+    if (s1 == s2 && s2 == s3)
+    {
+        std::cerr << "MultiPV candidate scores are identically clamped: " << s1 << ", " << s2 << ", " << s3 << '\n';
+        return 1;
+    }
+
+    std::cout << "MultiPV distinct candidate scores and ordering verified (" << s1 << ", " << s2 << ", " << s3 << ")\n";
     return 0;
 }
 

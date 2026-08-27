@@ -22,6 +22,8 @@ public:
     {
         return NullMoveReduction(isPVNode, alpha, beta, depth, prevMove, move1, move2, move3, board4, mateSearch, isNullMoveAllowed, depthGone, previousMoveWasCheck, nullWindowSearch);
     }
+    static int FutilityPruningSkippedQuietMovesForTesting();
+    static void ResetFutilityPruningSkippedQuietMovesForTesting();
 #endif
 
 private:
