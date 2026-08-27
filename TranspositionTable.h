@@ -6,6 +6,7 @@
 #include <vector>
 #include <algorithm>
 #include "Move.h"
+#include "MoveLogic.h"
 
 enum TTFlag : uint8_t
 {
@@ -92,6 +93,36 @@ struct TTTelemetryBucket
     uint64_t cutoffs = 0;
 };
 
+struct ShallowSameKeyStats
+{
+    uint64_t totalAttempts = 0;
+
+    uint64_t depthDiff1 = 0;
+    uint64_t depthDiff2 = 0;
+    uint64_t depthDiff3To4 = 0;
+    uint64_t depthDiff5Plus = 0;
+
+    uint64_t exactToExact = 0;
+    uint64_t exactToLower = 0;
+    uint64_t exactToUpper = 0;
+    uint64_t lowerToExact = 0;
+    uint64_t lowerToLower = 0;
+    uint64_t lowerToUpper = 0;
+    uint64_t upperToExact = 0;
+    uint64_t upperToLower = 0;
+    uint64_t upperToUpper = 0;
+
+    uint64_t bestMoveDiffers = 0;
+    uint64_t existingBestMoveEmptyIncomingProvides = 0;
+    uint64_t incomingScoreIsMate = 0;
+    uint64_t existingScoreIsMate = 0;
+
+    // Shadow evaluation of overwritten entries
+    uint64_t shadowProducedCutoff = 0;
+    uint64_t shadowProducedUsableMoveOnly = 0;
+    uint64_t shadowNoLaterUse = 0;
+};
+
 struct TTTelemetryStats
 {
     uint64_t eligibleProbes = 0;
@@ -120,6 +151,8 @@ struct TTTelemetryStats
     uint64_t replacementCollisions = 0;
     uint64_t replacementGreaterDepthOverwritten = 0;
     uint64_t hashKeyMismatchOnProbe = 0; // Slot occupied by different key
+
+    ShallowSameKeyStats shallowSameKey;
 
     TTTelemetryBucket depth1To2;
     TTTelemetryBucket depth3To5;
@@ -153,6 +186,7 @@ public:
     static TTTelemetryStats& TelemetryStats();
     static void ResetTelemetryStats();
     static void PrintTelemetryStats();
+    static void CheckShadowEntryOnProbe(uint64_t key, int depth, int alpha, int beta, bool isPVNode, const MoveList& moveList, bool actualCutoffOccurred);
 #endif
 
 private:
