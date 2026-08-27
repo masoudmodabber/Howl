@@ -73,6 +73,15 @@ bool TranspositionTable::IsActive()
 #if HOWL_CORRECTNESS_TESTING
 TTTelemetryStats g_ttTelemetryStats;
 
+// Shadow table tracking deeper entries that were overwritten by shallow same-key stores
+struct ShadowEntryInfo {
+    TTEntry entry;
+    bool wasOverwritten = false;
+    bool producedCutoff = false;
+    bool producedMoveOnly = false;
+};
+std::vector<ShadowEntryInfo> g_shadowEntries;
+
 TTTelemetryStats& TranspositionTable::TelemetryStats()
 {
     return g_ttTelemetryStats;
@@ -81,10 +90,23 @@ TTTelemetryStats& TranspositionTable::TelemetryStats()
 void TranspositionTable::ResetTelemetryStats()
 {
     g_ttTelemetryStats = TTTelemetryStats{};
+    g_shadowEntries.clear();
+    if (!entries.empty()) {
+        g_shadowEntries.resize(entries.size());
+    }
 }
 
 void TranspositionTable::PrintTelemetryStats()
 {
+    // Aggregate shadow entry outcomes
+    for (const auto& s : g_shadowEntries) {
+        if (s.wasOverwritten) {
+            if (s.producedCutoff) g_ttTelemetryStats.shallowSameKey.shadowProducedCutoff++;
+            else if (s.producedMoveOnly) g_ttTelemetryStats.shallowSameKey.shadowProducedUsableMoveOnly++;
+            else g_ttTelemetryStats.shallowSameKey.shadowNoLaterUse++;
+        }
+    }
+
     std::cout << "=== Transposition Table Telemetry (Recursive PVS) ===\n";
     std::cout << "  Eligible PVS Probes: " << g_ttTelemetryStats.eligibleProbes << "\n";
     double hitRate = (g_ttTelemetryStats.eligibleProbes > 0) ? (100.0 * g_ttTelemetryStats.hits / static_cast<double>(g_ttTelemetryStats.eligibleProbes)) : 0.0;
@@ -116,6 +138,29 @@ void TranspositionTable::PrintTelemetryStats()
     std::cout << "  Replacement Collisions: " << g_ttTelemetryStats.replacementCollisions << "\n";
     std::cout << "  Replaced Entry Had Greater Depth: " << g_ttTelemetryStats.replacementGreaterDepthOverwritten << "\n";
 
+    std::cout << "\n=== Shallow Same-Key Overwrites (incoming depth < existing depth) ===\n";
+    const auto& s = g_ttTelemetryStats.shallowSameKey;
+    std::cout << "  Total Shallow Same-Key Attempts: " << s.totalAttempts << "\n";
+    std::cout << "  Depth Delta = 1:   " << s.depthDiff1 << "\n";
+    std::cout << "  Depth Delta = 2:   " << s.depthDiff2 << "\n";
+    std::cout << "  Depth Delta = 3-4: " << s.depthDiff3To4 << "\n";
+    std::cout << "  Depth Delta = 5+:  " << s.depthDiff5Plus << "\n";
+
+    std::cout << "  Flags (Exist -> Inc):\n";
+    std::cout << "    Exact -> Exact: " << s.exactToExact << " | Exact -> Lower: " << s.exactToLower << " | Exact -> Upper: " << s.exactToUpper << "\n";
+    std::cout << "    Lower -> Exact: " << s.lowerToExact << " | Lower -> Lower: " << s.lowerToLower << " | Lower -> Upper: " << s.lowerToUpper << "\n";
+    std::cout << "    Upper -> Exact: " << s.upperToExact << " | Upper -> Lower: " << s.upperToLower << " | Upper -> Upper: " << s.upperToUpper << "\n";
+
+    std::cout << "  Incoming BestMove Differs: " << s.bestMoveDiffers << "\n";
+    std::cout << "  Existing BestMove Empty & Incoming Provides: " << s.existingBestMoveEmptyIncomingProvides << "\n";
+    std::cout << "  Incoming Score Is Mate: " << s.incomingScoreIsMate << "\n";
+    std::cout << "  Existing Score Is Mate: " << s.existingScoreIsMate << "\n";
+
+    std::cout << "  Overwritten Deeper Entry Shadow Outcome:\n";
+    std::cout << "    Would have produced TT cutoff: " << s.shadowProducedCutoff << "\n";
+    std::cout << "    Would have produced usable move only: " << s.shadowProducedUsableMoveOnly << "\n";
+    std::cout << "    No later use: " << s.shadowNoLaterUse << "\n";
+
     auto printBucket = [](const char* label, const TTTelemetryBucket& b) {
         double hr = (b.probes > 0) ? (100.0 * b.hits / static_cast<double>(b.probes)) : 0.0;
         double cr = (b.probes > 0) ? (100.0 * b.cutoffs / static_cast<double>(b.probes)) : 0.0;
@@ -129,6 +174,45 @@ void TranspositionTable::PrintTelemetryStats()
     printBucket("Depth 3-5:", g_ttTelemetryStats.depth3To5);
     printBucket("Depth 6-8:", g_ttTelemetryStats.depth6To8);
     printBucket("Depth 9+:", g_ttTelemetryStats.depth9Plus);
+}
+
+void TranspositionTable::CheckShadowEntryOnProbe(uint64_t key, int depth, int alpha, int beta, bool isPVNode, const MoveList& moveList, bool actualCutoffOccurred)
+{
+    if (entries.empty() || key == 0) return;
+    std::size_t idx = key & entryMask;
+    if (g_shadowEntries.size() > idx && g_shadowEntries[idx].wasOverwritten && g_shadowEntries[idx].entry.key == key)
+    {
+        const TTEntry& shadow = g_shadowEntries[idx].entry;
+        // Check if shadow entry would have produced a cutoff that didn't happen
+        if (!actualCutoffOccurred && !isPVNode && shadow.depth >= depth && TTFlagIsRigorous(shadow.flag))
+        {
+            if (shadow.flag == TT_EXACT ||
+                (shadow.flag == TT_LOWER_BOUND && shadow.score >= beta) ||
+                (shadow.flag == TT_UPPER_BOUND && shadow.score <= alpha))
+            {
+                g_shadowEntries[idx].producedCutoff = true;
+                return;
+            }
+        }
+
+        // Check if shadow entry had a valid move that could be matched
+        if (shadow.bestMove != 0)
+        {
+            int ttFrom = TTMoveHelper::UnpackFrom(shadow.bestMove);
+            int ttTo = TTMoveHelper::UnpackTo(shadow.bestMove);
+            int ttPromo = TTMoveHelper::UnpackPromotion(shadow.bestMove);
+            for (int i = 0; i < moveList.count; ++i)
+            {
+                Move* m = moveList.moves[i];
+                if (m->beginPlace == ttFrom && m->endPlace == ttTo &&
+                    (ttPromo == 0 ? (m->promotionPiece <= 0) : (m->promotionPiece == ttPromo)))
+                {
+                    g_shadowEntries[idx].producedMoveOnly = true;
+                    break;
+                }
+            }
+        }
+    }
 }
 #endif
 
@@ -165,6 +249,40 @@ void TranspositionTable::Store(uint64_t key, int32_t score, int8_t depth, uint8_
     else if (entries[idx].key == key)
     {
         g_ttTelemetryStats.overwriteSameKey++;
+        if (depth < entries[idx].depth)
+        {
+            auto& s = g_ttTelemetryStats.shallowSameKey;
+            s.totalAttempts++;
+            int diff = entries[idx].depth - depth;
+            if (diff == 1) s.depthDiff1++;
+            else if (diff == 2) s.depthDiff2++;
+            else if (diff <= 4) s.depthDiff3To4++;
+            else s.depthDiff5Plus++;
+
+            uint8_t existBase = TTBaseFlag(entries[idx].flag);
+            uint8_t incBase = TTBaseFlag(flag);
+            if (existBase == TT_EXACT && incBase == TT_EXACT) s.exactToExact++;
+            else if (existBase == TT_EXACT && incBase == TT_LOWER_BOUND) s.exactToLower++;
+            else if (existBase == TT_EXACT && incBase == TT_UPPER_BOUND) s.exactToUpper++;
+            else if (existBase == TT_LOWER_BOUND && incBase == TT_EXACT) s.lowerToExact++;
+            else if (existBase == TT_LOWER_BOUND && incBase == TT_LOWER_BOUND) s.lowerToLower++;
+            else if (existBase == TT_LOWER_BOUND && incBase == TT_UPPER_BOUND) s.lowerToUpper++;
+            else if (existBase == TT_UPPER_BOUND && incBase == TT_EXACT) s.upperToExact++;
+            else if (existBase == TT_UPPER_BOUND && incBase == TT_LOWER_BOUND) s.upperToLower++;
+            else if (existBase == TT_UPPER_BOUND && incBase == TT_UPPER_BOUND) s.upperToUpper++;
+
+            if (bestMove != 0 && entries[idx].bestMove != 0 && bestMove != entries[idx].bestMove) s.bestMoveDiffers++;
+            if (entries[idx].bestMove == 0 && bestMove != 0) s.existingBestMoveEmptyIncomingProvides++;
+
+            if (score > 150000 || score < -150000) s.incomingScoreIsMate++;
+            if (entries[idx].score > 150000 || entries[idx].score < -150000) s.existingScoreIsMate++;
+
+            if (g_shadowEntries.size() > idx && !g_shadowEntries[idx].wasOverwritten)
+            {
+                g_shadowEntries[idx].entry = entries[idx];
+                g_shadowEntries[idx].wasOverwritten = true;
+            }
+        }
     }
     else
     {

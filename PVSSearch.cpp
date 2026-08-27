@@ -756,6 +756,9 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             return retValue;
         }
     }
+#if HOWL_CORRECTNESS_TESTING
+    TranspositionTable::CheckShadowEntryOnProbe(board4.ZobristHashCode, depth, alpha, beta, isPVNode, moveList, false);
+#endif
     if (depthGone >= 0 && depthGone < MaxKillerPly)
     {
         bool boosted = false;
