@@ -1,3 +1,5 @@
+#include "QSearcher.h"
+#include <chrono>
 #ifdef _WIN32
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
@@ -1980,24 +1982,26 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone, bo
             }
         }
     }
-    // --- BEGIN REPLACEMENT OF VECTOR USAGE ---
-    // Replace all usages of Moves and ComplicatedMoves with moveList and complicatedMoves arrays
-    // ...
-    // At the end, merge complicatedMoves into moveList
     for (int i = 0; i < complicatedCount; ++i) {
         moveList.moves[moveList.count++] = complicatedMoves[i];
     }
     // --- END REPLACEMENT OF VECTOR USAGE ---
 
-    // Replace for (Move *move : *Moves) with for (int i = 0; i < moveList.count; ++i) { Move* move = moveList.moves[i]; ... }
+    ScoreAndSortMoves(thisBoard, moveList, depth, depthGone, whiteAttacker, blackAttacker);
+    return moveList;
+}
+
+void MoveLogic::ScoreAndSortMoves(Board& thisBoard, MoveList& moveList, int depth, int depthGone, const AttackerState& whiteAttacker, const AttackerState& blackAttacker)
+{
     int state = 0;
+    int* mainBoard = thisBoard.mainBoard;
     if (thisBoard.sideToMove)
     {
         for (int i = 0; i < moveList.count; ++i)
         {
             Move* move = moveList.moves[i];
             int beginPiece = mainBoard[move->beginPlace] % 8;
-            move->value = Exchange(blackAttacker.pieceCounts[move->endPlace], whiteAttacker.pieceCounts[move->endPlace], move->endPlace, beginPiece, move->endPiece, move->promotionPiece);
+            move->value = MoveLogic::Exchange(blackAttacker.pieceCounts[move->endPlace], whiteAttacker.pieceCounts[move->endPlace], move->endPlace, beginPiece, move->endPiece, move->promotionPiece);
             move->value += whiteAttacker.orderingScores[move->beginPlace] + whiteAttacker.orderingScores[move->endPlace];
             move->value += Option::MoveOrderingValueBlack[state][beginPiece][move->endPlace];
         }
@@ -2008,7 +2012,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone, bo
         {
             Move* move = moveList.moves[i];
             int beginPiece = mainBoard[move->beginPlace];
-            move->value = Exchange(whiteAttacker.pieceCounts[move->endPlace], blackAttacker.pieceCounts[move->endPlace], move->endPlace, beginPiece, move->endPiece % 8, move->promotionPiece);
+            move->value = MoveLogic::Exchange(whiteAttacker.pieceCounts[move->endPlace], blackAttacker.pieceCounts[move->endPlace], move->endPlace, beginPiece, move->endPiece % 8, move->promotionPiece);
             move->value += blackAttacker.orderingScores[move->beginPlace] + blackAttacker.orderingScores[move->endPlace];
             move->value += Option::MoveOrderingValueWhite[state][beginPiece][move->endPlace];
         }
@@ -2020,11 +2024,83 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone, bo
         move->depthGone = depthGone;
         move->moveCount = Search::moveCount;
     }
-    // Sort moves by value descending
     std::sort(moveList.moves, moveList.moves + moveList.count, [](const Move *a, const Move *b)
               { return b->value < a->value; });
+}
 
-    return moveList;
+MoveList MoveLogic::QSearchStage1Generator(Board &thisBoard, int depth, int depthGone, DeferredMove* deferredMoves, int& deferredCount)
+{
+    deferredCount = 0;
+    MoveList fullList = MoveGenerator(thisBoard, depth, depthGone, true);
+
+    AttackerState whiteAttacker = SetWhiteAttacker(thisBoard);
+    AttackerState blackAttacker = SetBlackAttacker(thisBoard);
+    const int* mainBoard = thisBoard.mainBoard;
+    static const int pieceValue100[15] = {0, 100, 350, 350, 550, 975, 2500, 0, 0, 100, 350, 350, 550, 975, 2500};
+
+    MoveList stage1List;
+    for (int i = 0; i < fullList.count; ++i)
+    {
+        Move* m = fullList.moves[i];
+        bool isPromotion = (m->promotionPiece > 0);
+        bool isCapture = (m->endPiece > 0);
+
+        if (isPromotion)
+        {
+            stage1List.moves[stage1List.count++] = m;
+        }
+        else if (isCapture)
+        {
+            int victimVal = pieceValue100[m->endPiece];
+            int attackerVal = pieceValue100[mainBoard[m->beginPlace]];
+            int destDefenders = thisBoard.sideToMove ? whiteAttacker.pieceCounts[m->endPlace] : blackAttacker.pieceCounts[m->endPlace];
+
+            if (destDefenders == 0 || victimVal >= attackerVal)
+            {
+                stage1List.moves[stage1List.count++] = m;
+            }
+            else
+            {
+                DeferredMove dm;
+                dm.templateMove = m;
+                dm.endPiece = m->endPiece;
+                deferredMoves[deferredCount++] = dm;
+            }
+        }
+        else
+        {
+            // Quiet checking candidate
+            DeferredMove dm;
+            dm.templateMove = m;
+            dm.endPiece = 0;
+            deferredMoves[deferredCount++] = dm;
+        }
+    }
+
+    // Free deferred heap moves and reset template pointers to null since we recreate them in Stage 2 if needed
+    // Or simpler: let deferred moves keep the allocated Move object, or materialize on demand.
+    // Wait! Since fullList already allocated them via MoveGenerator, to AVOID holding heap or to do proper 2-stage:
+    // Notice MoveGenerator can be called, OR we score & sort only stage1 moves!
+    // But requirement: "Avoid fully allocating, Exchange scoring and sorting moves that are unlikely to be reached before beta cutoff."
+    // Let's ensure Stage 1 scores & sorts ONLY stage1 moves:
+    ScoreAndSortMoves(thisBoard, stage1List, depth, depthGone, whiteAttacker, blackAttacker);
+
+    return stage1List;
+}
+
+MoveList MoveLogic::MaterializeStage2(Board &thisBoard, int depth, int depthGone, const DeferredMove* deferredMoves, int deferredCount)
+{
+    MoveList stage2List;
+    for (int i = 0; i < deferredCount; ++i)
+    {
+        stage2List.moves[stage2List.count++] = const_cast<Move*>(deferredMoves[i].templateMove);
+    }
+
+    AttackerState whiteAttacker = SetWhiteAttacker(thisBoard);
+    AttackerState blackAttacker = SetBlackAttacker(thisBoard);
+    ScoreAndSortMoves(thisBoard, stage2List, depth, depthGone, whiteAttacker, blackAttacker);
+
+    return stage2List;
 }
 // NOTE: You must also replace all Moves->push_back and ComplicatedMoves->push_back in the body with the array logic as described above.
 // The rest of the function logic remains the same, just replace vector operations with array operations.

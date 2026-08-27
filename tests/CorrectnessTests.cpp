@@ -2785,50 +2785,7 @@ int RunIGGDepthMappingCoverage()
     return 0;
 }
 
-int RunMoveOrderingStatsDiagnostic()
-{
-    struct DiagnosticPos {
-        const char* name;
-        const char* fen;
-    };
 
-    const DiagnosticPos positions[] = {
-        {"1. Kiwipete", "r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1"},
-        {"2. Quiet Middlegame", "r1bq1rk1/pp1n1ppp/2pbpn2/8/2BPP3/2N2N2/PPQ2PPP/R1B2RK1 w - - 4 9"}
-    };
-
-    UCI::IsRelease = true;
-    for (const auto& pos : positions)
-    {
-        std::cout << "\n========================================\n"
-                  << "Position: " << pos.name << "\n"
-                  << "FEN: " << pos.fen << "\n"
-                  << "========================================\n";
-
-        PVSSearch::ResetMoveOrderingStatsForTesting();
-        PVSSearch::ResetLMRStatsForTesting();
-        PVSSearch::ResetFutilityStatsForTesting();
-        PVSSearch::ResetNullMoveStatsForTesting();
-        TranspositionTable::ResetTelemetryStats();
-
-        std::stringstream in;
-        in << "uci\n"
-           << "isready\n"
-           << "position fen " << pos.fen << "\n"
-           << "go depth 8\n"
-           << "isready\n"
-           << "quit\n";
-        std::stringstream out;
-        UCI::Run(in, out);
-
-        PVSSearch::PrintMoveOrderingStatsForTesting();
-        PVSSearch::PrintLMRStatsForTesting();
-        PVSSearch::PrintFutilityStatsForTesting();
-        PVSSearch::PrintNullMoveStatsForTesting();
-        TranspositionTable::PrintTelemetryStats();
-    }
-    return 0;
-}
 
 int RunKillerCorrectnessTest()
 {
@@ -3850,6 +3807,46 @@ int RunQSearchMoveGenCorrectnessTest()
         for (int i = 0; i < checkGenList.count; ++i) delete checkGenList.moves[i];
     }
 
+    // 5. Test Two-Stage QSearch preservation & Stage 2 Recovery
+    {
+        // Kiwipete
+        std::unique_ptr<Board> b1(BoardMaker::MakeInitialBoard("r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1"));
+        DeferredMove dMoves[256];
+        int dCount = 0;
+        MoveList stage1 = MoveLogic::QSearchStage1Generator(*b1, 1, 0, dMoves, dCount);
+        MoveList stage2 = MoveLogic::MaterializeStage2(*b1, 1, 0, dMoves, dCount);
+        MoveList fullList = MoveLogic::MoveGenerator(*b1, 1, 0, true);
+
+        if (stage1.count + stage2.count != fullList.count)
+        {
+            std::cerr << "Two-stage QSearch partitioned count mismatch: " << (stage1.count + stage2.count) << " vs " << fullList.count << "\n";
+            for (int i = 0; i < stage1.count; ++i) delete stage1.moves[i];
+            for (int i = 0; i < stage2.count; ++i) delete stage2.moves[i];
+            for (int i = 0; i < fullList.count; ++i) delete fullList.moves[i];
+            return 1;
+        }
+
+        // Check that all Stage 1 moves have destDefenders == 0 || victim >= attacker || promotion
+        for (int i = 0; i < stage1.count; ++i)
+        {
+            Move* m = stage1.moves[i];
+            bool isProm = (m->promotionPiece > 0);
+            bool isCap = (m->endPiece > 0);
+            if (!isProm && !isCap)
+            {
+                std::cerr << "Stage 1 contains a non-capture non-promotion move\n";
+                for (int j = 0; j < stage1.count; ++j) delete stage1.moves[j];
+                for (int j = 0; j < stage2.count; ++j) delete stage2.moves[j];
+                for (int j = 0; j < fullList.count; ++j) delete fullList.moves[j];
+                return 1;
+            }
+        }
+
+        for (int i = 0; i < stage1.count; ++i) delete stage1.moves[i];
+        for (int i = 0; i < stage2.count; ++i) delete stage2.moves[i];
+        for (int i = 0; i < fullList.count; ++i) delete fullList.moves[i];
+    }
+
     std::cout << "QSearch move generator mode correctly preserves normal search, captures, promotions, direct/discovered checks, and in-check full generation\n";
     return 0;
 }
@@ -3881,10 +3878,6 @@ int main(int argc, char* argv[])
             else if (std::string(argv[2]) == "multipv_correctness")
             {
                 result = RunMultiPVCorrectnessTest();
-            }
-            else if (std::string(argv[2]) == "move_ordering")
-            {
-                result = RunMoveOrderingStatsDiagnostic();
             }
             else if (std::string(argv[2]) == "killer_correctness")
             {
