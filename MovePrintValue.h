@@ -7,6 +7,7 @@ public:
 
     int value;
     std::string printString;
+    bool provisionalMate = false;
 };
 
 #endif

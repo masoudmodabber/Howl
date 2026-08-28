@@ -44,6 +44,22 @@ int64_t Search::searchNodeCount = 0;
 std::string Search::Score = "";
 bool Search::mated = false;
 
+namespace
+{
+    bool IsMateScore(int score)
+    {
+        return score != 160000 && score != -160000 && (score > 159800 || score < -159800);
+    }
+
+    int FiniteProvisionalScore(int score)
+    {
+        constexpr int mateThreshold = 159800;
+        constexpr int safetyMargin = 2;
+        constexpr int provisionalWin = mateThreshold - PVSSearch::MaxKillerPly - safetyMargin;
+        return IsMateScore(score) ? (score > 0 ? provisionalWin : -provisionalWin) : score;
+    }
+}
+
 void Search::PrintBestMove()
 {
     const std::string& outBest = !completedBestMove.empty() ? completedBestMove : bestMove;
@@ -72,6 +88,7 @@ void Search::PrintBestMove()
 
 void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Board &board4)
 {
+    PVSSearch::ResetCandidateMemory();
     bestMove = "";
     ponderMove = "";
     completedBestMove = "";
@@ -233,6 +250,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                         {
                             value++;
                         }
+                        value = FiniteProvisionalScore(value);
                         move->value = value;
                     }
                 GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
@@ -315,6 +333,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     delete MPValue;
                     MPValue = PVSSearch::PVS(tempPVNode, -KthBestValue - Option::nullWindowSize, -KthBestValue, recDepth - 1, *move, move2, move3, move4, board4, MATESearch, true, 1, false, true);
                     value = -MPValue->value;
+                    value = FiniteProvisionalScore(value);
                     move->value = value;
                     if (Option::MultiPV > 1)
                     {
@@ -331,6 +350,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                             {
                                 value++;
                             }
+                            value = FiniteProvisionalScore(value);
                             move->value = value;
                         }
                     }
@@ -347,6 +367,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                         {
                             value++;
                         }
+                        value = FiniteProvisionalScore(value);
                         move->value = value;
                     }
                 }
@@ -640,6 +661,7 @@ void Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
             {
                 MovePrintValue *tempRetValLocal = PVSSearch::PVS(true, -beta, -alpha, 0, *move, move2, move3, move4, board4, false, true, 1, previousMoveWasCheck, false);
                 move->value = - tempRetValLocal->value;
+                move->value = FiniteProvisionalScore(move->value);
                 delete tempRetValLocal;
                 tempRetValLocal = nullptr;
             }
