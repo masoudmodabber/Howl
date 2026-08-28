@@ -40,6 +40,7 @@ bool Search::isMoveTime{false};
 
 int Search::overAllIteration = 0;
 int Search::moveCount = 0;
+int64_t Search::searchNodeCount = 0;
 std::string Search::Score = "";
 bool Search::mated = false;
 
@@ -102,6 +103,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     int alpha = -200000;
     int beta = 200000;
     moveCount = 0;
+    searchNodeCount = 0;
 
     bool previousMoveWasCheck = false;
     if (BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove))
@@ -259,14 +261,14 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 MovePrintValue *movePrint = new MovePrintValue();
                 movePrint->value = move->value;
                 int64_t elapsed_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count());
-                int64_t safeMoveCount = static_cast<int64_t>(moveCount);
-                int64_t nps = (elapsed_ms > 0) ? (safeMoveCount * 1000LL / elapsed_ms) : 0;
+                int64_t safeNodeCount = searchNodeCount;
+                int64_t nps = (elapsed_ms > 0) ? (safeNodeCount * 1000LL / elapsed_ms) : 0;
                 if (nps < 0) {
-                    std::cerr << "[DEBUG] Negative nps detected! moveCount=" << safeMoveCount << ", elapsed_ms=" << elapsed_ms << std::endl;
+                    std::cerr << "[DEBUG] Negative nps detected! searchNodeCount=" << safeNodeCount << ", elapsed_ms=" << elapsed_ms << std::endl;
                 }
                 movePrint->printString = "info depth " + std::to_string(recDepth) + " time " +
                     std::to_string(elapsed_ms) +
-                    " nodes " + std::to_string(moveCount) + " nps " +
+                    " nodes " + std::to_string(searchNodeCount) + " nps " +
                     std::to_string(nps) +
                     " pv " + ChessStringManipulation::PVToString(*move, 1, mated, board4) + ' ' + MPValue->printString + " score " + Score;
                 if (ChessStringManipulation::PVToString(*move, 0, false, board4) == bestMove)
@@ -380,10 +382,11 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 MovePrintValue *movePrint = new MovePrintValue();
                 movePrint->value = move->value;
                 int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
-                int64_t nps = (elapsed_ms > 0) ? (static_cast<int64_t>(moveCount) * 1000LL / elapsed_ms) : 0;
+                int64_t safeNodeCount = searchNodeCount;
+                int64_t nps = (elapsed_ms > 0) ? (safeNodeCount * 1000LL / elapsed_ms) : 0;
                 movePrint->printString = "info depth " + std::to_string(recDepth) + " time " +
                     std::to_string(elapsed_ms) +
-                    " nodes " + std::to_string(moveCount) + " nps " +
+                    " nodes " + std::to_string(searchNodeCount) + " nps " +
                     std::to_string(nps) +
                     " pv " + ChessStringManipulation::PVToString(*move, 1, mated, board4) + ' ' + MPValue->printString + " score " + Score;
                 movesPrintValue.push_back(movePrint);
@@ -685,9 +688,9 @@ void Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
     CalculateAndDisplayScore(moveList.moves[0]->value);
 
     int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
-    int64_t safeMoveCount = static_cast<int64_t>(moveCount);
-    int64_t nps = (elapsed_ms > 0) ? (safeMoveCount * 1000LL / elapsed_ms) : 0;
-    std::string infoStr = "info depth 1 time " + std::to_string(elapsed_ms) + " nodes " + std::to_string(moveCount) + " nps " + std::to_string(nps) + " pv " + ChessStringManipulation::PVToString(*(moveList.moves[0]), 1, mated, board4) + " score " + Score;
+    int64_t safeNodeCount = searchNodeCount;
+    int64_t nps = (elapsed_ms > 0) ? (safeNodeCount * 1000LL / elapsed_ms) : 0;
+    std::string infoStr = "info depth 1 time " + std::to_string(elapsed_ms) + " nodes " + std::to_string(searchNodeCount) + " nps " + std::to_string(nps) + " pv " + ChessStringManipulation::PVToString(*(moveList.moves[0]), 1, mated, board4) + " score " + Score;
     DiagnosticLogger::Log("EMIT_INFO", infoStr, DiagnosticLogger::currentSearchId.load());
     std::cout << infoStr << '\n';
 }

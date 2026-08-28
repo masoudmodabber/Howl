@@ -47,6 +47,7 @@ QSearchTestStatistics QSearcher::TestStatistics() {
 
 MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& prevMove, int depthGone, int lastCheck, bool kick, int depth, Move& move1, Move& move2, Move& move3, Board& board4, bool MAtESearch, int depthQuisStarted, bool nullWindowSearch)
 {
+    Search::searchNodeCount++;
     MoveList moveList;
     Move* SelectedMove = nullptr;
     Move selectedMoveStorage{};

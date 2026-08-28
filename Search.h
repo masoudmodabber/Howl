@@ -31,6 +31,7 @@ public:
 
     static int overAllIteration;
     static int moveCount;
+    static int64_t searchNodeCount;
     static std::string Score;
     static bool mated;
 

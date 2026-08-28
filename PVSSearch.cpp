@@ -601,6 +601,8 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
         return StartQSearch(isPVNode, alpha, beta, prevMove, depthGone, move1, move2, move3, board4, nullWindowSearch, previousMoveWasCheck);
     }
 
+    Search::searchNodeCount++;
+
     bool isNullWindow = (beta - alpha <= 1);
 
     // Two-stage null-window protocol:
