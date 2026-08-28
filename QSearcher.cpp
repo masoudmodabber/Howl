@@ -138,7 +138,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
     bool hasDeferredStage2 = false;
 
     if (!currentSideInCheck) {
-        moveList = MoveLogic::QSearchStage1Generator(board4, depth, depthGone, deferredMoves, deferredCount);
+        moveList = MoveLogic::QSearchStage1Generator(board4, depth, depthGone, deferredMoves, deferredCount, prevMove);
         hasDeferredStage2 = (deferredCount > 0);
     } else {
         moveList = MoveLogic::MoveGenerator(board4, depth, depthGone, false);
@@ -201,8 +201,16 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                 ? (pieceValue100[move->promotionPiece] - pieceValue100[1])
                 : 0;
 
-            bool isDeltaPruned = (!currentSideInCheck && !moveGivesCheck &&
+            bool deltaRejectsMaterial = (!currentSideInCheck &&
                 Option::SafetyMargin + standPot + pieceValueTemp + promotionGain <= alpha);
+
+#ifdef HOWL_CORRECTNESS_TESTING
+            if (testRootNode && moveGivesCheck && deltaRejectsMaterial) {
+                qSearchTestStatistics.checkingMovesExemptedFromDelta++;
+            }
+#endif
+
+            bool isDeltaPruned = deltaRejectsMaterial && !moveGivesCheck;
 
             if (isDeltaPruned) {
                 move->value = Option::SafetyMargin + standPot + pieceValueTemp + promotionGain - 1;

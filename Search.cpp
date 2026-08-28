@@ -149,6 +149,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     alpha = 0;
     beta = 0;
     int value = -200000;
+    int prevCompletedScore = moveList.moves[0]->value;
 
     MovePrintValue *MPValue = new MovePrintValue();
     MPValue->printString = "";
@@ -162,64 +163,76 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         }
         SearchForCheckUpdate();
 
-        alpha = -200000;
-        beta = +200000;
-        value = -200000;
-        std::vector<MovePrintValue *> movesPrintValue;
-        int KthBestValue = -200000;
-        bool pvPrintedThisDepth = false;
-        std::string bestPVString = "";
-
-        for (int counter = 0; counter < moveList.count; counter++)
+        int alphaDelta = 50;
+        int betaDelta = 50;
+        int aspAlpha = -200000;
+        int aspBeta = +200000;
+        if (Option::MultiPV <= 1 && prevCompletedScore > -159800 && prevCompletedScore < 159800)
         {
-            if (!active)
-            {
-                stopRequested = true;
-                break;
-            }
-            if (maxNodes > 0 && moveCount >= maxNodes)
-            {
-                stopRequested = true;
-                break;
-            }
+            aspAlpha = std::max(-200000, prevCompletedScore - alphaDelta);
+            aspBeta = std::min(200000, prevCompletedScore + betaDelta);
+        }
 
-            Move *move = moveList.moves[counter];
-            if (recDepth == 2 && move->beginPlace == 17 && move->endPlace == 53)
+        while (active)
+        {
+            alpha = aspAlpha;
+            beta = aspBeta;
+            value = -200000;
+            std::vector<MovePrintValue *> movesPrintValue;
+            int KthBestValue = (Option::MultiPV <= 1) ? aspAlpha : -200000;
+            bool pvPrintedThisDepth = false;
+            std::string bestPVString = "";
+
+            for (int counter = 0; counter < moveList.count; counter++)
             {
-                overAllIteration++;
-            }
-            if (counter < MultiPV)
-            {
-                Board *boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
-                MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
-                GameLogic::DoMove(board4, *move, move4, -1, -1);
-                if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
+                if (!active)
                 {
-                    move->value = 0;
+                    stopRequested = true;
+                    break;
                 }
-                else
+                if (maxNodes > 0 && moveCount >= maxNodes)
                 {
-                    if (move->value > 159800 || move->value < -159800)
+                    stopRequested = true;
+                    break;
+                }
+
+                Move *move = moveList.moves[counter];
+                if (recDepth == 2 && move->beginPlace == 17 && move->endPlace == 53)
+                {
+                    overAllIteration++;
+                }
+                if (counter < MultiPV)
+                {
+                    Board *boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
+                    MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
+                    GameLogic::DoMove(board4, *move, move4, -1, -1);
+                    if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                     {
-                        MATESearch = true;
+                        move->value = 0;
                     }
                     else
                     {
-                        MATESearch = false;
+                        if (move->value > 159800 || move->value < -159800)
+                        {
+                            MATESearch = true;
+                        }
+                        else
+                        {
+                            MATESearch = false;
+                        }
+                        delete MPValue;
+                        MPValue = PVSSearch::PVS(true, -beta, -alpha, recDepth - 1, *move, move2, move3, move4, board4, MATESearch, true, 1, false, false);
+                        value = -MPValue->value;
+                        if (value > 159800 && value != 160000)
+                        {
+                            value--;
+                        }
+                        else if (value < -159800 && value != -160000)
+                        {
+                            value++;
+                        }
+                        move->value = value;
                     }
-                    delete MPValue;
-                    MPValue = PVSSearch::PVS(true, -200000, 200000, recDepth - 1, *move, move2, move3, move4, board4, MATESearch, true, 1, false, false);
-                    value = -MPValue->value;
-                    if (value > 159800 && value != 160000)
-                    {
-                        value--;
-                    }
-                    else if (value < -159800 && value != -160000)
-                    {
-                        value++;
-                    }
-                    move->value = value;
-                }
                 GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
                 delete missingInfoAboutPrevStateFromMove;
                 missingInfoAboutPrevStateFromMove = nullptr;
@@ -451,9 +464,33 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 std::cout << movesPrintValue[0]->printString << '\n';
             }
         }
+            int iterScore = moveList.moves[0]->value;
+            deleteMovesPrintValue(movesPrintValue);
+
+            if (Option::MultiPV <= 1 && iterScore > -159800 && iterScore < 159800)
+            {
+                if (iterScore <= aspAlpha)
+                {
+                    alphaDelta *= 2;
+                    aspAlpha = std::max(-200000, prevCompletedScore - alphaDelta);
+                    if (aspAlpha <= -159800) aspAlpha = -200000;
+                    continue;
+                }
+                else if (iterScore >= aspBeta)
+                {
+                    betaDelta *= 2;
+                    aspBeta = std::min(200000, prevCompletedScore + betaDelta);
+                    if (aspBeta >= 159800) aspBeta = 200000;
+                    continue;
+                }
+            }
+
+            prevCompletedScore = iterScore;
+            break;
+        }
+
         if (stopRequested)
         {
-            deleteMovesPrintValue(movesPrintValue);
             break;
         }
         completedBestMove = bestMove;
@@ -474,7 +511,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 }
             }
         }
-        deleteMovesPrintValue(movesPrintValue);
 
         if (maxDepth > 0 && recDepth >= maxDepth)
         {

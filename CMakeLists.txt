@@ -69,7 +69,7 @@ if(BUILD_TESTING)
         )
     endforeach()
 
-    foreach(QSEARCH_CASE in_check_stand_pat quiet_king_evasion quiet_block_evasion mate stalemate pseudo_legal_illegal research_accounting quiet_promotion promotion_capture underpromotion_knight underpromotion_rook promotion_check discovered_check ordinary_delta pawn_capture_recapture pawn_capture_free pawn_capture_forcing quiet_check checking_capture delta_boundary)
+    foreach(QSEARCH_CASE in_check_stand_pat quiet_king_evasion quiet_block_evasion mate stalemate pseudo_legal_illegal research_accounting quiet_promotion promotion_capture underpromotion_knight underpromotion_rook promotion_check discovered_check ordinary_delta pawn_capture_recapture pawn_capture_free pawn_capture_forcing quiet_check checking_capture delta_boundary movegen_correctness)
         add_test(
             NAME qsearch_${QSEARCH_CASE}
             COMMAND howl_correctness_tests qsearch ${QSEARCH_CASE}

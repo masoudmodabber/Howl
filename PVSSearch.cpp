@@ -570,7 +570,7 @@ void PVSSearch::PrintNullMoveStatsForTesting()
 }
 #endif
 
-MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch)
+MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool nullWindowVerification, bool isAggressivePreprobe)
 {
     Move *SelectedMove = nullptr;
     Board *boardCopy = nullptr;
@@ -593,6 +593,57 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
 
     const int origAlpha = alpha;
     if (depth == 0)
+    {
+        delete retValue;
+        retValue = nullptr;
+        delete MPValue;
+        MPValue = nullptr;
+        return StartQSearch(isPVNode, alpha, beta, prevMove, depthGone, move1, move2, move3, board4, nullWindowSearch, previousMoveWasCheck);
+    }
+
+    bool isNullWindow = (beta - alpha <= 1);
+
+    // Two-stage null-window protocol:
+    if (isNullWindow && !nullWindowVerification && !isAggressivePreprobe && depth >= 1)
+    {
+        // 1. Untrusted aggressive pre-probe (frontier collapse + LQP enabled, no trusted TT store)
+        MovePrintValue *aggRes = PVS(isPVNode, alpha, beta, depth, prevMove, move1, move2, move3, board4, MAtESearch, isNullMoveAllowed, depthGone, previousMoveWasCheck, nullWindowSearch, false, true);
+
+        // 2. Check if an existing valid TT entry independently confirms the same bound direction:
+        TTEntry ttEntry{};
+        bool ttHit = TranspositionTable::Probe(board4.ZobristHashCode, ttEntry);
+        if (TranspositionTable::CutoffsEnabled() && ttHit && ttEntry.depth >= depth && TTFlagIsRigorous(ttEntry.flag))
+        {
+            if (aggRes->value >= beta)
+            {
+                if ((ttEntry.flag == TT_EXACT && ttEntry.score >= beta) || (ttEntry.flag == TT_LOWER_BOUND && ttEntry.score >= beta))
+                {
+                    delete retValue;
+                    delete MPValue;
+                    return aggRes;
+                }
+            }
+            else if (aggRes->value <= alpha)
+            {
+                if ((ttEntry.flag == TT_EXACT && ttEntry.score <= alpha) || (ttEntry.flag == TT_UPPER_BOUND && ttEntry.score <= alpha))
+                {
+                    delete retValue;
+                    delete MPValue;
+                    return aggRes;
+                }
+            }
+        }
+        delete aggRes;
+
+        // 3. Safe verification probe (nullWindowVerification=true: frontier collapse & LQP disabled at null-window nodes)
+        delete retValue;
+        delete MPValue;
+        return PVS(isPVNode, alpha, beta, depth, prevMove, move1, move2, move3, board4, MAtESearch, isNullMoveAllowed, depthGone, previousMoveWasCheck, nullWindowSearch, true, false);
+    }
+
+    // Frontier collapse at non-PV depth <= 4:
+    bool allowFrontierCollapse = isAggressivePreprobe || !isNullWindow;
+    if (allowFrontierCollapse && !isPVNode && depth <= 4)
     {
         delete retValue;
         retValue = nullptr;
@@ -821,6 +872,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
     int bestMoveValue = -200000;
     std::string SelectedPV = "";
     int availMoves = 0;
+    int quietMovesSearched = 0;
     int futilityPrunedCount = 0;
     int unverifiedLMRCount = 0;
     {
@@ -896,16 +948,19 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
 #if HOWL_CORRECTNESS_TESTING
                         RecordMoveOrderingCutoff(i, hasTTMove, *move, depth, depthGone);
 #endif
-                        RecordKiller(depthGone, *move);
-                        if (isPVNode)
+                        if (!isAggressivePreprobe)
                         {
-                            move->isRefuteWithoutNullMove = true;
-                        }
-                        // TODO: remove rest of list from movelist for memory management
-                        if (bestMoveValue != 0)
-                        {
-                            uint16_t packed = TTMoveHelper::PackMove(*move);
-                            TranspositionTable::Store(board4.ZobristHashCode, move->value, depth, TT_LOWER_BOUND, packed);
+                            RecordKiller(depthGone, *move);
+                            if (isPVNode)
+                            {
+                                move->isRefuteWithoutNullMove = true;
+                            }
+                            // TODO: remove rest of list from movelist for memory management
+                            if (bestMoveValue != 0)
+                            {
+                                uint16_t packed = TTMoveHelper::PackMove(*move);
+                                TranspositionTable::Store(board4.ZobristHashCode, move->value, depth, TT_LOWER_BOUND, packed);
+                            }
                         }
                         retValue->value = move->value;
                         retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + MPValue->printString;
@@ -921,6 +976,18 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             }
             else
             {
+                // Late quiet pruning: enabled during aggressive pre-probe or at wide-window nodes; disabled during null-window verification
+                bool allowLQP = isAggressivePreprobe || !isNullWindow;
+                if (allowLQP && !isPVNode && depth <= 4 && availMoves > 0 && move->endPiece == 0 && move->promotionPiece <= 0 &&
+                    (move->CastleFlag & 15) == 0 &&
+                    alpha > -159800 && beta < 159800)
+                {
+                    if (depth == 1 && quietMovesSearched >= 0) continue;
+                    if (depth == 2 && quietMovesSearched >= 1) continue;
+                    if (depth == 3 && quietMovesSearched >= 2) continue;
+                    if (depth == 4 && quietMovesSearched >= 4) continue;
+                }
+
                 if (!isPVNode && depth <= 2 && availMoves > 0 && move->endPiece == 0 && move->promotionPiece <= 0 &&
                     (move->CastleFlag & 15) == 0 &&
                     alpha > -159800 && beta < 159800)
@@ -1015,6 +1082,10 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                         {
                             exempt = true;
                         }
+                    }
+                    if (move->endPiece == 0 && move->promotionPiece <= 0)
+                    {
+                        quietMovesSearched++;
                     }
                     if (!tempPVNode && !exempt && depth >= 3)
                     {
@@ -1111,17 +1182,20 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
 #if HOWL_CORRECTNESS_TESTING
                         RecordMoveOrderingCutoff(i, false, *move, depth, depthGone);
 #endif
-                        RecordKiller(depthGone, *move);
-                        if (isPVNode)
+                        if (!isAggressivePreprobe)
                         {
-                            move->isRefuteWithoutNullMove = true;
-                        }
-                        // TODO: delete movelist except first and second move
-                        if (value != 0)
-                        {
-                            uint16_t packed = TTMoveHelper::PackMove(*move);
-                            int storedDepth = (LMRDepth > 0 && !wasResearchedAtFullDepth) ? (depth - LMRDepth) : depth;
-                            TranspositionTable::Store(board4.ZobristHashCode, move->value, storedDepth, TT_LOWER_BOUND, packed);
+                            RecordKiller(depthGone, *move);
+                            if (isPVNode)
+                            {
+                                move->isRefuteWithoutNullMove = true;
+                            }
+                            // TODO: delete movelist except first and second move
+                            if (value != 0)
+                            {
+                                uint16_t packed = TTMoveHelper::PackMove(*move);
+                                int storedDepth = (LMRDepth > 0 && !wasResearchedAtFullDepth) ? (depth - LMRDepth) : depth;
+                                TranspositionTable::Store(board4.ZobristHashCode, move->value, storedDepth, TT_LOWER_BOUND, packed);
+                            }
                         }
                         retValue->value = move->value;
                         retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + MPValue->printString;
@@ -1160,7 +1234,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
         }
         else
         {
-            if (SelectedMove != nullptr && bestMoveValue != 0)
+            if (!isAggressivePreprobe && SelectedMove != nullptr && bestMoveValue != 0)
             {
                 uint8_t flag = (bestMoveValue > origAlpha) ? TT_EXACT : TT_UPPER_BOUND;
                 if (futilityPrunedCount > 0 || unverifiedLMRCount > 0)
