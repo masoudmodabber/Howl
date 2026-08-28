@@ -13,6 +13,7 @@ struct QSearchTestStatistics {
     int rootAvailableMoves = 0;
     int rootIllegalMovesBeforeFirstSearch = 0;
     int rootFullWindowResearches = 0;
+    int checkingMovesExemptedFromDelta = 0;
     bool firstLegalSearchedMoveUsedFullWindow = false;
 };
 #endif
