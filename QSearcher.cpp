@@ -399,16 +399,24 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         qSearchTestStatistics.rootAvailableMoves = availMoves;
     }
 #endif
-    if (availMoves == 0 && !BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove)) {
-        Move stalemateMove;
-        stalemateMove.value = 0;
-        stalemateMove.promotionPiece = -2;
-        retValue->value = 0;
+    if (availMoves == 0 && !currentSideInCheck) {
+        bool hasLegalMove = false;
+        MoveList legalMoveList = MoveLogic::MoveGenerator(board4, depth, depthGone, false);
+        for (int i = 0; i < legalMoveList.count && !hasLegalMove; ++i) {
+            Move* move = legalMoveList.moves[i];
+            MissingInfoAboutPrevStateFromMove undo(board4);
+            GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone);
+            hasLegalMove = !BoardLogic::UnderAttack(
+                board4, board4.pieces[turn * 8 + 6].front(), board4.sideToMove);
+            GameLogic::UndoMove(board4, *move, undo);
+        }
+        deleteMoveList(legalMoveList);
+        retValue->value = hasLegalMove ? standPot : 0;
         deleteMoveList(moveList);
         delete MPValue;
         MPValue = nullptr;
         return retValue;
-    } else if (availMoves == 0 && BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove)) {
+    } else if (availMoves == 0 && currentSideInCheck) {
         Move mateMove;
         mateMove.value = -159999;
         retValue->value = -159999;

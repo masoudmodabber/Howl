@@ -827,6 +827,22 @@ int RunQSearchTerminalPosition(bool mate)
     return 0;
 }
 
+int RunQSearchQuietStandPat()
+{
+    const char* fen = "7k/8/8/8/8/8/P7/7K w - - 0 1";
+    std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+    const int staticEvaluation = EvaluationLogic::Evaluate(*board);
+    const DirectQSearchResult result = RunDirectQSearch(fen, -200000, 200000, 0, 1);
+    if (result.score != staticEvaluation || result.statistics.rootAvailableMoves != 0)
+    {
+        return ReportQSearchFailure(
+            "quiet stand-pat without tactical candidates", fen,
+            "score " + std::to_string(staticEvaluation), result);
+    }
+    std::cout << "QSearch returns stand-pat when legal quiet moves exist\n";
+    return 0;
+}
+
 int RunQSearchPseudoLegalIllegalMoves()
 {
     const char* fen = "k3r3/8/8/6b1/8/1b5n/3R2b1/4K3 w - - 0 1";
@@ -1114,6 +1130,8 @@ int RunQSearch(const std::string& testCase)
         return RunQSearchTerminalPosition(true);
     if (testCase == "stalemate")
         return RunQSearchTerminalPosition(false);
+    if (testCase == "quiet_stand_pat")
+        return RunQSearchQuietStandPat();
     if (testCase == "pseudo_legal_illegal")
         return RunQSearchPseudoLegalIllegalMoves();
     if (testCase == "research_accounting")
@@ -4171,5 +4189,4 @@ int main(int argc, char* argv[])
         return 1;
     }
 }
-
 

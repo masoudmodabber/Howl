@@ -15,6 +15,8 @@
 #include "TranspositionTable.h"
 #include <iostream>
 #include <algorithm>
+#include <unordered_map>
+#include <unordered_set>
 
 int PVSSearch::moveOrderingDepth[20] = {
     1,
@@ -37,6 +39,77 @@ int PVSSearch::moveOrderingDepth[20] = {
     10};
 
 PVSSearch::KillerMove PVSSearch::killers[PVSSearch::MaxKillerPly][2] = {};
+
+namespace
+{
+    struct CandidateEvidence
+    {
+        int discoveryScore = -200000;
+        bool hasDiscoveryScore = false;
+    };
+
+    std::unordered_map<uint64_t, std::unordered_map<uint16_t, CandidateEvidence>> candidateMemory;
+    std::unordered_set<uint64_t> discoveryComplete;
+    bool IsMateScore(int score)
+    {
+        return score != 160000 && score != -160000 && (score > 159800 || score < -159800);
+    }
+
+    int FiniteProvisionalScore(int score)
+    {
+        constexpr int mateThreshold = 159800;
+        constexpr int safetyMargin = 2;
+        constexpr int provisionalWin = mateThreshold - PVSSearch::MaxKillerPly - safetyMargin;
+        return IsMateScore(score) ? (score > 0 ? provisionalWin : -provisionalWin) : score;
+    }
+
+    int CandidateSearchScore(int score, bool &provisionalMate)
+    {
+        provisionalMate = provisionalMate || IsMateScore(score);
+        return IsMateScore(score) && score < 0 ? score : FiniteProvisionalScore(score);
+    }
+
+    int CandidateCount(bool isPVNode)
+    {
+        return isPVNode ? 3 : 2;
+    }
+
+    void PrioritizeCandidateEvidence(uint64_t key, MoveList &moveList, int depth)
+    {
+        const auto &evidence = candidateMemory[key];
+        std::stable_sort(moveList.moves, moveList.moves + moveList.count,
+                         [&evidence](const Move *a, const Move *b)
+                         {
+                             auto aEvidence = evidence.find(TTMoveHelper::PackMove(*a));
+                             auto bEvidence = evidence.find(TTMoveHelper::PackMove(*b));
+                             const bool aScored = aEvidence != evidence.end() && aEvidence->second.hasDiscoveryScore;
+                             const bool bScored = bEvidence != evidence.end() && bEvidence->second.hasDiscoveryScore;
+                             if (aScored != bScored)
+                                 return aScored;
+                             if (!aScored)
+                                 return false;
+                             return aEvidence->second.discoveryScore > bEvidence->second.discoveryScore;
+                         });
+    }
+
+    void MarkCandidateSeen(uint64_t key, const Move &move)
+    {
+        candidateMemory[key].try_emplace(TTMoveHelper::PackMove(move));
+    }
+
+    void RecordDiscoveryScore(uint64_t key, const Move &move, int score)
+    {
+        CandidateEvidence &evidence = candidateMemory[key][TTMoveHelper::PackMove(move)];
+        evidence.discoveryScore = score;
+        evidence.hasDiscoveryScore = true;
+    }
+}
+
+void PVSSearch::ResetCandidateMemory()
+{
+    candidateMemory.clear();
+    discoveryComplete.clear();
+}
 
 void PVSSearch::ResetKillers()
 {
@@ -645,7 +718,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
 
     // Frontier collapse at non-PV depth <= 4:
     bool allowFrontierCollapse = isAggressivePreprobe || !isNullWindow;
-    if (allowFrontierCollapse && !isPVNode && depth <= 4)
+    if (false && allowFrontierCollapse && !isPVNode && depth <= 4)
     {
         delete retValue;
         retValue = nullptr;
@@ -872,6 +945,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
     int inCheck = -1;
     int staticEval = -200000;
     int bestMoveValue = -200000;
+    bool bestMoveProvisionalMate = false;
     std::string SelectedPV = "";
     int availMoves = 0;
     int quietMovesSearched = 0;
@@ -879,9 +953,35 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
     int unverifiedLMRCount = 0;
     {
         bool firstMove = true;
-        for (int i = 0; i < moveList.count; ++i)
+        const uint64_t positionKey = board4.ZobristHashCode;
+        if ((depth == 1 || isPVNode) && discoveryComplete.find(positionKey) == discoveryComplete.end())
+        {
+            for (int i = 0; i < moveList.count; ++i)
+            {
+                Move *move = moveList.moves[i];
+                MissingInfoAboutPrevStateFromMove undo(board4);
+                GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone);
+                MovePrintValue *discovery = PVS(true, -200000, 200000, 0, *move, move2, move3,
+                                                prevMove, board4, MAtESearch, true, depthGone + 1,
+                                                previousMoveWasCheck, false);
+                int discoveryScore = -discovery->value;
+                if (discoveryScore > 159800 && discoveryScore != 160000) discoveryScore--;
+                else if (discoveryScore < -159800 && discoveryScore != -160000) discoveryScore++;
+                GameLogic::UndoMove(board4, *move, undo);
+                if (discoveryScore != -160000)
+                    RecordDiscoveryScore(positionKey, *move, discoveryScore);
+                delete discovery;
+            }
+            discoveryComplete.insert(positionKey);
+        }
+        const int candidateCount = CandidateCount(isPVNode);
+        PrioritizeCandidateEvidence(positionKey, moveList, depth);
+        bool mateEscapeExpansion = false;
+        for (int i = 0; i < moveList.count &&
+                        (availMoves < candidateCount || mateEscapeExpansion); ++i)
         {
             Move *move = moveList.moves[i];
+            MarkCandidateSeen(board4.ZobristHashCode, *move);
             int LMRDepth = 0;
             bool wasResearchedAtFullDepth = false;
             if (Search::overAllIteration == 1 && move->beginPlace == 60 && move->endPlace == 53)
@@ -904,6 +1004,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                 if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                 {
                     bestMoveValue = 0;
+                    bestMoveProvisionalMate = false;
                     SelectedMove = move;
                     move->value = 0;
                 }
@@ -915,8 +1016,11 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                         tempPVNode = true;
                     }
                     delete MPValue;
-                    MPValue = PVS(tempPVNode, -beta, -alpha, depth - 1, *move, move2, move3, prevMove, board4, MAtESearch, true, depthGone + 1, previousMoveWasCheck, nullWindowSearch);
+                    MPValue = PVS(tempPVNode, -beta, -alpha,
+                                  depth - 1, *move, move2, move3, prevMove, board4, MAtESearch, true,
+                                  depthGone + 1, previousMoveWasCheck, nullWindowSearch);
                     bestMoveValue = -MPValue->value;
+                    bestMoveProvisionalMate = MPValue->provisionalMate;
                     SelectedMove = move;
                     SelectedPV = MPValue->printString;
                     if (bestMoveValue != -160000)
@@ -931,6 +1035,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     {
                         bestMoveValue++;
                     }
+                    bestMoveValue = CandidateSearchScore(bestMoveValue, bestMoveProvisionalMate);
                     move->value = bestMoveValue;
                 }
                 GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
@@ -958,13 +1063,14 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                                 move->isRefuteWithoutNullMove = true;
                             }
                             // TODO: remove rest of list from movelist for memory management
-                            if (bestMoveValue != 0)
+                            if (bestMoveValue != 0 && !IsMateScore(move->value))
                             {
                                 uint16_t packed = TTMoveHelper::PackMove(*move);
                                 TranspositionTable::Store(board4.ZobristHashCode, move->value, depth, TT_LOWER_BOUND, packed);
                             }
                         }
                         retValue->value = move->value;
+                        retValue->provisionalMate = bestMoveProvisionalMate;
                         retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + MPValue->printString;
                         deleteMoveList(moveList);
                         delete MPValue;
@@ -980,7 +1086,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             {
                 // Late quiet pruning: enabled during aggressive pre-probe or at wide-window nodes; disabled during null-window verification
                 bool allowLQP = isAggressivePreprobe || !isNullWindow;
-                if (allowLQP && !isPVNode && depth <= 4 && availMoves > 0 && move->endPiece == 0 && move->promotionPiece <= 0 &&
+                if (false && allowLQP && !isPVNode && depth <= 4 && availMoves > 0 && move->endPiece == 0 && move->promotionPiece <= 0 &&
                     (move->CastleFlag & 15) == 0 &&
                     alpha > -159800 && beta < 159800)
                 {
@@ -990,7 +1096,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     if (depth == 4 && quietMovesSearched >= 4) continue;
                 }
 
-                if (!isPVNode && depth <= 2 && availMoves > 0 && move->endPiece == 0 && move->promotionPiece <= 0 &&
+                if (false && !isPVNode && depth <= 2 && availMoves > 0 && move->endPiece == 0 && move->promotionPiece <= 0 &&
                     (move->CastleFlag & 15) == 0 &&
                     alpha > -159800 && beta < 159800)
                 {
@@ -1057,6 +1163,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                 MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
                 GameLogic::DoMove(board4, *move, prevMove, depth, depthGone);
                 int value;
+                bool valueProvisionalMate = false;
                 if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                 {
                     tempRepeat = true;
@@ -1089,22 +1196,16 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     {
                         quietMovesSearched++;
                     }
-                    if (!tempPVNode && !exempt && depth >= 3)
+                    if (false && !isPVNode)
                     {
-                        bool isKiller = (depthGone >= 0 && depthGone < MaxKillerPly &&
-                                         (killers[depthGone][0] == *move || killers[depthGone][1] == *move));
-                        if (i >= 8 && depth >= 5 && move->endPiece == 0 && !isKiller)
-                        {
-                            LMRDepth = 2;
-                        }
-                        else
-                        {
-                            LMRDepth = 1;
-                        }
+                        LMRDepth = std::min(availMoves >= 2 ? 2 : 1, depth - 1);
                     }
                     delete MPValue;
-                    MPValue = PVS(tempPVNode, -alpha - Option::nullWindowSize, -alpha, depth - 1 - LMRDepth, *move, move2, move3, prevMove, board4, MAtESearch, true, depthGone + 1, previousMoveWasCheck, true);
+                    MPValue = PVS(tempPVNode, -alpha - Option::nullWindowSize, -alpha,
+                                  depth - 1 - LMRDepth, *move, move2, move3, prevMove, board4, MAtESearch, true,
+                                  depthGone + 1, previousMoveWasCheck, true);
                     value = -MPValue->value;
+                    valueProvisionalMate = MPValue->provisionalMate;
                     if (value != -160000)
                     {
                         availMoves++;
@@ -1117,6 +1218,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     {
                         value++;
                     }
+                    value = CandidateSearchScore(value, valueProvisionalMate);
                     move->value = value;
 
                     if (LMRDepth > 0 && value <= alpha)
@@ -1147,6 +1249,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                         MPValue = PVS(tempPVNode, -beta, -alpha, depth - 1, *move, move2, move3, prevMove, board4, MAtESearch, true, depthGone + 1, previousMoveWasCheck, nullWindowSearch);
                         wasResearchedAtFullDepth = true;
                         value = -MPValue->value;
+                        valueProvisionalMate = MPValue->provisionalMate;
                         if (value > 159800 && value != 160000)
                         {
                             value--;
@@ -1155,6 +1258,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                         {
                             value++;
                         }
+                        value = CandidateSearchScore(value, valueProvisionalMate);
                         move->value = value;
 #if HOWL_CORRECTNESS_TESTING
                         if (LMRDepth > 0)
@@ -1192,7 +1296,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                                 move->isRefuteWithoutNullMove = true;
                             }
                             // TODO: delete movelist except first and second move
-                            if (value != 0)
+                            if (value != 0 && !IsMateScore(move->value))
                             {
                                 uint16_t packed = TTMoveHelper::PackMove(*move);
                                 int storedDepth = (LMRDepth > 0 && !wasResearchedAtFullDepth) ? (depth - LMRDepth) : depth;
@@ -1200,6 +1304,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                             }
                         }
                         retValue->value = move->value;
+                        retValue->provisionalMate = valueProvisionalMate;
                         retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + MPValue->printString;
                         deleteMoveList(moveList);
                         delete MPValue;
@@ -1208,10 +1313,14 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     }
                     move->isRefuteWithoutNullMove = false;
                     bestMoveValue = value;
+                    bestMoveProvisionalMate = valueProvisionalMate;
                     SelectedMove = move;
                     SelectedPV = MPValue->printString;
                 }
             }
+            if (availMoves >= candidateCount)
+                mateEscapeExpansion = bestMoveValue < 0 &&
+                                      (IsMateScore(bestMoveValue) || bestMoveProvisionalMate);
         }
         if (availMoves == 0 && !BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove))
         {
@@ -1244,9 +1353,11 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     flag = static_cast<uint8_t>(flag + 4);
                 }
                 uint16_t packed = TTMoveHelper::PackMove(*SelectedMove);
-                TranspositionTable::Store(board4.ZobristHashCode, bestMoveValue, depth, flag, packed);
+                if (!IsMateScore(bestMoveValue))
+                    TranspositionTable::Store(board4.ZobristHashCode, bestMoveValue, depth, flag, packed);
             }
             retValue->value = bestMoveValue;
+            retValue->provisionalMate = bestMoveProvisionalMate;
             retValue->printString = ChessStringManipulation::PVToString(*SelectedMove, 0, false, board4) + ' ' + SelectedPV;
             deleteMoveList(moveList);
             delete MPValue;

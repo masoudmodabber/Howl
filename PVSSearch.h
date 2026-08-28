@@ -34,6 +34,7 @@ public:
     static KillerMove killers[MaxKillerPly][2];
 
     static void ResetKillers();
+    static void ResetCandidateMemory();
     static void RecordKiller(int ply, const Move& move);
 
 #if HOWL_CORRECTNESS_TESTING
