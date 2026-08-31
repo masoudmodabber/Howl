@@ -66,6 +66,16 @@ void Search::PrintBestMove()
     const std::string& outPonder = !completedBestMove.empty() ? completedPonderMove : ponderMove;
 
     uint64_t sId = DiagnosticLogger::currentSearchId.load();
+    const auto &nullProfile = PVSSearch::nullMoveProfile;
+    std::cout << "nullprofile attempts=" << nullProfile.attempts
+              << " fail_highs=" << nullProfile.failHighs
+              << " immediate_cutoffs=" << nullProfile.immediateCutoffs
+              << " verifications=" << nullProfile.verificationsStarted
+              << " verification_confirmed=" << nullProfile.verificationsConfirmed
+              << " verification_rejected=" << nullProfile.verificationsRejected
+              << " null_nodes=" << nullProfile.nullSearchNodes
+              << " verification_nodes=" << nullProfile.verificationNodes
+              << '\n';
     if (outBest.empty())
     {
         DiagnosticLogger::Log("EMIT_BESTMOVE", "bestmove (none)", sId);
@@ -88,7 +98,9 @@ void Search::PrintBestMove()
 
 void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Board &board4)
 {
+    PVSSearch::nullMoveProfile = PVSSearch::NullMoveProfile{};
     PVSSearch::ResetCandidateMemory();
+    PVSSearch::ResetHistory();
     bestMove = "";
     ponderMove = "";
     completedBestMove = "";
@@ -199,7 +211,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             value = -200000;
             std::vector<MovePrintValue *> movesPrintValue;
             int KthBestValue = (Option::MultiPV <= 1) ? aspAlpha : -200000;
-            bool pvPrintedThisDepth = false;
             std::string bestPVString = "";
 
             for (int counter = 0; counter < moveList.count; counter++)
@@ -300,8 +311,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 }
                 else if (moveList.count == 1)
                 {
-                    std::cout << movePrint->printString << '\n';
-                    pvPrintedThisDepth = true;
                     KthBestValue = value;
                 }
                 else
@@ -437,12 +446,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     if (value > KthBestValue)
                     {
                         KthBestValue = value;
-                        if (!bestPVString.empty())
-                        {
-                            DiagnosticLogger::Log("EMIT_INFO", bestPVString, DiagnosticLogger::currentSearchId.load());
-                            std::cout << bestPVString << '\n';
-                            pvPrintedThisDepth = true;
-                        }
                     }
                 }
             }
@@ -468,7 +471,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 }
             }
         }
-        if (!stopRequested && !pvPrintedThisDepth)
+        if (!stopRequested && Option::MultiPV > 1)
         {
             if (!finiteSearch && Option::MultiPV > 1)
             {
@@ -489,12 +492,12 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             }
         }
             int iterScore = moveList.moves[0]->value;
-            deleteMovesPrintValue(movesPrintValue);
 
             if (Option::MultiPV <= 1 && iterScore > -159800 && iterScore < 159800)
             {
                 if (iterScore <= aspAlpha)
                 {
+                    deleteMovesPrintValue(movesPrintValue);
                     alphaDelta *= 2;
                     aspAlpha = std::max(-200000, prevCompletedScore - alphaDelta);
                     if (aspAlpha <= -159800) aspAlpha = -200000;
@@ -502,12 +505,23 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 }
                 else if (iterScore >= aspBeta)
                 {
+                    deleteMovesPrintValue(movesPrintValue);
                     betaDelta *= 2;
                     aspBeta = std::min(200000, prevCompletedScore + betaDelta);
                     if (aspBeta >= 159800) aspBeta = 200000;
                     continue;
                 }
             }
+
+            if (Option::MultiPV <= 1)
+            {
+                const std::string &completedInfo = !bestPVString.empty()
+                    ? bestPVString
+                    : movesPrintValue[0]->printString;
+                DiagnosticLogger::Log("EMIT_INFO", completedInfo, DiagnosticLogger::currentSearchId.load());
+                std::cout << completedInfo << '\n';
+            }
+            deleteMovesPrintValue(movesPrintValue);
 
             prevCompletedScore = iterScore;
             break;

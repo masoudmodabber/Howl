@@ -2029,7 +2029,7 @@ void MoveLogic::ScoreAndSortMoves(Board& thisBoard, MoveList& moveList, int dept
               { return b->value < a->value; });
 }
 
-MoveList MoveLogic::QSearchStage1Generator(Board &thisBoard, int depth, int depthGone, DeferredMove* deferredMoves, int& deferredCount, const Move& prevMove)
+MoveList MoveLogic::QSearchStage1Generator(Board &thisBoard, int depth, int depthGone, DeferredMove* deferredMoves, int& deferredCount, const Move& prevMove, bool includeQuietChecks, bool deepResolution)
 {
     deferredCount = 0;
     MoveList fullList = MoveGenerator(thisBoard, depth, depthGone, true);
@@ -2064,7 +2064,6 @@ MoveList MoveLogic::QSearchStage1Generator(Board &thisBoard, int depth, int dept
             }
             else if (exch == 0)
             {
-                // Search ONLY if destination is the destination square of the immediately previous move
                 if (prevMove.endPlace >= 0 && m->endPlace == prevMove.endPlace)
                 {
                     stage1List.moves[stage1List.count++] = m;
@@ -2076,17 +2075,22 @@ MoveList MoveLogic::QSearchStage1Generator(Board &thisBoard, int depth, int dept
             }
             else
             {
-                // Discard capture with Exchange < 0 completely
                 delete m;
             }
         }
         else
         {
-            // Quiet checking candidate
-            DeferredMove dm;
-            dm.templateMove = m;
-            dm.endPiece = 0;
-            deferredMoves[deferredCount++] = dm;
+            if (includeQuietChecks)
+            {
+                DeferredMove dm;
+                dm.templateMove = m;
+                dm.endPiece = 0;
+                deferredMoves[deferredCount++] = dm;
+            }
+            else
+            {
+                delete m;
+            }
         }
     }
 

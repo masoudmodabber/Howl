@@ -663,6 +663,87 @@ int RunSearchCase(
     return 0;
 }
 
+struct NormalFixedDepthSearchResult
+{
+    std::string moveText;
+    std::string scoreText;
+    int score = 0;
+    int64_t nodes = 0;
+};
+
+NormalFixedDepthSearchResult RunNormalFixedDepthSearch(const char* fen, int depth)
+{
+    std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+    Search::maxDepth = depth;
+    Search::maxNodes = -1;
+    Search::isMoveTime = false;
+    Search::allowedTime = 0.0;
+    Search::finiteSearch = true;
+    Search::startTime = std::chrono::high_resolution_clock::now();
+    Search::active = true;
+    TranspositionTable::Clear();
+    TranspositionTable::SetCutoffsEnabled(true);
+    RepetitionHistory::ResetWithRoot(board->ZobristHashCode);
+
+    std::ostringstream output;
+    std::streambuf* oldCout = std::cout.rdbuf(output.rdbuf());
+    Move move1{}, move2{}, move3{}, move4{};
+    Search::MainSearch(move1, move2, move3, move4, *board);
+    std::cout.rdbuf(oldCout);
+
+    NormalFixedDepthSearchResult result;
+    result.moveText = Search::completedBestMove;
+    result.scoreText = Search::Score;
+    result.nodes = Search::searchNodeCount;
+    if (result.scoreText.rfind("cp ", 0) == 0)
+        result.score = std::stoi(result.scoreText.substr(3));
+    return result;
+}
+
+int RunWinningCandidateSearchRegression()
+{
+    constexpr const char* fen =
+        "2r4r/1kp2p2/p1p1pb2/5q1p/PPQP2pP/2P3B1/5PP1/1R2R1K1 w - - 0 25";
+    NormalFixedDepthSearchResult result = RunNormalFixedDepthSearch(fen, 9);
+
+    const bool expectedMove = result.moveText == "b4b5";
+    const bool finiteScore = result.scoreText.rfind("cp ", 0) == 0;
+    const bool withinNodeBudget = result.nodes < 2000000;
+    if (!expectedMove || !finiteScore || !withinNodeBudget)
+    {
+        std::cerr << "Winning candidate-search regression failure\n"
+                  << "  FEN: " << fen << '\n'
+                  << "  Returned move: " << result.moveText << '\n'
+                  << "  Returned score: " << result.scoreText << '\n'
+                  << "  Search nodes: " << result.nodes << '\n';
+        return 1;
+    }
+
+    std::cout << "Winning candidate-search regression passed: " << result.moveText
+              << ", score " << result.score << ", nodes " << result.nodes << '\n';
+    return 0;
+}
+
+int RunEqualityDefensiveAwarenessRegression()
+{
+    constexpr const char* fen =
+        "rn1qkb1r/ppp1pp1p/6p1/5b2/3PP3/2P2N2/P4PPP/R1BQKB1R b KQkq - 0 7";
+    NormalFixedDepthSearchResult result = RunNormalFixedDepthSearch(fen, 6);
+
+    if (result.scoreText.rfind("cp ", 0) != 0 || result.score < -150 || result.score > 150)
+    {
+        std::cerr << "Equality / defensive-awareness regression failure\n"
+                  << "  FEN: " << fen << '\n'
+                  << "  Returned move: " << result.moveText << '\n'
+                  << "  Returned score: " << result.scoreText << '\n';
+        return 1;
+    }
+
+    std::cout << "Equality / defensive-awareness regression passed: score "
+              << result.score << '\n';
+    return 0;
+}
+
 int RunReturnedMoveLegality()
 {
     struct LegalityCase
@@ -1167,6 +1248,10 @@ int RunQSearch(const std::string& testCase)
 
 int RunSearch(const std::string& testCase)
 {
+    if (testCase == "winning_candidate_regression")
+        return RunWinningCandidateSearchRegression();
+    if (testCase == "equality_defensive_awareness_regression")
+        return RunEqualityDefensiveAwarenessRegression();
     if (testCase == "mate_in_one")
         return RunSearchCase(
             "unique mate in one",
@@ -4189,4 +4274,3 @@ int main(int argc, char* argv[])
         return 1;
     }
 }
-

@@ -47,6 +47,7 @@ QSearchTestStatistics QSearcher::TestStatistics() {
 
 MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& prevMove, int depthGone, int lastCheck, bool kick, int depth, Move& move1, Move& move2, Move& move3, Board& board4, bool MAtESearch, int depthQuisStarted, bool nullWindowSearch)
 {
+    const int qsearchDistance = std::max(0, depthGone - depthQuisStarted);
     Search::searchNodeCount++;
     MoveList moveList;
     Move* SelectedMove = nullptr;
@@ -70,6 +71,11 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         turn = 1;
     }
     
+    bool currentSideInCheck = BoardLogic::UnderAttack(
+        board4,
+        board4.pieces[turn * 8 + 6].front(),
+        !board4.sideToMove);
+
     if (BoardLogic::UnderAttack(board4, board4.pieces[(1 - turn) * 8 + 6].front(), board4.sideToMove)) {
         retValue->value = 160000;
         delete MPValue;
@@ -77,11 +83,6 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         return retValue;
     }
     
-    bool currentSideInCheck = BoardLogic::UnderAttack(
-        board4,
-        board4.pieces[turn * 8 + 6].front(),
-        !board4.sideToMove);
-
     if (depth == 0 && lastCheck == 0 && !kick && !currentSideInCheck) {
         retValue->value = EvaluationLogic::Evaluate(board4);
         delete MPValue;
@@ -137,9 +138,13 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
     DeferredMove deferredMoves[256];
     int deferredCount = 0;
     bool hasDeferredStage2 = false;
+    const bool frontierPhase = qsearchDistance <= 1;
+    const bool deepResolutionPhase = qsearchDistance >= 5;
 
     if (!currentSideInCheck) {
-        moveList = MoveLogic::QSearchStage1Generator(board4, depth, depthGone, deferredMoves, deferredCount, prevMove);
+        moveList = MoveLogic::QSearchStage1Generator(
+            board4, depth, depthGone, deferredMoves, deferredCount, prevMove,
+            frontierPhase, deepResolutionPhase);
         hasDeferredStage2 = (deferredCount > 0);
     } else {
         moveList = MoveLogic::MoveGenerator(board4, depth, depthGone, false);
