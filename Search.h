@@ -36,7 +36,7 @@ public:
     static bool mated;
 
     static void MainSearch(Move& move1, Move& move2, Move& move3, Move& move4, Board& board4);
-    static void SearchDepthZero(MoveList& moveList, bool& firstAssign, int& recDepth, int& alpha, int& beta, bool& previousMoveWasCheck, Move& move1, Move& move2, Move& move3, Move& move4, Board& board4);
+    static void SearchDepthZero(MoveList& moveList, bool& firstAssign, int& recDepth, int& alpha, int& beta, bool& previousMoveWasCheck, Move& move1, Move& move2, Move& move3, Move& move4, Board& board4, bool& exactMate);
     static void SearchForCheckUpdate();
     static void CalculateAndDisplayScore(int value, bool exactMate);
     static std::string Parse(std::string p, int place);
