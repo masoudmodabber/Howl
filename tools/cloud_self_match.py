@@ -276,7 +276,8 @@ class AzureCloudRunner:
         self.movetime_sec = movetime_sec
         self.inc_sec = inc_sec
         self.total_games = total_games
-        self.pgn_output = pgn_output or "cloud_match_output.pgn"
+        self.pgn_output = pgn_output or time.strftime("self-match-%Y-%m-%d-%H%M%S.pgn")
+        self.pgn_output_is_default = pgn_output is None
         self.location = location
         self.candidate_regions = candidate_regions or CANDIDATE_REGIONS
         self.dry_run = dry_run
@@ -346,6 +347,8 @@ class AzureCloudRunner:
             self.print_dry_run_plan()
             return []
 
+        self._initialize_pgn_output()
+
         # Setup explicit signal handlers for SIGINT and SIGTERM
         import signal
 
@@ -372,6 +375,17 @@ class AzureCloudRunner:
                 self.cleanup_resources()
 
         return results
+
+    def _initialize_pgn_output(self) -> None:
+        mode = "x" if self.pgn_output_is_default else "w"
+        with open(self.pgn_output, mode, encoding="utf-8"):
+            pass
+
+    def _append_completed_game(self, result: GameResult) -> None:
+        if result.result not in ("1-0", "0-1", "1/2-1/2") or not result.pgn_str:
+            return
+        with open(self.pgn_output, "a", encoding="utf-8") as pgn_file:
+            pgn_file.write(result.pgn_str + "\n\n")
 
     def build_container_create_cmd(
         self,
@@ -560,6 +574,7 @@ ENTRYPOINT ["python", "-u", "/app/tools/cloud_self_match.py"]
                         pgn_str="",
                     )
                     results.append(failed_res)
+                    self._append_completed_game(failed_res)
                 else:
                     pending_wave_tasks[task.game_index] = (task, task_location, cg_name, wave_launch_time)
 
@@ -597,6 +612,7 @@ ENTRYPOINT ["python", "-u", "/app/tools/cloud_self_match.py"]
                                 diag = f"Provisioning timeout exceeded ({DEFAULT_PROVISIONING_TIMEOUT_SEC}s) in {task_location}"
                                 game_res = self._parse_worker_output(task, "", diag)
                                 results.append(game_res)
+                                self._append_completed_game(game_res)
                                 finished_indices.append(idx)
                                 subprocess.run(["az", "container", "delete", "--resource-group", self.rg_name, "--name", cg_name, "--yes", "--no-wait"], capture_output=True)
                             continue
@@ -621,6 +637,7 @@ ENTRYPOINT ["python", "-u", "/app/tools/cloud_self_match.py"]
                         diag = f"Container provisioningState Failed (detail: {detail_status})"
                         game_res = self._parse_worker_output(task, "", diag)
                         results.append(game_res)
+                        self._append_completed_game(game_res)
                         finished_indices.append(idx)
                         subprocess.run(["az", "container", "delete", "--resource-group", self.rg_name, "--name", cg_name, "--yes", "--no-wait"], capture_output=True)
                         print(f"[Game {game_res.game_index:02d}/{self.total_games:02d}] {game_res.pos_name:<24} {game_res.white_engine} vs {game_res.black_engine} -> FAILED (Provisioning Failed)")
@@ -631,6 +648,7 @@ ENTRYPOINT ["python", "-u", "/app/tools/cloud_self_match.py"]
                         diag = f"Provisioning timeout exceeded ({DEFAULT_PROVISIONING_TIMEOUT_SEC}s)"
                         game_res = self._parse_worker_output(task, "", diag)
                         results.append(game_res)
+                        self._append_completed_game(game_res)
                         finished_indices.append(idx)
                         subprocess.run(["az", "container", "delete", "--resource-group", self.rg_name, "--name", cg_name, "--yes", "--no-wait"], capture_output=True)
                         print(f"[Game {game_res.game_index:02d}/{self.total_games:02d}] {game_res.pos_name:<24} {game_res.white_engine} vs {game_res.black_engine} -> FAILED (Provisioning Timeout)")
@@ -655,6 +673,7 @@ ENTRYPOINT ["python", "-u", "/app/tools/cloud_self_match.py"]
                             diag += f"\nStdout: {log_res.stdout}\nStderr: {log_res.stderr}"
                         game_res = self._parse_worker_output(task, log_res.stdout, diag)
                         results.append(game_res)
+                        self._append_completed_game(game_res)
                         finished_indices.append(idx)
 
                         summary_term = game_res.termination.splitlines()[0] if "\n" in game_res.termination else game_res.termination
@@ -674,6 +693,7 @@ ENTRYPOINT ["python", "-u", "/app/tools/cloud_self_match.py"]
 
                         game_res = self._parse_worker_output(task, log_res.stdout, log_res.stderr)
                         results.append(game_res)
+                        self._append_completed_game(game_res)
                         finished_indices.append(idx)
 
                         summary_term = game_res.termination.splitlines()[0] if "\n" in game_res.termination else game_res.termination
@@ -688,17 +708,11 @@ ENTRYPOINT ["python", "-u", "/app/tools/cloud_self_match.py"]
 
         results.sort(key=lambda r: r.game_index)
 
-        # Write combined PGN containing only valid completed games
+        # The PGN is updated as each valid game completes.
         valid_games = [r for r in results if r.result in ("1-0", "0-1", "1/2-1/2") and r.pgn_str]
-        if self.pgn_output and valid_games:
-            with open(self.pgn_output, "w", encoding="utf-8") as f:
-                for r in valid_games:
-                    f.write(r.pgn_str + "\n\n")
+        if valid_games:
             print(f"\nPGN ({len(valid_games)} completed games) written to {self.pgn_output}")
-        elif self.pgn_output:
-            # Zero completed games
-            with open(self.pgn_output, "w", encoding="utf-8") as f:
-                f.write("")
+        else:
             print(f"\nNo completed games. Empty PGN written to {self.pgn_output}")
 
         self._print_cloud_summary(results)
@@ -828,8 +842,8 @@ def main() -> int:
     parser.add_argument(
         "--pgn",
         type=str,
-        default="cloud_match_output.pgn",
-        help="Output file for combined PGN games (default: cloud_match_output.pgn)",
+        default=None,
+        help="Output file for this run's PGN games (default: self-match-YYYY-MM-DD-HHMMSS.pgn)",
     )
     parser.add_argument(
         "--dry-run",

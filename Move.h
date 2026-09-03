@@ -13,6 +13,7 @@ public:
     char PublicFlag;
     int unpassentPlace;
     int value;
+    bool givesCheck = false;
     bool isRefuteWithoutNullMove = false;
     int depth;
     int depthGone;

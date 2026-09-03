@@ -34,6 +34,26 @@ struct EvaluationBreakdown
     int blackCentralKingExposure = 0;
     int centralKingExposureNet = 0;
     int kingSafetyTotal = 0;
+    int whiteKingDanger = 0;
+    int blackKingDanger = 0;
+    int whiteAttackerWeight = 0;
+    int blackAttackerWeight = 0;
+    int whiteDefenderWeight = 0;
+    int blackDefenderWeight = 0;
+    int whiteEscapeSafety = 0;
+    int blackEscapeSafety = 0;
+    int whiteSafeCheckPressure = 0;
+    int blackSafeCheckPressure = 0;
+    int whiteCheckEscapeInteraction = 0;
+    int blackCheckEscapeInteraction = 0;
+    int whiteFilePressure = 0;
+    int blackFilePressure = 0;
+    int whiteDiagonalPressure = 0;
+    int blackDiagonalPressure = 0;
+    int whitePawnShelter = 0;
+    int blackPawnShelter = 0;
+    int whitePhaseScale = 0;
+    int blackPhaseScale = 0;
 
     int pawnStructureNet = 0;
     int rookConnectionNet = 0;

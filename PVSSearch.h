@@ -21,7 +21,6 @@ public:
         uint64_t verificationNodes = 0;
     };
     static NullMoveProfile nullMoveProfile;
-
     static MovePrintValue* PVS(bool isPVNode, int alpha, int beta, int depth, Move& prevMove, Move& move1, Move& move2, Move& move3, Board& board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool nullWindowVerification = false, bool isAggressivePreprobe = false);
     static void IGG(bool isPVNode, int alpha, int beta, int depth, Move& prevMove, Move& move1, Move& move2, Move& move3, Board& board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool lastCheck, bool nullWindowSearch, MoveList moveList);
     static void deleteMoveList(MoveList moveList);
@@ -49,6 +48,7 @@ public:
     static void ResetCandidateMemory();
     static void ResetHistory();
     static void RecordKiller(int ply, const Move& move);
+    static void SetRootChildDiagnosticActive(bool active);
 
 #if HOWL_CORRECTNESS_TESTING
     static constexpr bool ProductionIGGEnabledForTesting()

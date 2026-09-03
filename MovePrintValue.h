@@ -8,6 +8,10 @@ public:
     int value;
     std::string printString;
     bool provisionalMate = false;
+    bool provisionalConfirmationAttempted = false;
+    bool exactMate = false;
+    bool selectedMateExact = false;
+    bool rigorousMateBound = false;
 };
 
 #endif
