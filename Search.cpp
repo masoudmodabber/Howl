@@ -51,12 +51,19 @@ namespace
         return score != 160000 && score != -160000 && (score > 159800 || score < -159800);
     }
 
-    int FiniteProvisionalScore(int score)
+    int FiniteProvisionalScore(int score, bool &provisionalMate,
+                               bool &provisionalConfirmationAttempted)
     {
         constexpr int mateThreshold = 159800;
         constexpr int safetyMargin = 2;
         constexpr int provisionalWin = mateThreshold - PVSSearch::MaxKillerPly - safetyMargin;
-        return IsMateScore(score) ? (score > 0 ? provisionalWin : -provisionalWin) : score;
+        if (IsMateScore(score))
+        {
+            provisionalMate = true;
+            provisionalConfirmationAttempted = false;
+            return score > 0 ? provisionalWin : -provisionalWin;
+        }
+        return score;
     }
 }
 
@@ -66,16 +73,6 @@ void Search::PrintBestMove()
     const std::string& outPonder = !completedBestMove.empty() ? completedPonderMove : ponderMove;
 
     uint64_t sId = DiagnosticLogger::currentSearchId.load();
-    const auto &nullProfile = PVSSearch::nullMoveProfile;
-    std::cout << "nullprofile attempts=" << nullProfile.attempts
-              << " fail_highs=" << nullProfile.failHighs
-              << " immediate_cutoffs=" << nullProfile.immediateCutoffs
-              << " verifications=" << nullProfile.verificationsStarted
-              << " verification_confirmed=" << nullProfile.verificationsConfirmed
-              << " verification_rejected=" << nullProfile.verificationsRejected
-              << " null_nodes=" << nullProfile.nullSearchNodes
-              << " verification_nodes=" << nullProfile.verificationNodes
-              << '\n';
     if (outBest.empty())
     {
         DiagnosticLogger::Log("EMIT_BESTMOVE", "bestmove (none)", sId);
@@ -185,6 +182,19 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     MovePrintValue *MPValue = new MovePrintValue();
     MPValue->printString = "";
     bool stopRequested = false;
+    struct CommittedMateIncumbent
+    {
+        bool available = false;
+        int score = 0;
+        bool positiveMate = false;
+        bool exactMate = false;
+        bool exactProven = false;
+        std::string bestMove;
+        std::string pv;
+        std::string ponderMove;
+        std::string formattedScore;
+        bool mated = false;
+    } mateIncumbent;
 
     while (active)
     {
@@ -192,10 +202,242 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         {
             break;
         }
+
+        if (mateIncumbent.exactProven)
+        {
+            // Exact mate proven; bypass search work and emit synthetic depth result
+            bestMove = mateIncumbent.bestMove;
+            ponderMove = mateIncumbent.ponderMove;
+            Score = mateIncumbent.formattedScore;
+            mated = mateIncumbent.mated;
+            int64_t elapsed_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count());
+            int64_t safeNodeCount = searchNodeCount;
+            int64_t nps = (elapsed_ms > 0) ? (safeNodeCount * 1000LL / elapsed_ms) : 0;
+            std::string depthInfo = "info depth " + std::to_string(recDepth) +
+                " time " + std::to_string(elapsed_ms) +
+                " nodes " + std::to_string(searchNodeCount) +
+                " nps " + std::to_string(nps) +
+                " pv " + mateIncumbent.pv +
+                " score " + Score;
+            DiagnosticLogger::Log("EMIT_INFO", depthInfo, DiagnosticLogger::currentSearchId.load());
+            std::cout << depthInfo << '\n';
+
+            if (maxDepth > 0 && recDepth >= maxDepth)
+            {
+                break;
+            }
+            recDepth++;
+            continue;
+        }
+
+        if (mateIncumbent.available)
+        {
+            // Dedicated mate mode: test only the single target M(k-1)
+            int currentM = mateIncumbent.positiveMate
+                ? ((159999 - mateIncumbent.score) + 1) / 2
+                : ((mateIncumbent.score - (-159999)) + 1) / 2;
+
+            if (currentM <= 1)
+            {
+                // Cannot tighten below M1; incumbent is exact
+                mateIncumbent.exactProven = true;
+            }
+            else
+            {
+                int targetM = currentM - 1;
+                int targetScore = mateIncumbent.positiveMate
+                    ? 159999 - (2 * targetM - 1)
+                    : -159999 + (2 * targetM - 1);
+                const int targetChildDepth = mateIncumbent.positiveMate
+                    ? 2 * targetM - 2
+                    : 2 * targetM - 1;
+
+                if (mateIncumbent.positiveMate)
+                {
+                    bool targetProven = false;
+                    for (int i = 0; i < moveList.count; i++)
+                    {
+                        if (!active) { stopRequested = true; break; }
+                        if (maxNodes > 0 && moveCount >= maxNodes) { stopRequested = true; break; }
+
+                        Move *rMove = moveList.moves[i];
+                        Board *boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
+                        MissingInfoAboutPrevStateFromMove *missingInfo = new MissingInfoAboutPrevStateFromMove(board4);
+                        GameLogic::DoMove(board4, *rMove, move4, -1, -1);
+
+                        bool moveProves = false;
+                        int rootScore = -200000;
+                        std::string candidatePv = "";
+                        std::string candidatePonder = "";
+
+                        if (!RepetitionHistory::IsRepetition(board4.ZobristHashCode))
+                        {
+                            delete MPValue;
+                            MPValue = PVSSearch::PVS(true, -targetScore, -(targetScore - 1), targetChildDepth, *rMove, move2, move3, move4, board4, true, true, 1, false, false);
+                            const bool trustCondition = !MPValue->provisionalMate && (MPValue->exactMate || MPValue->rigorousMateBound);
+                            int childVal = MPValue->value;
+                            if (childVal > 159800 && childVal != 160000) childVal--;
+                            else if (childVal < -159800 && childVal != -160000) childVal++;
+                            rootScore = -childVal;
+
+                            if (trustCondition && rootScore >= targetScore)
+                            {
+                                moveProves = true;
+                                candidatePv = ChessStringManipulation::PVToString(*rMove, 1, true, board4) + ' ' + MPValue->printString;
+                                if (MPValue->printString.length() > 7)
+                                    candidatePonder = Parse(MPValue->printString, 1);
+                            }
+                        }
+
+                        GameLogic::UndoMove(board4, *rMove, *missingInfo);
+                        delete missingInfo;
+                        if (UCI::IsTest())
+                        {
+                            Board::AreBoardsEqual(board4, *boardCopy);
+                            delete boardCopy;
+                        }
+
+                        if (moveProves)
+                        {
+                            mateIncumbent.score = rootScore;
+                            mateIncumbent.positiveMate = true;
+                            mateIncumbent.exactMate = true;
+                            mateIncumbent.bestMove = ChessStringManipulation::PVToString(*rMove, 0, false, board4);
+                            mateIncumbent.pv = candidatePv;
+                            mateIncumbent.ponderMove = candidatePonder;
+                            mateIncumbent.formattedScore = "mate " + std::to_string(targetM);
+                            mateIncumbent.mated = true;
+                            targetProven = true;
+                            break;
+                        }
+                    }
+
+                    if (!targetProven)
+                    {
+                        mateIncumbent.exactProven = true;
+                    }
+                }
+                else
+                {
+                    bool allDefensesPass = true;
+                    for (int i = 0; i < moveList.count; i++)
+                    {
+                        if (!active) { stopRequested = true; break; }
+                        if (maxNodes > 0 && moveCount >= maxNodes) { stopRequested = true; break; }
+
+                        Move *rMove = moveList.moves[i];
+                        Board *boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
+                        MissingInfoAboutPrevStateFromMove *missingInfo = new MissingInfoAboutPrevStateFromMove(board4);
+                        GameLogic::DoMove(board4, *rMove, move4, -1, -1);
+
+                        bool defensePasses = false;
+                        int rootScore = 200000;
+
+                        if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
+                        {
+                            defensePasses = false;
+                        }
+                        else
+                        {
+                            delete MPValue;
+                            MPValue = PVSSearch::PVS(true, -(targetScore + 1), -targetScore, targetChildDepth, *rMove, move2, move3, move4, board4, true, true, 1, false, false);
+                            const bool trustCondition = !MPValue->provisionalMate && (MPValue->exactMate || MPValue->rigorousMateBound);
+                            int childVal = MPValue->value;
+                            if (childVal > 159800 && childVal != 160000) childVal--;
+                            else if (childVal < -159800 && childVal != -160000) childVal++;
+                            rootScore = -childVal;
+
+                            if (trustCondition && rootScore <= targetScore)
+                            {
+                                defensePasses = true;
+                            }
+                        }
+
+                        GameLogic::UndoMove(board4, *rMove, *missingInfo);
+                        delete missingInfo;
+                        if (UCI::IsTest())
+                        {
+                            Board::AreBoardsEqual(board4, *boardCopy);
+                            delete boardCopy;
+                        }
+
+                        if (!defensePasses)
+                        {
+                            allDefensesPass = false;
+                            break;
+                        }
+                    }
+
+                    if (allDefensesPass && !stopRequested)
+                    {
+                        mateIncumbent.score = targetScore;
+                        mateIncumbent.positiveMate = false;
+                        mateIncumbent.exactMate = true;
+                        mateIncumbent.formattedScore = "mate -" + std::to_string(targetM);
+                        mateIncumbent.mated = true;
+                    }
+                    else
+                    {
+                        mateIncumbent.exactProven = true;
+                    }
+                }
+            }
+
+            // Emit depth result for this mate test
+            bestMove = mateIncumbent.bestMove;
+            ponderMove = mateIncumbent.ponderMove;
+            Score = mateIncumbent.formattedScore;
+            mated = mateIncumbent.mated;
+            completedBestMove = bestMove;
+            completedPonderMove = ponderMove;
+            int64_t elapsed_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count());
+            int64_t safeNodeCount = searchNodeCount;
+            int64_t nps = (elapsed_ms > 0) ? (safeNodeCount * 1000LL / elapsed_ms) : 0;
+            std::string depthInfo = "info depth " + std::to_string(recDepth) +
+                " time " + std::to_string(elapsed_ms) +
+                " nodes " + std::to_string(searchNodeCount) +
+                " nps " + std::to_string(nps) +
+                " pv " + mateIncumbent.pv +
+                " score " + Score;
+            DiagnosticLogger::Log("EMIT_INFO", depthInfo, DiagnosticLogger::currentSearchId.load());
+            std::cout << depthInfo << '\n';
+
+            if (maxDepth > 0 && recDepth >= maxDepth)
+            {
+                break;
+            }
+            recDepth++;
+            continue;
+        }
         SearchForCheckUpdate();
 
+        std::vector<Move *> completedRootOrder(moveList.moves,
+                                               moveList.moves + moveList.count);
+        std::vector<Move> completedRootMoves;
+        completedRootMoves.reserve(moveList.count);
+        for (Move *rootMove : completedRootOrder)
+            completedRootMoves.push_back(*rootMove);
+        const std::string completedDepthBestMove = bestMove;
+        const std::string completedDepthPonderMove = ponderMove;
+        const std::string completedDepthScoreText = Score;
+        const bool completedDepthMated = mated;
+        const auto restoreCompletedRootState = [&]()
+        {
+            for (int i = 0; i < moveList.count; ++i)
+            {
+                *completedRootOrder[i] = completedRootMoves[i];
+                moveList.moves[i] = completedRootOrder[i];
+            }
+            bestMove = completedDepthBestMove;
+            ponderMove = completedDepthPonderMove;
+            Score = completedDepthScoreText;
+            mated = completedDepthMated;
+        };
+
+        bool abandonCurrentDepth = false;
         int alphaDelta = 50;
         int betaDelta = 50;
+        constexpr int maxAspirationDelta = 400000;
         int aspAlpha = -200000;
         int aspBeta = +200000;
         if (Option::MultiPV <= 1 && prevCompletedScore > -159800 && prevCompletedScore < 159800)
@@ -203,6 +445,31 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             aspAlpha = std::max(-200000, prevCompletedScore - alphaDelta);
             aspBeta = std::min(200000, prevCompletedScore + betaDelta);
         }
+
+        enum class RootResultBound
+        {
+            Exact,
+            Lower,
+            Upper
+        };
+        struct PreservedRootResult
+        {
+            bool available = false;
+            int value = 0;
+            int searchValue = 0;
+            RootResultBound bound = RootResultBound::Exact;
+            bool provisionalMate = false;
+            bool provisionalConfirmationAttempted = false;
+            bool exactMate = false;
+            std::string printString;
+            std::string ponderMove;
+        };
+        std::vector<PreservedRootResult> preservedRootResults(moveList.count);
+        struct RootConfirmationAttempts
+        {
+            bool byMateSearchMode[2] = {false, false};
+        };
+        std::vector<RootConfirmationAttempts> rootConfirmationAttempts(moveList.count);
 
         while (active)
         {
@@ -212,6 +479,10 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             std::vector<MovePrintValue *> movesPrintValue;
             int KthBestValue = (Option::MultiPV <= 1) ? aspAlpha : -200000;
             std::string bestPVString = "";
+            bool iterationBestExactMate = false;
+            bool iterationHasAuthoritativeResult = false;
+            bool iterationHasUnresolvedResult = false;
+            int authoritativeIterationScore = -200000;
 
             for (int counter = 0; counter < moveList.count; counter++)
             {
@@ -227,10 +498,20 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 }
 
                 Move *move = moveList.moves[counter];
+                const int rootAlphaBefore = alpha;
+                const int rootBetaBefore = beta;
+                const int64_t rootMoveNodesBefore = searchNodeCount;
+                bool rootMoveReceivedFullSearch = false;
+                bool rootResearchOccurred = false;
+                bool rootMoveExactMate = false;
+                bool rootMoveAuthoritativeResult = false;
+                bool rootMoveRepetitionResult = false;
+                PVSSearch::SetRootChildDiagnosticActive(false);
                 if (recDepth == 2 && move->beginPlace == 17 && move->endPlace == 53)
                 {
                     overAllIteration++;
                 }
+
                 if (counter < MultiPV)
                 {
                     Board *boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
@@ -238,7 +519,10 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     GameLogic::DoMove(board4, *move, move4, -1, -1);
                     if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                     {
+                        value = 0;
                         move->value = 0;
+                        rootMoveAuthoritativeResult = true;
+                        rootMoveRepetitionResult = true;
                     }
                     else
                     {
@@ -252,16 +536,40 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                         }
                         delete MPValue;
                         MPValue = PVSSearch::PVS(true, -beta, -alpha, recDepth - 1, *move, move2, move3, move4, board4, MATESearch, true, 1, false, false);
-                        value = -MPValue->value;
-                        if (value > 159800 && value != 160000)
+                        if (MPValue->provisionalMate && IsMateScore(MPValue->value) &&
+                            MPValue->exactMate)
+                        {
+                            MPValue->provisionalMate = false;
+                            MPValue->provisionalConfirmationAttempted = true;
+                        }
+                        else if (MPValue->provisionalMate &&
+                                 !MPValue->provisionalConfirmationAttempted)
+                        {
+                            bool &confirmationAttempted = rootConfirmationAttempts[counter]
+                                .byMateSearchMode[MATESearch ? 1 : 0];
+                            if (!confirmationAttempted)
+                            {
+                                confirmationAttempted = true;
+                                rootResearchOccurred = true;
+                                delete MPValue;
+                                MPValue = PVSSearch::PVS(true, -200000, 200000, recDepth - 1, *move, move2, move3, move4, board4, MATESearch, true, 1, false, false);
+                                if (IsMateScore(MPValue->value) && MPValue->exactMate)
+                                    MPValue->provisionalMate = false;
+                            }
+                            MPValue->provisionalConfirmationAttempted = true;
+                        }
+                        rootMoveReceivedFullSearch = true;
+                        rootMoveExactMate = !MPValue->provisionalMate && MPValue->exactMate;
+                        rootMoveAuthoritativeResult = !MPValue->provisionalMate;
+                        value = MPValue->provisionalMate ? -200000 : -MPValue->value;
+                        if (!MPValue->provisionalMate && value > 159800 && value != 160000)
                         {
                             value--;
                         }
-                        else if (value < -159800 && value != -160000)
+                        else if (!MPValue->provisionalMate && value < -159800 && value != -160000)
                         {
                             value++;
                         }
-                        value = FiniteProvisionalScore(value);
                         move->value = value;
                     }
                 GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
@@ -276,6 +584,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 if (value > alpha)
                 {
                     alpha = value;
+                    iterationBestExactMate = rootMoveExactMate;
                     bestMove = ChessStringManipulation::PVToString(*move, 0, false, board4);
                     if (MPValue->printString.length() > 1)
                     {
@@ -286,9 +595,15 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                         ponderMove = "";
                     }
                 }
-                CalculateAndDisplayScore(move->value);
+                CalculateAndDisplayScore(move->value, rootMoveExactMate);
                 MovePrintValue *movePrint = new MovePrintValue();
                 movePrint->value = move->value;
+                movePrint->provisionalMate =
+                    rootMoveReceivedFullSearch && MPValue->provisionalMate;
+                movePrint->provisionalConfirmationAttempted =
+                    rootMoveReceivedFullSearch && MPValue->provisionalConfirmationAttempted;
+                movePrint->exactMate = rootMoveExactMate;
+                movePrint->rigorousMateBound = MPValue->rigorousMateBound;
                 int64_t elapsed_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count());
                 int64_t safeNodeCount = searchNodeCount;
                 int64_t nps = (elapsed_ms > 0) ? (safeNodeCount * 1000LL / elapsed_ms) : 0;
@@ -327,58 +642,93 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 {
                     value = 0;
                     move->value = 0;
+                    rootMoveAuthoritativeResult = true;
+                    rootMoveRepetitionResult = true;
                 }
                 else
                 {
                     bool tempPVNode = false;
-                    if (move->value > 159800 || move->value < -159800)
-                    {
-                        MATESearch = true;
-                    }
-                    else
-                    {
-                        MATESearch = false;
-                    }
+                    MATESearch = false;
                     delete MPValue;
                     MPValue = PVSSearch::PVS(tempPVNode, -KthBestValue - Option::nullWindowSize, -KthBestValue, recDepth - 1, *move, move2, move3, move4, board4, MATESearch, true, 1, false, true);
-                    value = -MPValue->value;
-                    value = FiniteProvisionalScore(value);
+                    rootMoveReceivedFullSearch = true;
+                    const int initialRootValue = -MPValue->value;
+                    int trustedMateValue = initialRootValue;
+                    if (trustedMateValue > 159800 && trustedMateValue != 160000)
+                        trustedMateValue--;
+                    else if (trustedMateValue < -159800 && trustedMateValue != -160000)
+                        trustedMateValue++;
+                    const bool trustedMateChallenge = !MPValue->provisionalMate &&
+                        IsMateScore(trustedMateValue) && trustedMateValue > KthBestValue;
+                    value = initialRootValue;
+                    value = FiniteProvisionalScore(
+                        value, MPValue->provisionalMate,
+                        MPValue->provisionalConfirmationAttempted);
                     move->value = value;
                     if (Option::MultiPV > 1)
                     {
-                        if (value > KthBestValue || move->value > 159800 || move->value < -159800)
+                        if (value > KthBestValue || trustedMateChallenge)
                         {
+                            rootResearchOccurred = true;
                             delete MPValue;
+                            MATESearch = trustedMateChallenge;
                             MPValue = PVSSearch::PVS(true, -200000, 200000, recDepth - 1, *move, move2, move3, move4, board4, MATESearch, true, 1, false, false);
-                            value = -MPValue->value;
-                            if (value > 159800 && value != 160000)
+                            rootMoveReceivedFullSearch = true;
+                            rootMoveExactMate = !MPValue->provisionalMate && MPValue->exactMate;
+                            value = MPValue->provisionalMate ? -200000 : -MPValue->value;
+                            if (!MPValue->provisionalMate && value > 159800 && value != 160000)
                             {
                                 value--;
                             }
-                            else if (value < -159800 && value != -160000)
+                            else if (!MPValue->provisionalMate && value < -159800 && value != -160000)
                             {
                                 value++;
                             }
-                            value = FiniteProvisionalScore(value);
                             move->value = value;
                         }
                     }
-                    else if ((value > KthBestValue /* && value < beta*/) || move->value > 159800 || move->value < -159800)
+                    else if ((value > KthBestValue /* && value < beta*/) || trustedMateChallenge)
                     {
+                        rootResearchOccurred = true;
                         delete MPValue;
+                        MATESearch = trustedMateChallenge;
                         MPValue = PVSSearch::PVS(true, -beta, -alpha, recDepth - 1, *move, move2, move3, move4, board4, MATESearch, true, 1, false, false);
-                        value = -MPValue->value;
-                        if (value > 159800 && value != 160000)
+                        if (MPValue->provisionalMate && IsMateScore(MPValue->value) &&
+                            MPValue->exactMate)
+                        {
+                            MPValue->provisionalMate = false;
+                            MPValue->provisionalConfirmationAttempted = true;
+                        }
+                        else if (MPValue->provisionalMate &&
+                                 !MPValue->provisionalConfirmationAttempted)
+                        {
+                            bool &confirmationAttempted = rootConfirmationAttempts[counter]
+                                .byMateSearchMode[MATESearch ? 1 : 0];
+                            if (!confirmationAttempted)
+                            {
+                                confirmationAttempted = true;
+                                rootResearchOccurred = true;
+                                delete MPValue;
+                                MPValue = PVSSearch::PVS(true, -200000, 200000, recDepth - 1, *move, move2, move3, move4, board4, MATESearch, true, 1, false, false);
+                                if (IsMateScore(MPValue->value) && MPValue->exactMate)
+                                    MPValue->provisionalMate = false;
+                            }
+                            MPValue->provisionalConfirmationAttempted = true;
+                        }
+                        rootMoveReceivedFullSearch = true;
+                        rootMoveExactMate = !MPValue->provisionalMate && MPValue->exactMate;
+                        value = MPValue->provisionalMate ? -200000 : -MPValue->value;
+                        if (!MPValue->provisionalMate && value > 159800 && value != 160000)
                         {
                             value--;
                         }
-                        else if (value < -159800 && value != -160000)
+                        else if (!MPValue->provisionalMate && value < -159800 && value != -160000)
                         {
                             value++;
                         }
-                        value = FiniteProvisionalScore(value);
                         move->value = value;
                     }
+                    rootMoveAuthoritativeResult = !MPValue->provisionalMate;
                 }
                 GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
                 delete missingInfoAboutPrevStateFromMove;
@@ -391,17 +741,17 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 }
                 mated = false;
                 Score = "";
-                if (move->value > 159800 && move->value != 160000)
+                if (rootMoveExactMate && move->value > 159800 && move->value != 160000)
                 {
                     int plies = 159999 - move->value;
-                    int mateMoves = (plies + 2) / 2;
+                    int mateMoves = (plies + 1) / 2;
                     Score = "mate " + std::to_string(mateMoves);
                     mated = true;
                 }
-                else if (move->value < -159800 && move->value != -160000)
+                else if (rootMoveExactMate && move->value < -159800 && move->value != -160000)
                 {
                     int plies = move->value - (-159999);
-                    int mateMoves = (plies + 2) / 2;
+                    int mateMoves = (plies + 1) / 2;
                     Score = "mate -" + std::to_string(mateMoves);
                     mated = true;
                 }
@@ -411,6 +761,12 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 }
                 MovePrintValue *movePrint = new MovePrintValue();
                 movePrint->value = move->value;
+                movePrint->provisionalMate =
+                    rootMoveReceivedFullSearch && MPValue->provisionalMate;
+                movePrint->provisionalConfirmationAttempted =
+                    rootMoveReceivedFullSearch && MPValue->provisionalConfirmationAttempted;
+                movePrint->exactMate = rootMoveExactMate;
+                movePrint->rigorousMateBound = MPValue->rigorousMateBound;
                 int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
                 int64_t safeNodeCount = searchNodeCount;
                 int64_t nps = (elapsed_ms > 0) ? (safeNodeCount * 1000LL / elapsed_ms) : 0;
@@ -423,6 +779,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 if (value > alpha)
                 {
                     alpha = value;
+                    iterationBestExactMate = rootMoveExactMate;
                     bestMove = ChessStringManipulation::PVToString(*move, 0, false, board4);
                     bestPVString = movePrint->printString;
                     if (MPValue->printString.length() > 7)
@@ -449,6 +806,77 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     }
                 }
             }
+
+            PreservedRootResult &preservedResult = preservedRootResults[counter];
+            if (rootMoveAuthoritativeResult)
+            {
+                preservedResult.available = true;
+                preservedResult.value = move->value;
+                preservedResult.searchValue = rootMoveRepetitionResult ? 0 : MPValue->value;
+                preservedResult.bound = rootMoveRepetitionResult || rootMoveExactMate ||
+                        (move->value > rootAlphaBefore && move->value < rootBetaBefore)
+                    ? RootResultBound::Exact
+                    : (move->value >= rootBetaBefore
+                        ? RootResultBound::Lower
+                        : RootResultBound::Upper);
+                preservedResult.provisionalMate = rootMoveRepetitionResult
+                    ? false
+                    : MPValue->provisionalMate;
+                preservedResult.provisionalConfirmationAttempted =
+                    rootMoveRepetitionResult
+                        ? false
+                        : MPValue->provisionalConfirmationAttempted;
+                preservedResult.exactMate = rootMoveExactMate;
+                if (!movesPrintValue.empty())
+                    preservedResult.printString = movesPrintValue.back()->printString;
+                preservedResult.ponderMove = ponderMove;
+                if (rootMoveAuthoritativeResult)
+                {
+                    if (!iterationHasAuthoritativeResult || move->value > authoritativeIterationScore)
+                        authoritativeIterationScore = move->value;
+                    iterationHasAuthoritativeResult = true;
+                }
+            }
+            else
+            {
+                iterationHasUnresolvedResult = true;
+                if (preservedResult.available)
+                {
+                    move->value = preservedResult.value;
+                    MPValue->value = preservedResult.searchValue;
+                    MPValue->provisionalMate = preservedResult.provisionalMate;
+                    MPValue->provisionalConfirmationAttempted =
+                        preservedResult.provisionalConfirmationAttempted;
+                    MPValue->exactMate = preservedResult.exactMate;
+                    rootMoveExactMate = preservedResult.exactMate;
+                    if (!movesPrintValue.empty())
+                    {
+                        movesPrintValue.back()->value = preservedResult.value;
+                        movesPrintValue.back()->provisionalMate =
+                            preservedResult.provisionalMate;
+                        movesPrintValue.back()->provisionalConfirmationAttempted =
+                            preservedResult.provisionalConfirmationAttempted;
+                        movesPrintValue.back()->exactMate = preservedResult.exactMate;
+                        movesPrintValue.back()->printString = preservedResult.printString;
+                    }
+                    if (preservedResult.bound == RootResultBound::Exact)
+                    {
+                        rootMoveAuthoritativeResult = true;
+                        if (!iterationHasAuthoritativeResult ||
+                            preservedResult.value > authoritativeIterationScore)
+                        {
+                            authoritativeIterationScore = preservedResult.value;
+                            iterationBestExactMate = preservedResult.exactMate;
+                            bestMove = ChessStringManipulation::PVToString(*move, 0, false, board4);
+                            ponderMove = preservedResult.ponderMove;
+                            bestPVString = preservedResult.printString;
+                        }
+                        iterationHasAuthoritativeResult = true;
+                    }
+                }
+            }
+
+            PVSSearch::SetRootChildDiagnosticActive(false);
 
             if (!active)
             {
@@ -491,26 +919,88 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 std::cout << movesPrintValue[0]->printString << '\n';
             }
         }
-            int iterScore = moveList.moves[0]->value;
 
-            if (Option::MultiPV <= 1 && iterScore > -159800 && iterScore < 159800)
+
+            if (!iterationHasAuthoritativeResult && iterationHasUnresolvedResult)
+            {
+                                deleteMovesPrintValue(movesPrintValue);
+                if (aspAlpha <= -200000)
+                {
+                    abandonCurrentDepth = true;
+                    break;
+                }
+                alphaDelta = alphaDelta <= maxAspirationDelta / 2
+                    ? alphaDelta * 2
+                    : maxAspirationDelta;
+                aspAlpha = std::max(-200000, prevCompletedScore - alphaDelta);
+                if (aspAlpha <= -159800) aspAlpha = -200000;
+                continue;
+            }
+
+            int iterScore = iterationHasAuthoritativeResult
+                ? authoritativeIterationScore
+                : moveList.moves[0]->value;
+
+            if (Option::MultiPV <= 1 && !iterationBestExactMate)
             {
                 if (iterScore <= aspAlpha)
                 {
-                    deleteMovesPrintValue(movesPrintValue);
-                    alphaDelta *= 2;
+                                        deleteMovesPrintValue(movesPrintValue);
+                    if (aspAlpha <= -200000)
+                    {
+                        abandonCurrentDepth = true;
+                        break;
+                    }
+                    alphaDelta = alphaDelta <= maxAspirationDelta / 2
+                        ? alphaDelta * 2
+                        : maxAspirationDelta;
                     aspAlpha = std::max(-200000, prevCompletedScore - alphaDelta);
                     if (aspAlpha <= -159800) aspAlpha = -200000;
                     continue;
                 }
                 else if (iterScore >= aspBeta)
                 {
-                    deleteMovesPrintValue(movesPrintValue);
-                    betaDelta *= 2;
+                                        deleteMovesPrintValue(movesPrintValue);
+                    if (aspBeta >= 200000)
+                    {
+                        abandonCurrentDepth = true;
+                        break;
+                    }
+                    betaDelta = betaDelta <= maxAspirationDelta / 2
+                        ? betaDelta * 2
+                        : maxAspirationDelta;
                     aspBeta = std::min(200000, prevCompletedScore + betaDelta);
                     if (aspBeta >= 159800) aspBeta = 200000;
                     continue;
                 }
+            }
+
+            
+            if (iterationBestExactMate && IsMateScore(iterScore) &&
+                (!mateIncumbent.available ||
+                 ((iterScore > 0) == (mateIncumbent.score > 0) &&
+                  (mateIncumbent.positiveMate
+                       ? iterScore > mateIncumbent.score
+                       : iterScore < mateIncumbent.score))))
+            {
+                CalculateAndDisplayScore(iterScore, true);
+                mateIncumbent.available = true;
+                mateIncumbent.score = iterScore;
+                mateIncumbent.positiveMate = iterScore > 0;
+                mateIncumbent.exactMate = true;
+                mateIncumbent.bestMove = bestMove;
+                const std::string incumbentInfo = !bestPVString.empty()
+                    ? bestPVString
+                    : (!movesPrintValue.empty() ? movesPrintValue[0]->printString : "");
+                const std::size_t pvStart = incumbentInfo.find(" pv ");
+                const std::size_t scoreStart = incumbentInfo.rfind(" score ");
+                mateIncumbent.pv = pvStart != std::string::npos &&
+                        scoreStart != std::string::npos && scoreStart > pvStart + 4
+                    ? incumbentInfo.substr(pvStart + 4, scoreStart - (pvStart + 4))
+                    : incumbentInfo;
+                mateIncumbent.ponderMove = ponderMove;
+                mateIncumbent.formattedScore = Score;
+                mateIncumbent.mated = mated;
             }
 
             if (Option::MultiPV <= 1)
@@ -524,14 +1014,25 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             deleteMovesPrintValue(movesPrintValue);
 
             prevCompletedScore = iterScore;
-            break;
+                                    break;
         }
 
         if (stopRequested)
         {
-            break;
+            restoreCompletedRootState();
+                        break;
         }
-        completedBestMove = bestMove;
+        if (abandonCurrentDepth)
+        {
+            restoreCompletedRootState();
+                        if (maxDepth > 0 && recDepth >= maxDepth)
+            {
+                break;
+            }
+            recDepth++;
+            continue;
+        }
+                completedBestMove = bestMove;
         completedPonderMove = ponderMove;
         std::sort(moveList.moves, moveList.moves + moveList.count, [](Move *a, Move *b)
                   { return b->value < a->value; });
@@ -674,8 +1175,9 @@ void Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
             else
             {
                 MovePrintValue *tempRetValLocal = PVSSearch::PVS(true, -beta, -alpha, 0, *move, move2, move3, move4, board4, false, true, 1, previousMoveWasCheck, false);
-                move->value = - tempRetValLocal->value;
-                move->value = FiniteProvisionalScore(move->value);
+                move->value = tempRetValLocal->provisionalMate
+                    ? -200000
+                    : -tempRetValLocal->value;
                 delete tempRetValLocal;
                 tempRetValLocal = nullptr;
             }
@@ -721,7 +1223,7 @@ void Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
               { return b->value < a->value; });
 
     bestMove = ChessStringManipulation::PVToString(*(moveList.moves[0]), 0, false, board4);
-    CalculateAndDisplayScore(moveList.moves[0]->value);
+    CalculateAndDisplayScore(moveList.moves[0]->value, false);
 
     int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
     int64_t safeNodeCount = searchNodeCount;
@@ -749,21 +1251,21 @@ void Search::SearchForCheckUpdate()
     */
 }
 
-void Search::CalculateAndDisplayScore(int value)
+void Search::CalculateAndDisplayScore(int value, bool exactMate)
 {
     Score = "";
     mated = false;
-    if (value > 159800 && value != 160000)
+    if (exactMate && value > 159800 && value != 160000)
     {
         int plies = 159999 - value;
-        int mateMoves = (plies + 2) / 2;
+        int mateMoves = (plies + 1) / 2;
         Score = "mate " + std::to_string(mateMoves);
         mated = true;
     }
-    else if (value < -159800 && value != -160000)
+    else if (exactMate && value < -159800 && value != -160000)
     {
         int plies = value - (-159999);
-        int mateMoves = (plies + 2) / 2;
+        int mateMoves = (plies + 1) / 2;
         Score = "mate -" + std::to_string(mateMoves);
         mated = true;
     }

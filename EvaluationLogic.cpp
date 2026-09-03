@@ -8,6 +8,10 @@
 #include "AttackPlaces.h"
 #include "PassedPawnSetup.h"
 #include "PieceMoves.h"
+#include "MoveLogic.h"
+#include "GameLogic.h"
+#include "MissingInfoAboutPrevStateFromMove.h"
+#include "Search.h"
 #include <algorithm>
 #include <iostream>
 
@@ -62,6 +66,378 @@ int RookConnectionValue(MyList (&pieces)[15], long long occupiedSquares)
         value -= 30;
     }
     return value;
+}
+
+struct KingDangerResult
+{
+    int danger = 0;
+    int attackerWeight = 0;
+    int defenderWeight = 0;
+    int escapeSafety = 0;
+    int safeCheckPressure = 0;
+    int checkEscapeInteraction = 0;
+    int filePressure = 0;
+    int diagonalPressure = 0;
+    int pawnShelter = 0;
+    int phaseScale = 0;
+};
+
+bool IsInsideBoard(int rank, int file)
+{
+    return rank >= 0 && rank < 8 && file >= 0 && file < 8;
+}
+
+bool PieceAttacksSquare(Board& board, int pieceType, bool white,
+                        int from, int target)
+{
+    const int fromRank = from / 8;
+    const int fromFile = from % 8;
+    const int targetRank = target / 8;
+    const int targetFile = target % 8;
+    const int rankDistance = targetRank - fromRank;
+    const int fileDistance = targetFile - fromFile;
+
+    if (pieceType == 1)
+    {
+        return rankDistance == (white ? 1 : -1) && std::abs(fileDistance) == 1;
+    }
+    if (pieceType == 2)
+    {
+        return (std::abs(rankDistance) == 2 && std::abs(fileDistance) == 1) ||
+               (std::abs(rankDistance) == 1 && std::abs(fileDistance) == 2);
+    }
+    if (pieceType == 6)
+    {
+        return std::max(std::abs(rankDistance), std::abs(fileDistance)) == 1;
+    }
+
+    const bool diagonal = std::abs(rankDistance) == std::abs(fileDistance);
+    const bool straight = rankDistance == 0 || fileDistance == 0;
+    if ((pieceType == 3 && !diagonal) || (pieceType == 4 && !straight) ||
+        (pieceType == 5 && !diagonal && !straight) || from == target)
+    {
+        return false;
+    }
+
+    const int rankStep = (rankDistance > 0) - (rankDistance < 0);
+    const int fileStep = (fileDistance > 0) - (fileDistance < 0);
+    int rank = fromRank + rankStep;
+    int file = fromFile + fileStep;
+    while (rank != targetRank || file != targetFile)
+    {
+        if (board.mainBoard[rank * 8 + file] != 0)
+        {
+            return false;
+        }
+        rank += rankStep;
+        file += fileStep;
+    }
+    return true;
+}
+
+int CountSideAttacks(Board& board, bool white, int target,
+                     int excludedPiece = -1, int excludedSquare = -1)
+{
+    int attackers = 0;
+    const int firstPiece = white ? 1 : 9;
+    for (int boardPiece = firstPiece; boardPiece < firstPiece + 6; boardPiece++)
+    {
+        const int pieceType = white ? boardPiece : boardPiece - 8;
+        for (int from : board.pieces[boardPiece])
+        {
+            if (boardPiece == excludedPiece && from == excludedSquare)
+            {
+                continue;
+            }
+            if (PieceAttacksSquare(board, pieceType, white, from, target))
+            {
+                attackers++;
+            }
+        }
+    }
+    return attackers;
+}
+
+int SafeCheckPressure(Board& board, bool attackingWhite, int safeEscapes)
+{
+    Board* checkBoard = board.MakeCopy();
+    checkBoard->sideToMove = !attackingWhite;
+    MoveList moves = MoveLogic::MoveGenerator(*checkBoard, -1, -1);
+    Move previousMove{};
+    int pressure = 0;
+    const int moveCountBefore = Search::moveCount;
+
+    for (int i = 0; i < moves.count; ++i)
+    {
+        Move& move = *moves.moves[i];
+        const int originalPiece = checkBoard->mainBoard[move.beginPlace];
+        MissingInfoAboutPrevStateFromMove undo(*checkBoard);
+        GameLogic::DoMove(*checkBoard, move, previousMove, -1, -1);
+
+        const int friendlyKing = checkBoard->pieces[attackingWhite ? 6 : 14].front();
+        const int enemyKing = checkBoard->pieces[attackingWhite ? 14 : 6].front();
+        const bool legal = CountSideAttacks(*checkBoard, !attackingWhite, friendlyKing) == 0;
+        const bool givesCheck = legal &&
+            CountSideAttacks(*checkBoard, attackingWhite, enemyKing) != 0;
+        if (givesCheck)
+        {
+            const int pieceType = move.promotionPiece > 0
+                ? move.promotionPiece
+                : (originalPiece > 8 ? originalPiece - 8 : originalPiece);
+            const int movedBoardPiece = attackingWhite ? pieceType : pieceType + 8;
+            const bool defended = CountSideAttacks(
+                *checkBoard, attackingWhite, move.endPlace,
+                movedBoardPiece, move.endPlace) != 0;
+            const bool immediatelyCapturable =
+                CountSideAttacks(*checkBoard, !attackingWhite, move.endPlace) != 0;
+
+            int movePressure = (pieceType == 4 || pieceType == 5) ? 2 : 1;
+            movePressure += defended ? 1 : 0;
+            movePressure -= immediatelyCapturable && !defended ? 1 : 0;
+            movePressure += safeEscapes <= 1 ? 1 : 0;
+            pressure += std::max(0, movePressure);
+        }
+
+        GameLogic::UndoMove(*checkBoard, move, undo);
+    }
+
+    Search::moveCount = moveCountBefore;
+    for (int i = 0; i < moves.count; ++i)
+        delete moves.moves[i];
+    delete checkBoard;
+    return pressure;
+}
+
+std::vector<int> KingZone(int kingSquare)
+{
+    std::vector<int> zone;
+    const int kingRank = kingSquare / 8;
+    const int kingFile = kingSquare % 8;
+    zone.push_back(kingSquare);
+    for (int rankOffset = -1; rankOffset <= 1; rankOffset++)
+    {
+        for (int fileOffset = -1; fileOffset <= 1; fileOffset++)
+        {
+            if (rankOffset == 0 && fileOffset == 0)
+            {
+                continue;
+            }
+            const int rank = kingRank + rankOffset;
+            const int file = kingFile + fileOffset;
+            if (IsInsideBoard(rank, file))
+            {
+                zone.push_back(rank * 8 + file);
+            }
+        }
+    }
+    return zone;
+}
+
+bool PieceParticipatesInZone(Board& board, int boardPiece, int square,
+                             const std::vector<int>& zone)
+{
+    const bool white = boardPiece < 8;
+    const int pieceType = white ? boardPiece : boardPiece - 8;
+    for (int target : zone)
+    {
+        if (PieceAttacksSquare(board, pieceType, white, square, target))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+int ShelterDanger(Board& board, bool whiteKing, int kingSquare)
+{
+    const int direction = whiteKing ? 1 : -1;
+    const int kingRank = kingSquare / 8;
+    const int kingFile = kingSquare % 8;
+    MyList& friendlyPawns = board.pieces[whiteKing ? 1 : 9];
+    MyList& enemyPawns = board.pieces[whiteKing ? 9 : 1];
+    int danger = 0;
+
+    for (int file = std::max(0, kingFile - 1); file <= std::min(7, kingFile + 1); file++)
+    {
+        bool firstRankPawn = false;
+        bool secondRankPawn = false;
+        bool fartherPawn = false;
+        for (int pawn : friendlyPawns)
+        {
+            if (pawn % 8 != file)
+            {
+                continue;
+            }
+            const int advance = (pawn / 8 - kingRank) * direction;
+            firstRankPawn |= advance == 1;
+            secondRankPawn |= advance == 2;
+            fartherPawn |= advance > 2;
+        }
+        if (firstRankPawn)
+        {
+            continue;
+        }
+        danger += secondRankPawn ? 5 : (fartherPawn ? 10 : 16);
+
+        bool fileHasEnemyPawn = false;
+        for (int pawn : enemyPawns)
+        {
+            fileHasEnemyPawn |= pawn % 8 == file;
+        }
+        if (!secondRankPawn && !fartherPawn && !fileHasEnemyPawn)
+        {
+            danger += 7;
+        }
+    }
+    return danger;
+}
+
+KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
+{
+    static constexpr int attackerWeight[7] = {0, 2, 5, 5, 8, 12, 0};
+    static constexpr int defenderWeight[7] = {0, 2, 4, 4, 5, 7, 0};
+    const int kingSquare = board.pieces[whiteKing ? 6 : 14].front();
+    const bool attackingWhite = !whiteKing;
+    const std::vector<int> zone = KingZone(kingSquare);
+    const int attackerFirst = attackingWhite ? 1 : 9;
+    const int defenderFirst = whiteKing ? 1 : 9;
+    int attackerParticipation = 0;
+    int defenderParticipation = 0;
+    int attackerCount = 0;
+    int defenderCount = 0;
+
+    for (int boardPiece = attackerFirst; boardPiece < attackerFirst + 5; boardPiece++)
+    {
+        const int pieceType = attackingWhite ? boardPiece : boardPiece - 8;
+        for (int square : board.pieces[boardPiece])
+        {
+            if (PieceParticipatesInZone(board, boardPiece, square, zone))
+            {
+                attackerParticipation += attackerWeight[pieceType];
+                attackerCount++;
+            }
+        }
+    }
+    for (int boardPiece = defenderFirst; boardPiece < defenderFirst + 5; boardPiece++)
+    {
+        const int pieceType = whiteKing ? boardPiece : boardPiece - 8;
+        for (int square : board.pieces[boardPiece])
+        {
+            if (PieceParticipatesInZone(board, boardPiece, square, zone))
+            {
+                defenderParticipation += defenderWeight[pieceType];
+                defenderCount++;
+            }
+        }
+    }
+
+    const int kingRank = kingSquare / 8;
+    const int kingFile = kingSquare % 8;
+    int safeEscapes = 0;
+    int controlledEscapes = 0;
+    int occupiedEscapes = 0;
+    int edgeDirections = 0;
+    for (int rankOffset = -1; rankOffset <= 1; rankOffset++)
+    {
+        for (int fileOffset = -1; fileOffset <= 1; fileOffset++)
+        {
+            if (rankOffset == 0 && fileOffset == 0)
+            {
+                continue;
+            }
+            const int rank = kingRank + rankOffset;
+            const int file = kingFile + fileOffset;
+            if (!IsInsideBoard(rank, file))
+            {
+                edgeDirections++;
+                continue;
+            }
+            const int target = rank * 8 + file;
+            const int occupant = board.mainBoard[target];
+            const bool occupiedByDefender = occupant != 0 && (occupant < 8) == whiteKing;
+            const bool enemyControlled = CountSideAttacks(board, attackingWhite, target) != 0;
+            if (occupiedByDefender)
+            {
+                occupiedEscapes++;
+            }
+            else if (enemyControlled)
+            {
+                controlledEscapes++;
+            }
+            else
+            {
+                safeEscapes++;
+            }
+
+        }
+    }
+
+    int filePressure = 0;
+    for (int file = std::max(0, kingFile - 1); file <= std::min(7, kingFile + 1); file++)
+    {
+        bool friendlyPawn = false;
+        bool enemyPawn = false;
+        for (int pawn : board.pieces[whiteKing ? 1 : 9]) friendlyPawn |= pawn % 8 == file;
+        for (int pawn : board.pieces[whiteKing ? 9 : 1]) enemyPawn |= pawn % 8 == file;
+        const int openness = !friendlyPawn ? (!enemyPawn ? 2 : 1) : 0;
+        if (openness == 0)
+        {
+            continue;
+        }
+        for (int pieceType : {4, 5})
+        {
+            const int boardPiece = attackingWhite ? pieceType : pieceType + 8;
+            for (int square : board.pieces[boardPiece])
+            {
+                for (int target : zone)
+                {
+                    if (target % 8 == file && PieceAttacksSquare(board, pieceType, attackingWhite, square, target))
+                    {
+                        filePressure += openness == 2 ? 10 : 6;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    int diagonalPressure = 0;
+    for (int pieceType : {3, 5})
+    {
+        const int boardPiece = attackingWhite ? pieceType : pieceType + 8;
+        for (int square : board.pieces[boardPiece])
+        {
+            if (PieceAttacksSquare(board, pieceType, attackingWhite, square, kingSquare))
+            {
+                diagonalPressure += 9;
+            }
+        }
+    }
+
+    const int escapeDanger = controlledEscapes * 6 + occupiedEscapes * 2 +
+                             edgeDirections * 2 + std::max(0, 3 - safeEscapes) * 8;
+    const int safeChecks = SafeCheckPressure(board, attackingWhite, safeEscapes);
+    const int checkDanger = std::min(safeChecks, 4) * 7;
+    const int checkEscapeInteraction = std::min(48, checkDanger * escapeDanger / 64);
+    const int balanceDanger = std::max(0, attackerParticipation - defenderParticipation) * 2 +
+                              std::max(0, attackerCount - defenderCount) * 4;
+    const int shelterDanger = ShelterDanger(board, whiteKing, kingSquare);
+    const int lineDanger = filePressure + diagonalPressure;
+    int rawDanger = attackerParticipation * 2 + escapeDanger + checkDanger +
+                    checkEscapeInteraction +
+                    lineDanger + shelterDanger + balanceDanger;
+
+    const int queenCount = board.pieces[attackingWhite ? 5 : 13].size();
+    const int rookCount = board.pieces[attackingWhite ? 4 : 12].size();
+    const int minorCount = board.pieces[attackingWhite ? 2 : 10].size() +
+                           board.pieces[attackingWhite ? 3 : 11].size();
+    const int attackingMaterialScale = std::min(100, 20 + queenCount * 45 +
+                                                     rookCount * 12 + minorCount * 5);
+    rawDanger = rawDanger * attackingMaterialScale / 100;
+    const int escalatedDanger = rawDanger + rawDanger * rawDanger / 180;
+    return {std::min(escalatedDanger, 450), attackerParticipation,
+            defenderParticipation, escapeDanger, checkDanger,
+            checkEscapeInteraction, filePressure,
+            diagonalPressure, shelterDanger, attackingMaterialScale};
 }
 }
 
@@ -208,54 +584,16 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
 
     int phase = EvaluationLogic::CalculatePhase(thisBoard);
 
-    int kingAttackBase = kingSafety;
-    int kingAttackTapered = (kingAttackBase * phase) / 24;
+    KingDangerResult whiteKingDanger = EvaluateKingDanger(thisBoard, true);
+    KingDangerResult blackKingDanger = EvaluateKingDanger(thisBoard, false);
+    int kingDangerNet = blackKingDanger.danger - whiteKingDanger.danger;
 
     int whiteKingPlacement = Option::WhiteKingPlaceSafetyMiddleGame[pieces[6].front()];
     int blackKingPlacement = Option::BlackKingPlaceSafetyMiddleGame[pieces[14].front()];
+    whiteKingPlacement = whiteKingPlacement * phase / 24;
+    blackKingPlacement = blackKingPlacement * phase / 24;
     int kingPlacementNet = whiteKingPlacement - blackKingPlacement;
-
-    int whitePawnShield = 0;
-    for (int item : KingSetup::WhiteKingInFront[pieces[6].front()])
-    {
-        if (std::find(pieces[1].begin(), pieces[1].end(), item) == pieces[1].end())
-        {
-            whitePawnShield += Option::WhiteKingPlacePawnShieldMiddleGame[item];
-        }
-    }
-    int blackPawnShield = 0;
-    for (int item : KingSetup::BlackKingInFront[pieces[14].front()])
-    {
-        if (std::find(pieces[9].begin(), pieces[9].end(), item) == pieces[9].end())
-        {
-            blackPawnShield -= Option::BlackKingPlacePawnShieldMiddleGame[item];
-        }
-    }
-    int whitePawnShieldTapered = (whitePawnShield * phase) / 24;
-    int blackPawnShieldTapered = (blackPawnShield * phase) / 24;
-    int pawnShieldNet = whitePawnShieldTapered + blackPawnShieldTapered;
-
-    // Central King Exposure (d1=3, e1=4 for White; d8=59, e8=60 for Black)
-    constexpr long long dFileMask = 0x0808080808080808ULL;
-    constexpr long long eFileMask = 0x1010101010101010ULL;
-    bool whiteHasD = (thisBoard.whitePawns & dFileMask) != 0;
-    bool blackHasD = (thisBoard.blackPawns & dFileMask) != 0;
-    bool whiteHasE = (thisBoard.whitePawns & eFileMask) != 0;
-    bool blackHasE = (thisBoard.blackPawns & eFileMask) != 0;
-
-    int dOpenness = (!whiteHasD && !blackHasD) ? 2 : ((!whiteHasD || !blackHasD) ? 1 : 0);
-    int eOpenness = (!whiteHasE && !blackHasE) ? 2 : ((!whiteHasE || !blackHasE) ? 1 : 0);
-    int centralOpenness = dOpenness + eOpenness;
-
-    int whiteKingSq = pieces[6].front();
-    int blackKingSq = pieces[14].front();
-    int whiteExposureBase = 5 + 10 * centralOpenness;
-    int blackExposureBase = 5 + 10 * centralOpenness;
-    int whiteCentralPenalty = (whiteKingSq == 3 || whiteKingSq == 4) ? (whiteExposureBase * phase) / 24 : 0;
-    int blackCentralPenalty = (blackKingSq == 59 || blackKingSq == 60) ? (blackExposureBase * phase) / 24 : 0;
-    int centralKingExposureNet = -whiteCentralPenalty + blackCentralPenalty;
-
-    kingSafety = kingAttackTapered + kingPlacementNet + pawnShieldNet + centralKingExposureNet;
+    kingSafety = kingDangerNet + kingPlacementNet;
 
     // Pawn Structure
     int pawnStructure = EvaluationLogic::GetPawnStructureValue(thisBoard, state);
@@ -333,17 +671,37 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
         breakdown->mobilityNet = movement;
         breakdown->centerNet = center;
 
-        breakdown->kingAttackNet = kingAttackTapered;
+        breakdown->kingAttackNet = kingDangerNet;
         breakdown->whiteKingPlacement = whiteKingPlacement;
         breakdown->blackKingPlacement = blackKingPlacement;
         breakdown->kingPlacementNet = kingPlacementNet;
-        breakdown->whitePawnShield = whitePawnShieldTapered;
-        breakdown->blackPawnShield = -blackPawnShieldTapered;
-        breakdown->pawnShieldNet = pawnShieldNet;
-        breakdown->whiteCentralKingExposure = -whiteCentralPenalty;
-        breakdown->blackCentralKingExposure = -blackCentralPenalty;
-        breakdown->centralKingExposureNet = centralKingExposureNet;
+        breakdown->whitePawnShield = 0;
+        breakdown->blackPawnShield = 0;
+        breakdown->pawnShieldNet = 0;
+        breakdown->whiteCentralKingExposure = 0;
+        breakdown->blackCentralKingExposure = 0;
+        breakdown->centralKingExposureNet = 0;
         breakdown->kingSafetyTotal = kingSafety;
+        breakdown->whiteKingDanger = whiteKingDanger.danger;
+        breakdown->blackKingDanger = blackKingDanger.danger;
+        breakdown->whiteAttackerWeight = whiteKingDanger.attackerWeight;
+        breakdown->blackAttackerWeight = blackKingDanger.attackerWeight;
+        breakdown->whiteDefenderWeight = whiteKingDanger.defenderWeight;
+        breakdown->blackDefenderWeight = blackKingDanger.defenderWeight;
+        breakdown->whiteEscapeSafety = whiteKingDanger.escapeSafety;
+        breakdown->blackEscapeSafety = blackKingDanger.escapeSafety;
+        breakdown->whiteSafeCheckPressure = whiteKingDanger.safeCheckPressure;
+        breakdown->blackSafeCheckPressure = blackKingDanger.safeCheckPressure;
+        breakdown->whiteCheckEscapeInteraction = whiteKingDanger.checkEscapeInteraction;
+        breakdown->blackCheckEscapeInteraction = blackKingDanger.checkEscapeInteraction;
+        breakdown->whiteFilePressure = whiteKingDanger.filePressure;
+        breakdown->blackFilePressure = blackKingDanger.filePressure;
+        breakdown->whiteDiagonalPressure = whiteKingDanger.diagonalPressure;
+        breakdown->blackDiagonalPressure = blackKingDanger.diagonalPressure;
+        breakdown->whitePawnShelter = whiteKingDanger.pawnShelter;
+        breakdown->blackPawnShelter = blackKingDanger.pawnShelter;
+        breakdown->whitePhaseScale = whiteKingDanger.phaseScale;
+        breakdown->blackPhaseScale = blackKingDanger.phaseScale;
 
         breakdown->pawnStructureNet = pawnStructure;
         breakdown->rookConnectionNet = rookValue;

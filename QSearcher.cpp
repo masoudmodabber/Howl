@@ -425,6 +425,9 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         Move mateMove;
         mateMove.value = -159999;
         retValue->value = -159999;
+        retValue->exactMate = true;
+        retValue->selectedMateExact = true;
+        retValue->rigorousMateBound = true;
         deleteMoveList(moveList);
         delete MPValue;
         MPValue = nullptr;

@@ -65,6 +65,102 @@ int NormalizeExchangePiece(int piece)
     return piece > 8 ? piece - 8 : piece;
 }
 
+bool PieceAttacksKing(int pieceType, bool whitePiece, int pieceSquare,
+                      int kingSquare, long long occupancy)
+{
+    const long long kingBit = Option::PowerTwo[kingSquare];
+    switch (pieceType)
+    {
+    case 1:
+        return ((whitePiece ? AttackPlaces::WhitePawnAttackPlaces[pieceSquare]
+                            : AttackPlaces::BlackPawnAttackPlaces[pieceSquare]) & kingBit) != 0;
+    case 2:
+        return (AttackPlaces::KnightAttackPlaces[pieceSquare] & kingBit) != 0;
+    case 3:
+        return (AttackPlaces::BishopAttack[pieceSquare][kingSquare] & occupancy) == kingBit;
+    case 4:
+        return (AttackPlaces::RookAttack[pieceSquare][kingSquare] & occupancy) == kingBit;
+    case 5:
+        return (AttackPlaces::QueenAttack[pieceSquare][kingSquare] & occupancy) == kingBit;
+    case 6:
+        return (AttackPlaces::KingAttackPlaces[pieceSquare] & kingBit) != 0;
+    default:
+        return false;
+    }
+}
+
+bool MoveWouldGiveCheck(Board& board, const Move& move)
+{
+    const bool movingWhite = !board.sideToMove;
+    const int enemyKingIndex = movingWhite ? 14 : 6;
+    if (board.pieces[enemyKingIndex].count == 0)
+        return false;
+
+    const int enemyKingSquare = board.pieces[enemyKingIndex].front();
+    long long occupancy = board.whitePieces | board.blackPieces;
+    occupancy &= ~Option::PowerTwo[move.beginPlace];
+    occupancy |= Option::PowerTwo[move.endPlace];
+
+    if ((move.PublicFlag & Option::PowerTwo[6]) != 0)
+    {
+        const int capturedPawnSquare = move.endPlace + (movingWhite ? -8 : 8);
+        occupancy &= ~Option::PowerTwo[capturedPawnSquare];
+    }
+
+    int rookFrom = -1;
+    int rookTo = -1;
+    if ((move.CastleFlag & Option::PowerTwo[3]) != 0)
+    {
+        rookFrom = move.beginPlace + 3;
+        rookTo = move.beginPlace + 1;
+    }
+    else if ((move.CastleFlag & Option::PowerTwo[2]) != 0)
+    {
+        rookFrom = move.beginPlace - 4;
+        rookTo = move.beginPlace - 1;
+    }
+    else if ((move.CastleFlag & Option::PowerTwo[1]) != 0)
+    {
+        rookFrom = move.beginPlace + 3;
+        rookTo = move.beginPlace + 1;
+    }
+    else if ((move.CastleFlag & Option::PowerTwo[0]) != 0)
+    {
+        rookFrom = move.beginPlace - 4;
+        rookTo = move.beginPlace - 1;
+    }
+    if (rookFrom >= 0)
+    {
+        occupancy &= ~Option::PowerTwo[rookFrom];
+        occupancy |= Option::PowerTwo[rookTo];
+    }
+
+    const int pieceOffset = movingWhite ? 0 : 8;
+    for (int pieceType = 1; pieceType <= 6; ++pieceType)
+    {
+        for (int originalSquare : board.pieces[pieceType + pieceOffset])
+        {
+            int virtualSquare = originalSquare;
+            int virtualPieceType = pieceType;
+            if (originalSquare == move.beginPlace)
+            {
+                virtualSquare = move.endPlace;
+                if (move.promotionPiece > 0)
+                    virtualPieceType = NormalizeExchangePiece(move.promotionPiece);
+            }
+            else if (pieceType == 4 && originalSquare == rookFrom)
+            {
+                virtualSquare = rookTo;
+            }
+
+            if (PieceAttacksKing(virtualPieceType, movingWhite, virtualSquare,
+                                 enemyKingSquare, occupancy))
+                return true;
+        }
+    }
+    return false;
+}
+
 std::uint64_t MakeExchangeKey(std::uint32_t attacker, std::uint32_t defender,
                               int beginPiece, int endPiece, int promotionPiece)
 {
@@ -1988,6 +2084,12 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone, bo
     }
     // --- END REPLACEMENT OF VECTOR USAGE ---
 
+    if (!onlyCapturesAndChecks)
+    {
+        for (int i = 0; i < moveList.count; ++i)
+            moveList.moves[i]->givesCheck = MoveWouldGiveCheck(thisBoard, *moveList.moves[i]);
+    }
+
     ScoreAndSortMoves(thisBoard, moveList, depth, depthGone, whiteAttacker, blackAttacker);
     return moveList;
 }
@@ -2977,6 +3079,7 @@ Move *MoveLogic::MoveCopy(Move *move)
     newMove->PublicFlag = move->PublicFlag;
     newMove->unpassentPlace = move->unpassentPlace;
     newMove->moveCount = move->moveCount;
+    newMove->givesCheck = move->givesCheck;
     return newMove;
 }
 
