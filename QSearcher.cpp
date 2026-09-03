@@ -12,6 +12,8 @@
 #include "MoveLogic.h"
 #include "RepetitionHistory.h"
 #include "ChessStringManipulation.h"
+#include "SearchAccounting.h"
+#include "MateScore.h"
 
 int QSearcher::pieceValue100[15] = {
     0,    // pieceValue100[0]
@@ -47,8 +49,15 @@ QSearchTestStatistics QSearcher::TestStatistics() {
 
 MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& prevMove, int depthGone, int lastCheck, bool kick, int depth, Move& move1, Move& move2, Move& move3, Board& board4, bool MAtESearch, int depthQuisStarted, bool nullWindowSearch)
 {
+    const int origAlpha = alpha;
+    const int origBeta = beta;
     const int qsearchDistance = std::max(0, depthGone - depthQuisStarted);
     Search::searchNodeCount++;
+    g_searchAccounting.qsearchNodes++;
+    if (g_searchAccounting.preprobeActive)
+    {
+        g_searchAccounting.preprobeQSearchNodes++;
+    }
     MoveList moveList;
     Move* SelectedMove = nullptr;
     Move selectedMoveStorage{};
@@ -85,6 +94,9 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
     
     if (depth == 0 && lastCheck == 0 && !kick && !currentSideInCheck) {
         retValue->value = EvaluationLogic::Evaluate(board4);
+        retValue->bound = retValue->value <= origAlpha ? SearchBound::Upper
+            : (retValue->value >= origBeta ? SearchBound::Lower : SearchBound::Exact);
+        retValue->selective = true;
         delete MPValue;
         MPValue = nullptr;
         return retValue;
@@ -120,6 +132,9 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
     }
     if (depth == 0) {
         retValue->value = EvaluationLogic::Evaluate(board4);
+        retValue->bound = retValue->value <= origAlpha ? SearchBound::Upper
+            : (retValue->value >= origBeta ? SearchBound::Lower : SearchBound::Exact);
+        retValue->selective = true;
         delete MPValue;
         MPValue = nullptr;
         return retValue;
@@ -129,6 +144,8 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         valueTemp2 = EvaluationLogic::Evaluate(board4);
         if (valueTemp2 >= beta) {
             retValue->value = valueTemp2;
+            retValue->bound = SearchBound::Lower;
+            retValue->selective = true;
             delete MPValue;
             MPValue = nullptr;
             return retValue;
@@ -259,11 +276,6 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                         value = -MPValue->value;
                         movePV = MPValue->printString;
                     }
-                    if (value > 159800 && value != 160000) {
-                        value--;
-                    } else if (value < -159800 && value != -160000) {
-                        value++;
-                    }
                     move->value = value;
                 }
                 if (value > bestMoveValue) {
@@ -281,9 +293,11 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                 }
                 firstMove = false;
                 if (value > alpha) {
-                    if (value >= beta && ((value < 159800 && value > -159800) || !MAtESearch)) {
+                    if (value >= beta) {
                         retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + movePV;
                         retValue->value = value;
+                        retValue->bound = SearchBound::Lower;
+                        retValue->selective = true;
                         deleteMoveList(moveList);
                         if (hasDeferredStage2 && currentStage == 1) {
                             for (int d = 0; d < deferredCount; ++d) {
@@ -318,11 +332,6 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                         value = -MPValue->value;
                         movePV = MPValue->printString;
                     }
-                    if (value > 159800 && value != 160000) {
-                        value--;
-                    } else if (value < -159800 && value != -160000) {
-                        value++;
-                    }
                     move->value = value;
                 }
                 if (value > alpha /* && value < beta */) {
@@ -343,11 +352,6 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                             value = -MPValue->value;
                             movePV = MPValue->printString;
                         }
-                        if (value > 159800 && value != 160000) {
-                            value--;
-                        } else if (value < -159800 && value != -160000) {
-                            value++;
-                        }
                         move->value = value;
                     }
                     if (value > alpha) {
@@ -363,9 +367,11 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                     boardCopy = nullptr;
                 }
                 if (value > bestMoveValue) {
-                    if (value >= beta && ((value < 159800 && value > -159800) || !MAtESearch)) {
+                    if (value >= beta) {
                         retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + movePV;
                         retValue->value = value;
+                        retValue->bound = SearchBound::Lower;
+                        retValue->selective = true;
                         deleteMoveList(moveList);
                         if (hasDeferredStage2 && currentStage == 1) {
                             for (int d = 0; d < deferredCount; ++d) {
@@ -417,23 +423,26 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         }
         deleteMoveList(legalMoveList);
         retValue->value = hasLegalMove ? standPot : 0;
+        retValue->bound = retValue->value <= origAlpha ? SearchBound::Upper
+            : (retValue->value >= origBeta ? SearchBound::Lower : SearchBound::Exact);
+        retValue->selective = true;
         deleteMoveList(moveList);
         delete MPValue;
         MPValue = nullptr;
         return retValue;
     } else if (availMoves == 0 && currentSideInCheck) {
         Move mateMove;
-        mateMove.value = -159999;
-        retValue->value = -159999;
-        retValue->exactMate = true;
-        retValue->selectedMateExact = true;
-        retValue->rigorousMateBound = true;
+        mateMove.value = MateScore::MatedAtPly(depthGone);
+        retValue->value = MateScore::MatedAtPly(depthGone);
         deleteMoveList(moveList);
         delete MPValue;
         MPValue = nullptr;
         return retValue;
     } else {
         retValue->value = bestMoveValue;
+        retValue->bound = bestMoveValue <= origAlpha ? SearchBound::Upper
+            : (bestMoveValue >= origBeta ? SearchBound::Lower : SearchBound::Exact);
+        retValue->selective = true;
         retValue->printString = (SelectedMove != nullptr) ? (ChessStringManipulation::PVToString(*SelectedMove, 0, false, board4) + ' ' + SelectedPV) : "";
         deleteMoveList(moveList);
         delete MPValue;

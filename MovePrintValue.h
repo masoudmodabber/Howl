@@ -2,16 +2,21 @@
 #define MOVEPRINTVALUE_H
 
 #include <string>
+
+enum class SearchBound
+{
+    Exact,
+    Lower,
+    Upper
+};
+
 class MovePrintValue {
 public:
 
-    int value;
+    int value = 0;
     std::string printString;
-    bool provisionalMate = false;
-    bool provisionalConfirmationAttempted = false;
-    bool exactMate = false;
-    bool selectedMateExact = false;
-    bool rigorousMateBound = false;
+    SearchBound bound = SearchBound::Exact;
+    bool selective = false;
 };
 
 #endif
