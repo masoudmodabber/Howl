@@ -117,6 +117,7 @@ void UCI::MainSearchStart()
     if (searchThread.joinable())
     {
         DiagnosticLogger::Log("JOIN_BEGIN", "MainSearchStart joining previous searchThread", prevId);
+        Search::stopRequested = true;
         Search::active = false;
         searchThread.join();
         DiagnosticLogger::Log("JOIN_END", "MainSearchStart joined previous searchThread", prevId);
@@ -124,6 +125,7 @@ void UCI::MainSearchStart()
     HashMemoryBudget::EnsureDefaultConfigured(std::cout);
     HashMemoryBudget::MarkSearchStarted();
     Search::startTime = std::chrono::high_resolution_clock::now();
+    Search::stopRequested = false;
     Search::active = true;
     uint64_t searchId = ++DiagnosticLogger::currentSearchId;
     std::string fenBeforeGo = DiagnosticLogger::BoardToFen(thisBoard);
@@ -180,6 +182,7 @@ void UCI::Run(std::istream& in, std::ostream& out)
                 if (searchThread.joinable())
                 {
                     DiagnosticLogger::Log("JOIN_BEGIN", "EOF on stdin, joining searchThread", DiagnosticLogger::currentSearchId.load());
+                    Search::stopRequested = true;
                     Search::active = false;
                     searchThread.join();
                     DiagnosticLogger::Log("JOIN_END", "EOF on stdin, joined searchThread", DiagnosticLogger::currentSearchId.load());
@@ -228,6 +231,7 @@ void UCI::Run(std::istream& in, std::ostream& out)
             if (searchThread.joinable())
             {
                 DiagnosticLogger::Log("STOP_REQUEST", "ucinewgame stopping search", DiagnosticLogger::currentSearchId.load());
+                Search::stopRequested = true;
                 Search::active = false;
                 DiagnosticLogger::Log("JOIN_BEGIN", "ucinewgame joining searchThread", DiagnosticLogger::currentSearchId.load());
                 searchThread.join();
@@ -239,6 +243,7 @@ void UCI::Run(std::istream& in, std::ostream& out)
             if (searchThread.joinable())
             {
                 DiagnosticLogger::Log("STOP_REQUEST", "quit stopping search", DiagnosticLogger::currentSearchId.load());
+                Search::stopRequested = true;
                 Search::active = false;
                 DiagnosticLogger::Log("JOIN_BEGIN", "quit joining searchThread", DiagnosticLogger::currentSearchId.load());
                 searchThread.join();
@@ -251,6 +256,7 @@ void UCI::Run(std::istream& in, std::ostream& out)
             if (searchThread.joinable())
             {
                 DiagnosticLogger::Log("STOP_REQUEST", "stop command received", DiagnosticLogger::currentSearchId.load());
+                Search::stopRequested = true;
                 Search::active = false;
                 DiagnosticLogger::Log("JOIN_BEGIN", "stop joining searchThread", DiagnosticLogger::currentSearchId.load());
                 searchThread.join();
@@ -265,6 +271,7 @@ void UCI::Run(std::istream& in, std::ostream& out)
             if (searchThread.joinable())
             {
                 DiagnosticLogger::Log("STOP_REQUEST", "position stopping search", DiagnosticLogger::currentSearchId.load());
+                Search::stopRequested = true;
                 Search::active = false;
                 DiagnosticLogger::Log("JOIN_BEGIN", "position joining searchThread", DiagnosticLogger::currentSearchId.load());
                 searchThread.join();
@@ -495,6 +502,7 @@ void UCI::Run(std::istream& in, std::ostream& out)
 
     if (searchThread.joinable())
     {
+        Search::stopRequested = true;
         Search::active = false;
         searchThread.join();
     }

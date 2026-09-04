@@ -3,6 +3,7 @@
 #include <crtdbg.h>
 #endif
 #include "QSearcher.h"
+#include "Search.h"
 #include "Option.h"
 #include "BoardLogic.h"
 #include "EvaluationLogic.h"
@@ -78,6 +79,18 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
     const int origBeta = beta;
     const int qsearchDistance = std::max(0, depthGone - depthQuisStarted);
     Search::searchNodeCount++;
+    if ((Search::searchNodeCount & 2047) == 0)
+    {
+        Search::CheckLimits();
+    }
+    if (Search::stopRequested.load(std::memory_order_relaxed))
+    {
+        MovePrintValue* abortVal = new MovePrintValue();
+        abortVal->value = 0;
+        abortVal->bound = SearchBound::Upper;
+        abortVal->selective = true;
+        return abortVal;
+    }
     MoveList moveList;
     Move* SelectedMove = nullptr;
     Move selectedMoveStorage{};
@@ -202,6 +215,20 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
     int currentStage = 1;
     while (true) {
         for (int i = 0; i < moveList.count; ++i) {
+            if (Search::stopRequested.load(std::memory_order_relaxed)) {
+                deleteMoveList(moveList);
+                if (hasDeferredStage2 && currentStage == 1) {
+                    for (int d = 0; d < deferredCount; ++d) {
+                        delete deferredMoves[d].templateMove;
+                    }
+                }
+                delete MPValue;
+                MPValue = nullptr;
+                retValue->value = 0;
+                retValue->bound = SearchBound::Upper;
+                retValue->selective = true;
+                return retValue;
+            }
             Move* move = moveList.moves[i];
             boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
             MissingInfoAboutPrevStateFromMove* missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
@@ -312,6 +339,20 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                     delete boardCopy;
                     boardCopy = nullptr;
                 }
+                if (Search::stopRequested.load(std::memory_order_relaxed)) {
+                    deleteMoveList(moveList);
+                    if (hasDeferredStage2 && currentStage == 1) {
+                        for (int d = 0; d < deferredCount; ++d) {
+                            delete deferredMoves[d].templateMove;
+                        }
+                    }
+                    delete MPValue;
+                    MPValue = nullptr;
+                    retValue->value = 0;
+                    retValue->bound = SearchBound::Upper;
+                    retValue->selective = true;
+                    return retValue;
+                }
                 firstMove = false;
                 if (value > alpha) {
                     if (value >= beta) {
@@ -386,6 +427,20 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                     Board::AreBoardsEqual(board4, *boardCopy);
                     delete boardCopy;
                     boardCopy = nullptr;
+                }
+                if (Search::stopRequested.load(std::memory_order_relaxed)) {
+                    deleteMoveList(moveList);
+                    if (hasDeferredStage2 && currentStage == 1) {
+                        for (int d = 0; d < deferredCount; ++d) {
+                            delete deferredMoves[d].templateMove;
+                        }
+                    }
+                    delete MPValue;
+                    MPValue = nullptr;
+                    retValue->value = 0;
+                    retValue->bound = SearchBound::Upper;
+                    retValue->selective = true;
+                    return retValue;
                 }
                 if (value > bestMoveValue) {
                     if (value >= beta) {

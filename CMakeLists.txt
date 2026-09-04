@@ -45,6 +45,13 @@ if(BUILD_TESTING)
     target_include_directories(howl_eval_breakdown PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_definitions(howl_eval_breakdown PRIVATE HOWL_CORRECTNESS_TESTING=1)
 
+    add_executable(howl_phase_curve_tool
+        tools/PhaseCurveTool.cpp
+        ${TEST_ENGINE_SOURCES}
+    )
+    target_include_directories(howl_phase_curve_tool PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_definitions(howl_phase_curve_tool PRIVATE HOWL_CORRECTNESS_TESTING=1)
+
     foreach(POSITION start kiwipete position3 position4 position5 position6)
         add_test(
             NAME perft_${POSITION}
@@ -105,7 +112,7 @@ if(BUILD_TESTING)
         )
     endforeach()
 
-    foreach(EVAL_CASE black_en_passant black_knight_attack bishop_pair_color king_danger_sign passed_pawn_table_symmetry king_safety_table_symmetry pawn_move_center_symmetry game_phase_calculation breakdown_reconciliation passed_pawn_phase_interpolation)
+    foreach(EVAL_CASE black_en_passant black_knight_attack bishop_pair_color king_danger_sign passed_pawn_table_symmetry king_safety_table_symmetry pawn_move_center_symmetry game_phase_calculation phase_taper_interpolation breakdown_reconciliation passed_pawn_phase_interpolation piece_balance_continuous)
         add_test(
             NAME eval_${EVAL_CASE}
             COMMAND howl_correctness_tests eval ${EVAL_CASE}

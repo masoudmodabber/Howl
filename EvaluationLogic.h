@@ -8,7 +8,6 @@
 struct EvaluationBreakdown
 {
     int phase = 0;
-    int state = 0;
 
     int whiteMaterial = 0;
     int blackMaterial = 0;
@@ -71,8 +70,8 @@ public:
     static int CalculatePhase(const Board& thisBoard);
     static int Evaluate(Board& thisBoard);
     static EvaluationBreakdown EvaluateDetailed(Board& thisBoard);
-    static int GetPawnStructureValue(Board& thisBoard, int state);
-    static int* PieceMoveCount(Board& thisBoard, int state);
+    static int GetPawnStructureValue(Board& thisBoard, int phase);
+    static int* PieceMoveCount(Board& thisBoard, int phase);
     static std::size_t EvalCacheSize();
     static std::size_t EvalCacheCapacityBytes();
     static std::size_t EvalCacheEntryCapacity();
@@ -84,6 +83,14 @@ public:
 #if HOWL_CORRECTNESS_TESTING
     static void ClearEvalCacheForTesting();
     static int RookConnectionValueForTesting(Board& board);
+    static int TaperEvaluationValueForTesting(int middleGameValue,
+                                              int endGameValue, int phase);
+    static int TaperGroup1ValueForTesting(int middleGameValue,
+                                          int endGameValue, int phase);
+    static int TaperGroup2ValueForTesting(int middleGameValue,
+                                          int endGameValue, int phase);
+    static int TaperGroup3ValueForTesting(int middleGameValue,
+                                          int endGameValue, int phase);
     static void SetEvalCacheAllocationFailureThresholdForTesting(
         std::size_t capacityBytes);
 #endif

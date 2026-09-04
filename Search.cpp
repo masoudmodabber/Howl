@@ -27,6 +27,7 @@
 
 
 std::atomic<bool> Search::active{false};
+std::atomic<bool> Search::stopRequested{false};
 time_t Search::beginTime{0};
 std::chrono::high_resolution_clock::time_point Search::startTime;
 double Search::allowedTime{0.0};
@@ -34,6 +35,7 @@ std::string Search::bestMove{""};
 std::string Search::ponderMove{""};
 std::string Search::completedBestMove{""};
 std::string Search::completedPonderMove{""};
+std::string Search::emergencyMove{""};
 bool Search::finiteSearch{false};
 
 int Search::maxDepth{-1};
@@ -45,6 +47,33 @@ int Search::moveCount = 0;
 int64_t Search::searchNodeCount = 0;
 std::string Search::Score = "";
 bool Search::mated = false;
+
+void Search::CheckLimits()
+{
+    if (stopRequested.load(std::memory_order_relaxed))
+        return;
+
+    if (!active.load(std::memory_order_relaxed))
+        return;
+
+    if (maxNodes > 0 && searchNodeCount >= maxNodes)
+    {
+        stopRequested.store(true, std::memory_order_relaxed);
+        active.store(false, std::memory_order_relaxed);
+        return;
+    }
+
+    if (finiteSearch && allowedTime > 0)
+    {
+        auto now = std::chrono::high_resolution_clock::now();
+        int64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count();
+        if (elapsed >= allowedTime)
+        {
+            stopRequested.store(true, std::memory_order_relaxed);
+            active.store(false, std::memory_order_relaxed);
+        }
+    }
+}
 
 namespace
 {
@@ -65,7 +94,7 @@ namespace
 
 void Search::PrintBestMove()
 {
-    const std::string& outBest = !completedBestMove.empty() ? completedBestMove : bestMove;
+    const std::string& outBest = !completedBestMove.empty() ? completedBestMove : (!bestMove.empty() ? bestMove : emergencyMove);
     const std::string& outPonder = !completedBestMove.empty() ? completedPonderMove : ponderMove;
 
     uint64_t sId = DiagnosticLogger::currentSearchId.load();
@@ -97,6 +126,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     ponderMove = "";
     completedBestMove = "";
     completedPonderMove = "";
+    stopRequested.store(false, std::memory_order_relaxed);
     PVSSearch::ResetKillers();
 
     if (!active)
@@ -117,6 +147,21 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         return;
     }
 
+    int rootTurn = board4.sideToMove ? 1 : 0;
+    for (int i = 0; i < moveList.count; ++i)
+    {
+        Move *m = moveList.moves[i];
+        MissingInfoAboutPrevStateFromMove undo(board4);
+        GameLogic::DoMove(board4, *m, move4, -2, -2);
+        bool legal = !BoardLogic::UnderAttack(board4, board4.pieces[rootTurn * 8 + 6].front(), board4.sideToMove);
+        GameLogic::UndoMove(board4, *m, undo);
+        if (legal)
+        {
+            emergencyMove = ChessStringManipulation::PVToString(*m, 0, false, board4);
+            break;
+        }
+    }
+
     int turn = board4.sideToMove ? 1 : 0;
     bool firstAssign = false;
     int recDepth = 1;
@@ -132,9 +177,21 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     }
     
     bool depthOneExactMate = false;
-    SearchDepthZero(moveList, firstAssign, recDepth, alpha, beta, previousMoveWasCheck, move1, move2, move3, move4, board4, depthOneExactMate);
-    completedBestMove = bestMove;
-    completedPonderMove = ponderMove;
+    bool depthOneCompleted = SearchDepthZero(moveList, firstAssign, recDepth, alpha, beta, previousMoveWasCheck, move1, move2, move3, move4, board4, depthOneExactMate);
+
+    if (depthOneCompleted)
+    {
+        completedBestMove = bestMove;
+        completedPonderMove = ponderMove;
+    }
+    else
+    {
+        PrintBestMove();
+        finiteSearch = false;
+        active = false;
+        PVSSearch::deleteMoveList(moveList);
+        return;
+    }
 
     if (!active || (maxDepth > 0 && maxDepth <= 1) || (maxNodes > 0 && moveCount >= maxNodes))
     {
@@ -206,7 +263,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
 
     MovePrintValue *MPValue = new MovePrintValue();
     MPValue->printString = "";
-    bool stopRequested = false;
     struct CommittedMateResult
     {
         bool available = false;
@@ -276,7 +332,9 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             aspBeta = std::min(200000, prevCompletedScore + betaDelta);
         }
 
-        while (active)
+        bool iterationCompleted = false;
+
+        while (active.load(std::memory_order_relaxed))
         {
             alpha = aspAlpha;
             beta = aspBeta;
@@ -287,18 +345,32 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             bool iterationSelective = false;
             bool iterationHasAuthoritativeResult = false;
             int authoritativeIterationScore = -200000;
+            bool allRootMovesCompleted = true;
 
             for (int counter = 0; counter < moveList.count; counter++)
             {
-                if (!active)
+                if (stopRequested.load(std::memory_order_relaxed) || !active.load(std::memory_order_relaxed))
                 {
                     stopRequested = true;
+                    allRootMovesCompleted = false;
                     break;
                 }
                 if (maxNodes > 0 && moveCount >= maxNodes)
                 {
                     stopRequested = true;
+                    allRootMovesCompleted = false;
                     break;
+                }
+                if (finiteSearch && allowedTime > 0)
+                {
+                    int64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
+                    if (elapsed >= allowedTime)
+                    {
+                        active.store(false, std::memory_order_relaxed);
+                        stopRequested = true;
+                        allRootMovesCompleted = false;
+                        break;
+                    }
                 }
 
                 Move *move = moveList.moves[counter];
@@ -518,26 +590,34 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             }
 
 
-            if (!active)
+            if (stopRequested.load(std::memory_order_relaxed) || !active.load(std::memory_order_relaxed))
             {
                 stopRequested = true;
+                allRootMovesCompleted = false;
                 break;
             }
             if (maxNodes > 0 && moveCount >= maxNodes)
             {
                 stopRequested = true;
+                allRootMovesCompleted = false;
                 break;
             }
             if (finiteSearch && allowedTime > 0)
             {
                 int64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
-                double limit = isMoveTime ? allowedTime : ((counter == moveList.count - 1) ? (allowedTime * 0.75) : (allowedTime * 0.90));
-                if (elapsed >= limit)
+                if (elapsed >= allowedTime)
                 {
+                    active.store(false, std::memory_order_relaxed);
                     stopRequested = true;
+                    allRootMovesCompleted = false;
                     break;
                 }
             }
+        }
+        if (stopRequested || !allRootMovesCompleted || !active.load(std::memory_order_relaxed))
+        {
+            deleteMovesPrintValue(movesPrintValue);
+            break;
         }
         if (!stopRequested && Option::MultiPV > 1)
         {
@@ -709,15 +789,16 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             deleteMovesPrintValue(movesPrintValue);
 
             prevCompletedScore = emittedScore;
-                                    break;
+            iterationCompleted = true;
+            break;
         }
 
-        if (stopRequested)
+        if (stopRequested || !active.load(std::memory_order_relaxed) || !iterationCompleted)
         {
             restoreCompletedRootState();
-                        break;
+            break;
         }
-                completedBestMove = bestMove;
+        completedBestMove = bestMove;
         completedPonderMove = ponderMove;
         std::sort(moveList.moves, moveList.moves + moveList.count, [](Move *a, Move *b)
                   { return b->value < a->value; });
@@ -733,6 +814,16 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     }
                     break;
                 }
+            }
+        }
+
+        if (finiteSearch && allowedTime > 0)
+        {
+            int64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
+            double softLimit = isMoveTime ? allowedTime : (allowedTime * 0.75);
+            if (elapsed >= softLimit)
+            {
+                break;
             }
         }
 
@@ -764,15 +855,17 @@ void Search::deleteMovesPrintValue(std::vector<MovePrintValue *> &movesPrintValu
     movesPrintValue.clear();
 }
 
-void Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDepth, int &alpha, int &beta, bool &previousMoveWasCheck, Move &move1, Move &move2, Move &move3, Move &move4, Board &board4, bool &exactMate)
+bool Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDepth, int &alpha, int &beta, bool &previousMoveWasCheck, Move &move1, Move &move2, Move &move3, Move &move4, Board &board4, bool &exactMate)
 {
     std::vector<Move> movesToDelete;
     int turn = board4.sideToMove ? 1 : 0;
     exactMate = false;
+    bool completedAll = true;
     for (int i = 0; i < moveList.count; ++i)
     {
-        if (!active)
+        if (!active.load(std::memory_order_relaxed))
         {
+            completedAll = false;
             break;
         }
         Move *move = moveList.moves[i];
@@ -825,6 +918,16 @@ void Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
             delete boardCopy;
             boardCopy = nullptr;
         }
+        if (!active.load(std::memory_order_relaxed))
+        {
+            completedAll = false;
+            break;
+        }
+    }
+
+    if (!completedAll)
+    {
+        return false;
     }
 
     // Remove and delete moves marked for deletion
@@ -855,6 +958,7 @@ void Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
     std::string infoStr = "info depth 1 time " + std::to_string(elapsed_ms) + " nodes " + std::to_string(searchNodeCount) + " nps " + std::to_string(nps) + " pv " + ChessStringManipulation::PVToString(*(moveList.moves[0]), 1, mated, board4) + " score " + Score;
     DiagnosticLogger::Log("EMIT_INFO", infoStr, DiagnosticLogger::currentSearchId.load());
     std::cout << infoStr << '\n';
+    return true;
 }
 
 void Search::SearchForCheckUpdate()

@@ -3,6 +3,7 @@
 #include <crtdbg.h>
 #endif
 #include "PVSSearch.h"
+#include "Search.h"
 #include "BoardLogic.h"
 #include "EvaluationLogic.h"
 #include "QSearcher.h"
@@ -911,6 +912,15 @@ void PVSSearch::PrintNullMoveStatsForTesting()
 
 MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool selectiveSearch)
 {
+    if (Search::stopRequested.load(std::memory_order_relaxed))
+    {
+        MovePrintValue *abortRet = new MovePrintValue();
+        abortRet->value = 0;
+        abortRet->bound = SearchBound::Upper;
+        abortRet->selective = true;
+        return abortRet;
+    }
+
     Move *SelectedMove = nullptr;
     Board *boardCopy = nullptr;
 
@@ -1018,6 +1028,18 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
     }
 
     Search::searchNodeCount++;
+    if ((Search::searchNodeCount & 2047) == 0)
+    {
+        Search::CheckLimits();
+    }
+    if (Search::stopRequested.load(std::memory_order_relaxed))
+    {
+        delete MPValue;
+        retValue->value = 0;
+        retValue->bound = SearchBound::Upper;
+        retValue->selective = true;
+        return retValue;
+    }
 
     bool isNullWindow = (beta - alpha <= 1);
 
@@ -1141,6 +1163,14 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     return retValue;
                 }
             }
+        }
+        if (Search::stopRequested.load(std::memory_order_relaxed))
+        {
+            delete MPValue;
+            retValue->value = 0;
+            retValue->bound = SearchBound::Upper;
+            retValue->selective = true;
+            return retValue;
         }
     }
     MoveList moveList = MoveLogic::MoveGenerator(board4, depth, depthGone);
@@ -1391,11 +1421,31 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     }
                 }
                 GameLogic::UndoMove(board4, probMove, probUndo);
+                if (Search::stopRequested.load(std::memory_order_relaxed))
+                {
+                    deleteMoveList(moveList);
+                    delete MPValue;
+                    MPValue = nullptr;
+                    retValue->value = 0;
+                    retValue->bound = SearchBound::Upper;
+                    retValue->selective = true;
+                    return retValue;
+                }
             }
         }
 
         for (int i = 0; i < moveList.count; ++i)
         {
+            if (Search::stopRequested.load(std::memory_order_relaxed))
+            {
+                deleteMoveList(moveList);
+                delete MPValue;
+                MPValue = nullptr;
+                retValue->value = 0;
+                retValue->bound = SearchBound::Upper;
+                retValue->selective = true;
+                return retValue;
+            }
             Move *move = moveList.moves[i];
             const int alphaBeforeMove = alpha;
             if (useCandidateProbes)
@@ -1447,6 +1497,16 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     Board::AreBoardsEqual(board4, *boardCopy);
                     delete boardCopy;
                     boardCopy = nullptr;
+                }
+                if (Search::stopRequested.load(std::memory_order_relaxed))
+                {
+                    deleteMoveList(moveList);
+                    delete MPValue;
+                    MPValue = nullptr;
+                    retValue->value = 0;
+                    retValue->bound = SearchBound::Upper;
+                    retValue->selective = true;
+                    return retValue;
                 }
                 firstMove = false;
                 if (bestMoveValue > alpha)
@@ -1761,6 +1821,16 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     Board::AreBoardsEqual(board4, *boardCopy);
                     delete boardCopy;
                     boardCopy = nullptr;
+                }
+                if (Search::stopRequested.load(std::memory_order_relaxed))
+                {
+                    deleteMoveList(moveList);
+                    delete MPValue;
+                    MPValue = nullptr;
+                    retValue->value = 0;
+                    retValue->bound = SearchBound::Upper;
+                    retValue->selective = true;
+                    return retValue;
                 }
                 if (trustedValue && value > bestMoveValue)
                 {

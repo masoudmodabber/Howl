@@ -16,6 +16,7 @@ class Search
 public:
 
     static std::atomic<bool> active;
+    static std::atomic<bool> stopRequested;
     static time_t beginTime;
     static std::chrono::high_resolution_clock::time_point startTime;
     static double allowedTime;
@@ -23,6 +24,7 @@ public:
     static std::string ponderMove;
     static std::string completedBestMove;
     static std::string completedPonderMove;
+    static std::string emergencyMove;
     static bool finiteSearch;
 
     static int maxDepth;
@@ -35,8 +37,9 @@ public:
     static std::string Score;
     static bool mated;
 
+    static void CheckLimits();
     static void MainSearch(Move& move1, Move& move2, Move& move3, Move& move4, Board& board4);
-    static void SearchDepthZero(MoveList& moveList, bool& firstAssign, int& recDepth, int& alpha, int& beta, bool& previousMoveWasCheck, Move& move1, Move& move2, Move& move3, Move& move4, Board& board4, bool& exactMate);
+    static bool SearchDepthZero(MoveList& moveList, bool& firstAssign, int& recDepth, int& alpha, int& beta, bool& previousMoveWasCheck, Move& move1, Move& move2, Move& move3, Move& move4, Board& board4, bool& exactMate);
     static void SearchForCheckUpdate();
     static void CalculateAndDisplayScore(int value, bool exactMate);
     static std::string Parse(std::string p, int place);

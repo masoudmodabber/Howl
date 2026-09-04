@@ -2043,8 +2043,10 @@ int RunPawnCacheKeyCoverage()
         "4k3/8/p7/8/3P4/8/8/4K3 w - - 0 1";
     std::unique_ptr<Board> blocked(BoardMaker::MakeInitialBoard(blockedPassedPawnFen));
     std::unique_ptr<Board> clear(BoardMaker::MakeInitialBoard(clearPassedPawnFen));
-    const int blockedDirect = EvaluationLogic::GetPawnStructureValue(*blocked, 0);
-    const int clearDirect = EvaluationLogic::GetPawnStructureValue(*clear, 0);
+    const int blockedDirect = EvaluationLogic::GetPawnStructureValue(
+        *blocked, EvaluationLogic::CalculatePhase(*blocked));
+    const int clearDirect = EvaluationLogic::GetPawnStructureValue(
+        *clear, EvaluationLogic::CalculatePhase(*clear));
     const bool sameProposedWhiteKey = blocked->whitePawns == clear->whitePawns;
     const bool opponentStructureChanged = blocked->blackPawns != clear->blackPawns;
 
@@ -3502,6 +3504,135 @@ int RunEvaluationCorrectness(const std::string& testCase)
         std::cout << "Game phase calculation tests passed\n";
         return 0;
     }
+    if (testCase == "phase_taper_interpolation")
+    {
+        // 1. Group 2 Heavy-Piece Delayed terms (anchors at phase 24=0%, 18=25%, 12=50%, 6=75%, 0=100%)
+        struct Group2Case
+        {
+            const char* name;
+            int mg;
+            int eg;
+            int p24;
+            int p18;
+            int p12;
+            int p6;
+            int p0;
+        };
+
+        const Group2Case g2Cases[] = {
+            {"rook PST 7th-rank", Option::RookInValueWhiteMiddleGame[48],
+                Option::RookInValueWhiteEndGame[48], 47, 47, 70, 98, 98},
+            {"rook mobility", Option::RookMoveCountValueMiddleGame[8],
+                Option::RookMoveCountValueEndGame[8], 23, 23, 55, 95, 95},
+            {"rook attacks pawn", Option::RookAttackValueMiddleGame[1],
+                Option::RookAttackValueEndGame[1], -1, -1, 12, 29, 29}
+        };
+
+        for (const auto& tc : g2Cases)
+        {
+            int v24 = EvaluationLogic::TaperGroup2ValueForTesting(tc.mg, tc.eg, 24);
+            int v18 = EvaluationLogic::TaperGroup2ValueForTesting(tc.mg, tc.eg, 18);
+            int v12 = EvaluationLogic::TaperGroup2ValueForTesting(tc.mg, tc.eg, 12);
+            int v6  = EvaluationLogic::TaperGroup2ValueForTesting(tc.mg, tc.eg, 6);
+            int v0  = EvaluationLogic::TaperGroup2ValueForTesting(tc.mg, tc.eg, 0);
+
+            if (v24 != tc.p24 || v18 != tc.p18 || v12 != tc.p12 || v6 != tc.p6 || v0 != tc.p0)
+            {
+                std::cerr << "Group 2 " << tc.name << " mismatch: "
+                          << "p24=" << v24 << " (exp " << tc.p24 << "), "
+                          << "p18=" << v18 << " (exp " << tc.p18 << "), "
+                          << "p12=" << v12 << " (exp " << tc.p12 << "), "
+                          << "p6="  << v6  << " (exp " << tc.p6  << "), "
+                          << "p0="  << v0  << " (exp " << tc.p0  << ")\n";
+                return 1;
+            }
+        }
+
+        // 2. Group 3 Pawn Late terms
+        struct Group3Case
+        {
+            const char* name;
+            int mg;
+            int eg;
+            int p24;
+            int p18;
+            int p12;
+            int p6;
+            int p0;
+        };
+
+        const Group3Case g3Cases[] = {
+            {"passed pawn d5", Option::WhitePassedPawnValueMiddleGam[35],
+                Option::WhitePassedPawnValueEndGame[35], 20, 20, 55, 90, 90},
+            {"pawn advancement rank 4", 0, 8, 0, 0, 4, 8, 8}
+        };
+
+        for (const auto& tc : g3Cases)
+        {
+            int v24 = EvaluationLogic::TaperGroup3ValueForTesting(tc.mg, tc.eg, 24);
+            int v18 = EvaluationLogic::TaperGroup3ValueForTesting(tc.mg, tc.eg, 18);
+            int v12 = EvaluationLogic::TaperGroup3ValueForTesting(tc.mg, tc.eg, 12);
+            int v6  = EvaluationLogic::TaperGroup3ValueForTesting(tc.mg, tc.eg, 6);
+            int v0  = EvaluationLogic::TaperGroup3ValueForTesting(tc.mg, tc.eg, 0);
+
+            if (v24 != tc.p24 || v18 != tc.p18 || v12 != tc.p12 || v6 != tc.p6 || v0 != tc.p0)
+            {
+                std::cerr << "Group 3 " << tc.name << " mismatch: "
+                          << "p24=" << v24 << " (exp " << tc.p24 << "), "
+                          << "p18=" << v18 << " (exp " << tc.p18 << "), "
+                          << "p12=" << v12 << " (exp " << tc.p12 << "), "
+                          << "p6="  << v6  << " (exp " << tc.p6  << "), "
+                          << "p0="  << v0  << " (exp " << tc.p0  << ")\n";
+                return 1;
+            }
+        }
+
+        // 3. Group 1 Steady / Fast terms (anchors at phase 24=0%, 18=25%, 12=50%, 6=75%, 0=100%)
+        struct Group1Case
+        {
+            const char* name;
+            int mg;
+            int eg;
+            int p24;
+            int p18;
+            int p12;
+            int p6;
+            int p0;
+        };
+
+        const Group1Case g1Cases[] = {
+            {"tempo", 24, 11, 24, 24, 19, 11, 11},
+            {"pawn attacks queen", Option::PawnAttackValueMiddleGame[5],
+                Option::PawnAttackValueEndGame[5], 86, 86, 96, 118, 118},
+            {"knight mobility", Option::KnightMoveCountValueMiddleGame[5],
+                Option::KnightMoveCountValueEndGame[5], 25, 25, 22, 17, 17},
+            {"bishop mobility", Option::BishopMoveCountValueMiddleGame[7],
+                Option::BishopMoveCountValueEndGame[7], 6, 6, 6, 8, 8}
+        };
+
+        for (const auto& tc : g1Cases)
+        {
+            int v24 = EvaluationLogic::TaperGroup1ValueForTesting(tc.mg, tc.eg, 24);
+            int v18 = EvaluationLogic::TaperGroup1ValueForTesting(tc.mg, tc.eg, 18);
+            int v12 = EvaluationLogic::TaperGroup1ValueForTesting(tc.mg, tc.eg, 12);
+            int v6  = EvaluationLogic::TaperGroup1ValueForTesting(tc.mg, tc.eg, 6);
+            int v0  = EvaluationLogic::TaperGroup1ValueForTesting(tc.mg, tc.eg, 0);
+
+            if (v24 != tc.p24 || v18 != tc.p18 || v12 != tc.p12 || v6 != tc.p6 || v0 != tc.p0)
+            {
+                std::cerr << "Group 1 " << tc.name << " mismatch: "
+                          << "p24=" << v24 << " (exp " << tc.p24 << "), "
+                          << "p18=" << v18 << " (exp " << tc.p18 << "), "
+                          << "p12=" << v12 << " (exp " << tc.p12 << "), "
+                          << "p6="  << v6  << " (exp " << tc.p6  << "), "
+                          << "p0="  << v0  << " (exp " << tc.p0  << ")\n";
+                return 1;
+            }
+        }
+
+        std::cout << "Evaluation phase taper endpoints and anchors (24, 18, 12, 6, 0) verified\n";
+        return 0;
+    }
     if (testCase == "breakdown_reconciliation")
     {
         InitializeEngine();
@@ -3575,7 +3706,7 @@ int RunEvaluationCorrectness(const std::string& testCase)
             std::cerr << "Expected MG phase 24, got " << mgPhase << '\n';
             return 1;
         }
-        int mgPassed = EvaluationLogic::GetPawnStructureValue(*mgBoard, 0);
+        int mgPassed = EvaluationLogic::GetPawnStructureValue(*mgBoard, mgPhase);
         if (mgPassed != 20)
         {
             std::cerr << "Expected MG passed pawn value 20, got " << mgPassed << '\n';
@@ -3590,7 +3721,7 @@ int RunEvaluationCorrectness(const std::string& testCase)
             std::cerr << "Expected EG phase 0, got " << egPhase << '\n';
             return 1;
         }
-        int egPawnVal = EvaluationLogic::GetPawnStructureValue(*egBoard, 2);
+        int egPawnVal = EvaluationLogic::GetPawnStructureValue(*egBoard, egPhase);
         if (egPawnVal != (90 + 8))
         {
             std::cerr << "Expected EG passed pawn value 98 (90+8), got " << egPawnVal << '\n';
@@ -3598,7 +3729,7 @@ int RunEvaluationCorrectness(const std::string& testCase)
         }
 
         // 3. Intermediate interpolation (phase = 12): White Q(4)+R(2)=6, Black Q(4)+R(2)=6 -> Total = 12
-        // Passed pawn bonus = (20 * 12 + 90 * 12) / 24 = 55
+        // Passed pawn bonus = 55; tapered endgame advancement = 4.
         std::unique_ptr<Board> midBoard(BoardMaker::MakeInitialBoard("3rqk2/8/8/3P4/8/8/3RQK2/8 w - - 0 1"));
         int midPhase = EvaluationLogic::CalculatePhase(*midBoard);
         if (midPhase != 12)
@@ -3606,10 +3737,10 @@ int RunEvaluationCorrectness(const std::string& testCase)
             std::cerr << "Expected mid phase 12, got " << midPhase << '\n';
             return 1;
         }
-        int midPassed = EvaluationLogic::GetPawnStructureValue(*midBoard, 0);
-        if (midPassed != 55)
+        int midPassed = EvaluationLogic::GetPawnStructureValue(*midBoard, midPhase);
+        if (midPassed != 59)
         {
-            std::cerr << "Expected mid phase passed pawn value 55, got " << midPassed << '\n';
+            std::cerr << "Expected mid phase pawn value 59, got " << midPassed << '\n';
             return 1;
         }
 
@@ -3710,6 +3841,87 @@ int RunEvaluationCorrectness(const std::string& testCase)
         }
 
         std::cout << "Central king exposure tests passed\n";
+        return 0;
+    }
+    if (testCase == "piece_balance_continuous")
+    {
+        InitializeEngine();
+
+        struct BalanceTestCase
+        {
+            int evalA;
+            int evalB;
+            double expectedRatio;
+            const char* desc;
+        };
+
+        const std::vector<BalanceTestCase> cases = {
+            {2000, 2000, 1.0, "equal material = 1.0"},
+            {2100, 2000, 3600.0 / 3500.0, "2100 vs 2000 (3600/3500 ≈ 1.02857)"},
+            {2325, 2000, 3825.0 / 3500.0, "2325 vs 2000 (3825/3500 ≈ 1.09286)"},
+            {2975, 2000, 4475.0 / 3500.0, "2975 vs 2000 (4475/3500 ≈ 1.27857)"},
+            {1499, 0, 2999.0 / 1500.0, "1499 vs 0 (2999/1500 ≈ 1.99933)"},
+            {1500, 0, 3000.0 / 1500.0, "1500 vs 0 (3000/1500 = 2.0)"}
+        };
+
+        constexpr double epsilon = 1e-4;
+        for (const auto& tc : cases)
+        {
+            double ratio = 1.0;
+            if (tc.evalA > tc.evalB)
+            {
+                ratio = static_cast<double>(tc.evalA + 1500) / (tc.evalB + 1500);
+            }
+            else if (tc.evalA < tc.evalB)
+            {
+                ratio = static_cast<double>(tc.evalB + 1500) / (tc.evalA + 1500);
+            }
+
+            if (std::abs(ratio - tc.expectedRatio) > epsilon)
+            {
+                std::cerr << "Ratio mismatch for " << tc.desc << ": got " << ratio
+                          << ", expected " << tc.expectedRatio << '\n';
+                return 1;
+            }
+
+            // Inverse perspective (Black ahead)
+            if (tc.evalA != tc.evalB)
+            {
+                double blackRatio = 1.0;
+                int wEval = tc.evalB;
+                int bEval = tc.evalA;
+                if (wEval > bEval)
+                {
+                    blackRatio = static_cast<double>(wEval + 1500) / (bEval + 1500);
+                }
+                else if (wEval < bEval)
+                {
+                    blackRatio = static_cast<double>(bEval + 1500) / (wEval + 1500);
+                }
+                if (std::abs(blackRatio - tc.expectedRatio) > epsilon)
+                {
+                    std::cerr << "Inverse ratio mismatch for " << tc.desc << ": got " << blackRatio
+                              << ", expected " << tc.expectedRatio << '\n';
+                    return 1;
+                }
+            }
+        }
+
+        // Verify through board evaluation and EvaluationBreakdown that pieceBalance is continuous
+        // White: 2 Rooks (1000) + 2 Pawns (200) = 1200. Black: 2 Rooks (1000) + 1 Pawn (100) = 1100.
+        // 2 pawns for leading side avoids 0.7/0.9 pawn multiplier.
+        // Expected: (1200 + 1500) / (1100 + 1500) = 2700 / 2600 ≈ 1.0384615
+        std::unique_ptr<Board> b1(BoardMaker::MakeInitialBoard("4k3/4r1r1/4p3/8/8/4P1P1/4R1R1/4K3 w - - 0 1"));
+        EvaluationBreakdown bd1 = EvaluationLogic::EvaluateDetailed(*b1);
+        double expectedBd1 = static_cast<double>(bd1.whiteMaterial + 1500) / (bd1.blackMaterial + 1500);
+        if (std::abs(bd1.pieceBalance - expectedBd1) > epsilon || bd1.pieceBalance <= 1.0)
+        {
+            std::cerr << "Board evaluation pieceBalance not continuous: got " << bd1.pieceBalance
+                      << ", expected " << expectedBd1 << '\n';
+            return 1;
+        }
+
+        std::cout << "Piece balance continuous ratio tests passed\n";
         return 0;
     }
     throw std::runtime_error("Unknown eval test case: " + testCase);

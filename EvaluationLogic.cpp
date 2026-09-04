@@ -13,6 +13,47 @@
 
 namespace
 {
+int TaperEvaluationValue(int middleGameValue, int endGameValue, int phase)
+{
+    return (middleGameValue * phase + endGameValue * (24 - phase)) / 24;
+}
+
+int TaperGroup1Value(int middleGameValue, int endGameValue, int phase)
+{
+    static const int weights[25] = {
+        10000, 10000, 10000, 10000, 10000, 10000, 10000, 8902, 7804, 6706,
+        5609, 4511, 3413, 2844, 2275, 1706, 1138, 569, 0, 0,
+        0, 0, 0, 0, 0
+    };
+    const int clampedPhase = std::clamp(phase, 0, 24);
+    const int w = weights[clampedPhase];
+    return (middleGameValue * (10000 - w) + endGameValue * w) / 10000;
+}
+
+int TaperGroup2Value(int middleGameValue, int endGameValue, int phase)
+{
+    static const int weights[25] = {
+        10000, 10000, 10000, 10000, 10000, 10000, 10000, 9093, 8186, 7279,
+        6372, 5465, 4558, 3798, 3039, 2279, 1519, 760, 0, 0,
+        0, 0, 0, 0, 0
+    };
+    const int clampedPhase = std::clamp(phase, 0, 24);
+    const int w = weights[clampedPhase];
+    return (middleGameValue * (10000 - w) + endGameValue * w) / 10000;
+}
+
+int TaperGroup3Value(int middleGameValue, int endGameValue, int phase)
+{
+    static const int weights[25] = {
+        10000, 10000, 10000, 10000, 10000, 10000, 10000, 9177, 8353, 7530,
+        6707, 5883, 5060, 4217, 3373, 2530, 1687, 843, 0, 0,
+        0, 0, 0, 0, 0
+    };
+    const int clampedPhase = std::clamp(phase, 0, 24);
+    const int w = weights[clampedPhase];
+    return (middleGameValue * (10000 - w) + endGameValue * w) / 10000;
+}
+
 bool RooksAreConnected(int firstRook, int secondRook, long long occupiedSquares)
 {
     return (AttackPlaces::RookAttack[firstRook][secondRook] & occupiedSquares) ==
@@ -434,6 +475,30 @@ int EvaluationLogic::RookConnectionValueForTesting(Board& board)
 {
     return RookConnectionValue(board.pieces, board.whitePieces | board.blackPieces);
 }
+
+int EvaluationLogic::TaperEvaluationValueForTesting(int middleGameValue,
+                                                     int endGameValue, int phase)
+{
+    return TaperEvaluationValue(middleGameValue, endGameValue, phase);
+}
+
+int EvaluationLogic::TaperGroup1ValueForTesting(int middleGameValue,
+                                               int endGameValue, int phase)
+{
+    return TaperGroup1Value(middleGameValue, endGameValue, phase);
+}
+
+int EvaluationLogic::TaperGroup2ValueForTesting(int middleGameValue,
+                                               int endGameValue, int phase)
+{
+    return TaperGroup2Value(middleGameValue, endGameValue, phase);
+}
+
+int EvaluationLogic::TaperGroup3ValueForTesting(int middleGameValue,
+                                               int endGameValue, int phase)
+{
+    return TaperGroup3Value(middleGameValue, endGameValue, phase);
+}
 #endif
 
 int EvaluationLogic::CalculatePhase(const Board &thisBoard)
@@ -457,11 +522,11 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     double pieceBalance = 1;
     if (whitePieceEvaluation > blackPieceEvaluation)
     {
-        pieceBalance = (whitePieceEvaluation + 1500) / (blackPieceEvaluation + 1500);
+        pieceBalance = static_cast<double>(whitePieceEvaluation + 1500) / (blackPieceEvaluation + 1500);
     }
     else if (whitePieceEvaluation < blackPieceEvaluation)
     {
-        pieceBalance = (blackPieceEvaluation + 1500) / (whitePieceEvaluation + 1500);
+        pieceBalance = static_cast<double>(blackPieceEvaluation + 1500) / (whitePieceEvaluation + 1500);
     }
 
     if (whitePieceEvaluation > blackPieceEvaluation)
@@ -501,20 +566,13 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     }
     int bishopPairVaue = whiteBishopPair - blackBishopPair;
 
-    // Movement
-    int state = 0;
-    if (whitePieceEvaluation <= 1700 || blackPieceEvaluation <= 1700 || whitePieceEvaluation + blackPieceEvaluation <= 4400)
-    {
-        state = 2;
-    }
+    int phase = EvaluationLogic::CalculatePhase(thisBoard);
 
-    int *movementAndKingSafety = EvaluationLogic::PieceMoveCount(thisBoard, state);
+    // Movement
+    int *movementAndKingSafety = EvaluationLogic::PieceMoveCount(thisBoard, phase);
     int movement = movementAndKingSafety[0];
-    int kingSafety = movementAndKingSafety[1];
     int center = movementAndKingSafety[2];
     delete[] movementAndKingSafety;
-
-    int phase = EvaluationLogic::CalculatePhase(thisBoard);
 
     KingDangerResult whiteKingDanger = EvaluateKingDanger(thisBoard, true);
     KingDangerResult blackKingDanger = EvaluateKingDanger(thisBoard, false);
@@ -525,35 +583,21 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     whiteKingPlacement = whiteKingPlacement * phase / 24;
     blackKingPlacement = blackKingPlacement * phase / 24;
     int kingPlacementNet = whiteKingPlacement - blackKingPlacement;
-    kingSafety = kingDangerNet + kingPlacementNet;
+    int kingSafety = kingDangerNet + kingPlacementNet;
 
     // Pawn Structure
-    int pawnStructure = EvaluationLogic::GetPawnStructureValue(thisBoard, state);
+    int pawnStructure = EvaluationLogic::GetPawnStructureValue(thisBoard, phase);
 
     // Rook Connection
     int rookValue = RookConnectionValue(pieces, piecesBinary);
     // Temp
-    int temp = 0;
-    if (state == 0)
-    {
-        temp = (!thisBoard.sideToMove) ? 24 : -24;
-    }
-    else if (state == 2)
-    {
-        temp = (!thisBoard.sideToMove) ? 11 : -11;
-    }
+    const int taperedTempo = TaperGroup1Value(24, 11, phase);
+    int temp = (!thisBoard.sideToMove) ? taperedTempo : -taperedTempo;
 
     double oppositeColorBishop = 1;
     if (pieces[3].size() == 1 && pieces[11].size() == 1 && ((pieces[3].front() / 8 + pieces[3].front() % 8) % 2) != ((pieces[11].front() / 8 + pieces[11].front() % 8) % 2))
     {
-        if (state == 0)
-        {
-            oppositeColorBishop = 0.9;
-        }
-        else if (state == 2)
-        {
-            oppositeColorBishop = 0.75;
-        }
+        oppositeColorBishop = (0.9 * phase + 0.75 * (24 - phase)) / 24;
     }
 
     int unscaled = pieceEvaluation + bishopPairVaue + movement + pawnStructure + kingSafety + rookValue + center + temp;
@@ -589,7 +633,6 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     if (breakdown != nullptr)
     {
         breakdown->phase = phase;
-        breakdown->state = state;
         breakdown->whiteMaterial = whitePieceEvaluation;
         breakdown->blackMaterial = blackPieceEvaluation;
         breakdown->materialNet = whitePieceEvaluation - blackPieceEvaluation;
@@ -671,7 +714,7 @@ EvaluationBreakdown EvaluationLogic::EvaluateDetailed(Board &thisBoard)
     return breakdown;
 }
 
-int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int state)
+int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int phase)
 {
     long long whitePawns = thisBoard.whitePawns;
     long long blackPawns = thisBoard.blackPawns;
@@ -684,9 +727,8 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int state)
         blackPawnPerColumn[counter] = std::vector<int>();
     }
 
-    int phase = CalculatePhase(thisBoard);
     int whitePawnSum;
-    std::optional<int> calculatedPawnEval = PawnEvalCache.GetFromCache(whitePawns, 0, state);
+    std::optional<int> calculatedPawnEval = PawnEvalCache.GetFromCache(whitePawns, 0, phase);
     if (calculatedPawnEval.has_value())
     {
         whitePawnSum = calculatedPawnEval.value();
@@ -712,22 +754,20 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int state)
             {
                 int mgVal = Option::WhitePassedPawnValueMiddleGam[pawnPlace];
                 int egVal = Option::WhitePassedPawnValueEndGame[pawnPlace];
-                singlePastWhite += (mgVal * phase + egVal * (24 - phase)) / 24;
+                singlePastWhite += TaperGroup3Value(mgVal, egVal, phase);
             }
         }
         int goForwardPawnWhite = 0;
-        if (state == 2)
+        for (int pawnPlace : thisBoard.pieces[1])
         {
-            for (int pawnPlace : thisBoard.pieces[1])
-            {
-                goForwardPawnWhite += pawnPlace / 8 * 2;
-            }
+            const int endGameValue = pawnPlace / 8 * 2;
+            goForwardPawnWhite += TaperGroup3Value(0, endGameValue, phase);
         }
         whitePawnSum = doubledPawnValueWhite + singlePastWhite + goForwardPawnWhite;
-        PawnEvalCache.Add(whitePawns, whitePawnSum, 0, state);
+        PawnEvalCache.Add(whitePawns, whitePawnSum, 0, phase);
     }
     int blackPawnSum;
-    calculatedPawnEval = PawnEvalCache.GetFromCache(blackPawns, 1, state);
+    calculatedPawnEval = PawnEvalCache.GetFromCache(blackPawns, 1, phase);
     if (calculatedPawnEval.has_value())
     {
         blackPawnSum = calculatedPawnEval.value();
@@ -754,25 +794,23 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int state)
             {
                 int mgVal = Option::BlackPassedPawnValueMiddleGam[pawnPlace];
                 int egVal = Option::BlackPassedPawnValueEndGam[pawnPlace];
-                singlePastBlack += (mgVal * phase + egVal * (24 - phase)) / 24;
+                singlePastBlack += TaperGroup3Value(mgVal, egVal, phase);
             }
         }
         int goForwardPawnBlack = 0;
-        if (state == 2)
+        for (int pawnPlace : thisBoard.pieces[9])
         {
-            for (int pawnPlace : thisBoard.pieces[9])
-            {
-                goForwardPawnBlack += (7 - (pawnPlace / 8)) * 2;
-            }
+            const int endGameValue = (7 - (pawnPlace / 8)) * 2;
+            goForwardPawnBlack += TaperGroup3Value(0, endGameValue, phase);
         }
         blackPawnSum = doubledPawnValueBlack + singlePastBlack + goForwardPawnBlack;
-        PawnEvalCache.Add(blackPawns, blackPawnSum, 1, state);
+        PawnEvalCache.Add(blackPawns, blackPawnSum, 1, phase);
     }
     whitePawnSum -= blackPawnSum;
     return whitePawnSum;
 }
 
-int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
+int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int phase)
 {
     // int pieceMovePosition[2][3][64][7];
     int whitePieceAttack[64] = {0};
@@ -783,12 +821,21 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
     long long wholeBoard = whitePieces | blackPieces;
     // int MovementMiddleGame = 0;
     // int MovementEndGame = 0;
-    int Movement[3] = {0};
-    // int KingSafetyMiddleGame[2][64];
-    // int KingSafetyEndGame[2][64];
-    int KingSafety[3][2][64] = {{{0}}};
+    int movement = 0;
     int centerValue = 0;
     int moveCount;
+    const auto taperedTable = [phase](const auto& values, int index)
+    {
+        return TaperEvaluationValue(values[0][index], values[1][index], phase);
+    };
+    const auto taperedGroup1Table = [phase](const auto& values, int index)
+    {
+        return TaperGroup1Value(values[0][index], values[1][index], phase);
+    };
+    const auto taperedGroup2Table = [phase](const auto& values, int index)
+    {
+        return TaperGroup2Value(values[0][index], values[1][index], phase);
+    };
     {
         for (int piece = 1; piece < 7; piece++)
         {
@@ -798,8 +845,7 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
                     moveCount = 0;
-                    Movement[state] += Option::PawnInValueWhite[state][piecePoisiion];
-                    KingSafety[state][0][piecePoisiion] += Option::PieceArroundTheKing[state][piece];
+                    movement += taperedTable(Option::PawnInValueWhite, piecePoisiion);
                     centerValue += Option::PawnInCenterValueWhite[piecePoisiion];
                     if (PieceMoves::WhitePawnMoves[piecePoisiion][0] != nullptr)
                     {
@@ -807,8 +853,7 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                         {
                             // pieceMovePosition[0][1][piecePoisiion + 16][piece]++;
                             moveCount++;
-                            // Movement[state] += Option::PawnMoveValueWhite[state][piecePoisiion + 16];
-                            KingSafety[state][0][piecePoisiion + 16] += Option::PieceAttackArroundTheKing[state][piece];
+                            // movement += taperedTable(Option::PawnMoveValueWhite, piecePoisiion + 16);
                             // whitePieceAttack
                         }
                     }
@@ -816,40 +861,37 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                     {
                         // pieceMovePosition[0][1][piecePoisiion + 8][piece]++;
                         moveCount++;
-                        // Movement[state] += Option::PawnMoveValueWhite[state][piecePoisiion + 8];
-                        KingSafety[state][0][piecePoisiion + 8] += Option::PieceAttackArroundTheKing[state][piece];
+                        // movement += taperedTable(Option::PawnMoveValueWhite, piecePoisiion + 8);
                     }
                     if (PieceMoves::WhitePawnMoves[piecePoisiion][6] != nullptr && piecePoisiion + 7 == thisBoard.unpassentPlace)
                     {
                         // pieceMovePosition[0][2][piecePoisiion + 7][piece]++;
-                        Movement[state] += Option::PawnAttackValue[state][9];
+                        movement += taperedGroup1Table(Option::PawnAttackValue, 9);
                     }
                     if (PieceMoves::WhitePawnMoves[piecePoisiion][7] != nullptr && piecePoisiion + 9 == thisBoard.unpassentPlace)
                     {
                         // pieceMovePosition[0][2][piecePoisiion + 9][piece]++;
-                        Movement[state] += Option::PawnAttackValue[state][9];
+                        movement += taperedGroup1Table(Option::PawnAttackValue, 9);
                     }
                     if (PieceMoves::WhitePawnMoves[piecePoisiion][8] != nullptr && (Option::PowerTwo[piecePoisiion + 7] & blackPieces) != 0)
                     {
                         // pieceMovePosition[0][2][piecePoisiion + 7][piece]++;
-                        Movement[state] += Option::PawnAttackValue[state][mainBoard[piecePoisiion + 7]];
+                        movement += taperedGroup1Table(Option::PawnAttackValue, mainBoard[piecePoisiion + 7]);
                     }
                     if (PieceMoves::WhitePawnMoves[piecePoisiion][13] != nullptr && (Option::PowerTwo[piecePoisiion + 9] & blackPieces) != 0)
                     {
                         // pieceMovePosition[0][2][piecePoisiion + 9][piece]++;
-                        Movement[state] += Option::PawnAttackValue[state][mainBoard[piecePoisiion + 9]];
+                        movement += taperedGroup1Table(Option::PawnAttackValue, mainBoard[piecePoisiion + 9]);
                     }
                     if (PieceMoves::WhitePawnMoves[piecePoisiion][8] != nullptr)
                     {
                         centerValue += Option::PawnMoveCenterValueWhite[piecePoisiion + 7];
-                        KingSafety[state][0][piecePoisiion + 7] += Option::PieceAttackArroundTheKing[state][piece];
                     }
                     if (PieceMoves::WhitePawnMoves[piecePoisiion][13] != nullptr)
                     {
                         centerValue += Option::PawnMoveCenterValueWhite[piecePoisiion + 9];
-                        KingSafety[state][0][piecePoisiion + 9] += Option::PieceAttackArroundTheKing[state][piece];
                     }
-                    Movement[state] += Option::PawnMoveCountValue[state][moveCount];
+                    movement += taperedTable(Option::PawnMoveCountValue, moveCount);
                 }
                 break;
             case 2:
@@ -858,8 +900,7 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
                     moveCount = 0;
-                    Movement[state] += Option::KnightInValueWhite[state][piecePoisiion];
-                    KingSafety[state][0][piecePoisiion] += Option::PieceArroundTheKing[state][piece];
+                    movement += taperedTable(Option::KnightInValueWhite, piecePoisiion);
                     centerValue += Option::KnightInCenterValueWhite[piecePoisiion];
                     for (int i = 0; i < 8; ++i)
                     {
@@ -868,26 +909,24 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                         if (PieceMoves::KnightMoves[piecePoisiion][dir] != nullptr)
                         {
                             centerValue += Option::KnightMoveCenterValueWhite[endPlace];
-                            KingSafety[state][0][endPlace] += Option::PieceAttackArroundTheKing[state][piece];
                             if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                             {
                                 moveCount++;
                             }
                             else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                             {
-                                Movement[state] += Option::KnightAttackValue[state][mainBoard[endPlace]];
+                                movement += taperedGroup1Table(Option::KnightAttackValue, mainBoard[endPlace]);
                             }
                         }
                     }
-                    Movement[state] += Option::KnightMoveCountValue[state][moveCount];
+                    movement += taperedGroup1Table(Option::KnightMoveCountValue, moveCount);
                 }
                 break;
             case 3:
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
                     moveCount = 0;
-                    Movement[state] += Option::BishopInValueWhite[state][piecePoisiion];
-                    KingSafety[state][0][piecePoisiion] += Option::PieceArroundTheKing[state][piece];
+                    movement += taperedTable(Option::BishopInValueWhite, piecePoisiion);
                     centerValue += Option::BishopInCenterValueWhite[piecePoisiion];
                     for (int direction = 0; direction <= 6; direction += 2)
                     {
@@ -899,30 +938,26 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                             if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                             {
                                 moveCount++;
-                                KingSafety[state][0][endPos] += Option::PieceAttackArroundTheKing[state][piece];
                             }
                             else if ((Option::PowerTwo[endPos] & blackPieces) != 0)
                             {
-                                Movement[state] += Option::BishopAttackValue[state][endPiece];
-                                KingSafety[state][0][endPos] += Option::PieceAttackArroundTheKing[state][piece];
+                                movement += taperedGroup1Table(Option::BishopAttackValue, endPiece);
                                 break;
                             }
                             else
                             {
-                                KingSafety[state][0][endPos] += Option::PieceAttackArroundTheKing[state][piece];
                                 break;
                             }
                         }
                     }
-                    Movement[state] += Option::BishopMoveCountValue[state][moveCount];
+                    movement += taperedGroup1Table(Option::BishopMoveCountValue, moveCount);
                 }
                 break;
             case 4:
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
                     moveCount = 0;
-                    Movement[state] += Option::RookInValueWhite[state][piecePoisiion];
-                    KingSafety[state][0][piecePoisiion] += Option::PieceArroundTheKing[state][piece];
+                    movement += taperedGroup2Table(Option::RookInValueWhite, piecePoisiion);
                     centerValue += Option::RookInCenterValueWhite[piecePoisiion];
                     for (int direction = 0; direction <= 6; direction += 2)
                     {
@@ -934,30 +969,26 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                             if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                             {
                                 moveCount++;
-                                KingSafety[state][0][endPos] += Option::PieceAttackArroundTheKing[state][piece];
                             }
                             else if ((Option::PowerTwo[endPos] & blackPieces) != 0)
                             {
-                                Movement[state] += Option::RookAttackValue[state][endPiece];
-                                KingSafety[state][0][endPos] += Option::PieceAttackArroundTheKing[state][piece];
+                                movement += taperedGroup2Table(Option::RookAttackValue, endPiece);
                                 break;
                             }
                             else
                             {
-                                KingSafety[state][0][endPos] += Option::PieceAttackArroundTheKing[state][piece];
                                 break;
                             }
                         }
                     }
-                    Movement[state] += Option::RookMoveCountValue[state][moveCount];
+                    movement += taperedGroup2Table(Option::RookMoveCountValue, moveCount);
                 }
                 break;
             case 5:
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
                     moveCount = 0;
-                    Movement[state] += Option::QueenInValueWhite[state][piecePoisiion];
-                    KingSafety[state][0][piecePoisiion] += Option::PieceArroundTheKing[state][piece];
+                    movement += taperedGroup2Table(Option::QueenInValueWhite, piecePoisiion);
                     centerValue += Option::QueenInCenterValueWhite[piecePoisiion];
                     for (int direction = 0; direction <= 14; direction += 2)
                     {
@@ -969,22 +1000,19 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                             if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                             {
                                 moveCount++;
-                                KingSafety[state][0][endPos] += Option::PieceAttackArroundTheKing[state][piece];
                             }
                             else if ((Option::PowerTwo[endPos] & blackPieces) != 0)
                             {
-                                Movement[state] += Option::QueenAttackValue[state][endPiece];
-                                KingSafety[state][0][endPos] += Option::PieceAttackArroundTheKing[state][piece];
+                                movement += taperedGroup1Table(Option::QueenAttackValue, endPiece);
                                 break;
                             }
                             else
                             {
-                                KingSafety[state][0][endPos] += Option::PieceAttackArroundTheKing[state][piece];
                                 break;
                             }
                         }
                     }
-                    Movement[state] += Option::QueenMoveCountValue[state][moveCount];
+                    movement += taperedGroup1Table(Option::QueenMoveCountValue, moveCount);
                 }
                 break;
             case 6:
@@ -993,7 +1021,7 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
                     moveCount = 0;
-                    Movement[state] += Option::KingInValueWhite[state][piecePoisiion];
+                    movement += taperedTable(Option::KingInValueWhite, piecePoisiion);
                     centerValue += Option::KingInCenterValueWhite[piecePoisiion];
                     for (int i = 0; i < 8; ++i)
                     {
@@ -1008,11 +1036,11 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                             }
                             else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                             {
-                                Movement[state] += Option::KingAttackValue[state][mainBoard[endPlace]];
+                                movement += taperedTable(Option::KingAttackValue, mainBoard[endPlace]);
                             }
                         }
                     }
-                    Movement[state] += Option::KingMoveCountValue[state][moveCount];
+                    movement += taperedTable(Option::KingMoveCountValue, moveCount);
                 }
                 break;
             }
@@ -1027,8 +1055,7 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
                     moveCount = 0;
-                    Movement[state] -= Option::PawnInValueBlack[state][piecePoisiion];
-                    KingSafety[state][1][piecePoisiion] -= Option::PieceArroundTheKing[state][piece];
+                    movement -= taperedTable(Option::PawnInValueBlack, piecePoisiion);
                     centerValue -= Option::PawnInCenterValueBlack[piecePoisiion];
 
                     if (PieceMoves::BlackPawnMoves[piecePoisiion][0] != nullptr)
@@ -1037,48 +1064,44 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                         {
                             // pieceMovePosition[1][1][piecePoisiion - 20][piece - 8]++;
                             moveCount++;
-                            // Movement[state] -= Option::PawnMoveValueBlack[state][piecePoisiion - 16];
-                            KingSafety[state][1][piecePoisiion - 16] -= Option::PieceAttackArroundTheKing[state][piece];
+                            // movement -= taperedTable(Option::PawnMoveValueBlack, piecePoisiion - 16);
                         }
                     }
                     if (PieceMoves::BlackPawnMoves[piecePoisiion][1] != nullptr && (Option::PowerTwo[piecePoisiion - 8] & wholeBoard) == 0)
                     {
                         // pieceMovePosition[1][1][piecePoisiion - 10][piece - 8]++;
                         moveCount++;
-                        // Movement[state] -= Option::PawnMoveValueBlack[state][piecePoisiion - 8];
-                        KingSafety[state][1][piecePoisiion - 8] -= Option::PieceAttackArroundTheKing[state][piece];
+                        // movement -= taperedTable(Option::PawnMoveValueBlack, piecePoisiion - 8);
                     }
                     if (PieceMoves::BlackPawnMoves[piecePoisiion][6] != nullptr && piecePoisiion - 7 == thisBoard.unpassentPlace)
                     {
                         // pieceMovePosition[1][2][piecePoisiion - 7][piece - 8]++;
-                        Movement[state] -= Option::PawnAttackValue[state][1];
+                        movement -= taperedGroup1Table(Option::PawnAttackValue, 1);
                     }
                     if (PieceMoves::BlackPawnMoves[piecePoisiion][7] != nullptr && piecePoisiion - 9 == thisBoard.unpassentPlace)
                     {
                         // pieceMovePosition[1][2][piecePoisiion - 9][piece - 8]++;
-                        Movement[state] -= Option::PawnAttackValue[state][1];
+                        movement -= taperedGroup1Table(Option::PawnAttackValue, 1);
                     }
                     if (PieceMoves::BlackPawnMoves[piecePoisiion][8] != nullptr && (Option::PowerTwo[piecePoisiion - 7] & whitePieces) != 0)
                     {
                         // pieceMovePosition[1][2][piecePoisiion - 7][piece - 8]++;
-                        Movement[state] -= Option::PawnAttackValue[state][mainBoard[piecePoisiion - 7]];
+                        movement -= taperedGroup1Table(Option::PawnAttackValue, mainBoard[piecePoisiion - 7]);
                     }
                     if (PieceMoves::BlackPawnMoves[piecePoisiion][13] != nullptr && (Option::PowerTwo[piecePoisiion - 9] & whitePieces) != 0)
                     {
                         // pieceMovePosition[1][2][piecePoisiion - 9][piece - 8]++;
-                        Movement[state] -= Option::PawnAttackValue[state][mainBoard[piecePoisiion - 9]];
+                        movement -= taperedGroup1Table(Option::PawnAttackValue, mainBoard[piecePoisiion - 9]);
                     }
                     if (PieceMoves::BlackPawnMoves[piecePoisiion][8] != nullptr)
                     {
                         centerValue -= Option::PawnMoveCenterValueBlack[piecePoisiion - 7];
-                        KingSafety[state][1][piecePoisiion - 7] -= Option::PieceAttackArroundTheKing[state][piece];
                     }
                     if (PieceMoves::BlackPawnMoves[piecePoisiion][13] != nullptr)
                     {
                         centerValue -= Option::PawnMoveCenterValueBlack[piecePoisiion - 9];
-                        KingSafety[state][1][piecePoisiion - 9] -= Option::PieceAttackArroundTheKing[state][piece];
                     }
-                    Movement[state] -= Option::PawnMoveCountValue[state][moveCount];
+                    movement -= taperedTable(Option::PawnMoveCountValue, moveCount);
                 }
                 break;
             case 10:
@@ -1087,8 +1110,7 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
                     moveCount = 0;
-                    Movement[state] -= Option::KnightInValueBlack[state][piecePoisiion];
-                    KingSafety[state][1][piecePoisiion] -= Option::PieceArroundTheKing[state][piece];
+                    movement -= taperedTable(Option::KnightInValueBlack, piecePoisiion);
                     centerValue -= Option::KnightInCenterValueBlack[piecePoisiion];
                     for (int i = 0; i < 8; ++i)
                     {
@@ -1097,26 +1119,24 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                         if (PieceMoves::KnightMoves[piecePoisiion][dir] != nullptr)
                         {
                             centerValue -= Option::KnightMoveCenterValueBlack[endPlace];
-                            KingSafety[state][1][endPlace] -= Option::PieceAttackArroundTheKing[state][piece];
                             if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                             {
                                 moveCount++;
                             }
                             else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                             {
-                                Movement[state] -= Option::KnightAttackValue[state][mainBoard[endPlace]];
+                                movement -= taperedGroup1Table(Option::KnightAttackValue, mainBoard[endPlace]);
                             }
                         }
                     }
-                    Movement[state] -= Option::KnightMoveCountValue[state][moveCount];
+                    movement -= taperedGroup1Table(Option::KnightMoveCountValue, moveCount);
                 }
                 break;
             case 11:
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
                     moveCount = 0;
-                    Movement[state] -= Option::BishopInValueBlack[state][piecePoisiion];
-                    KingSafety[state][1][piecePoisiion] -= Option::PieceArroundTheKing[state][piece];
+                    movement -= taperedTable(Option::BishopInValueBlack, piecePoisiion);
                     centerValue -= Option::BishopInCenterValueBlack[piecePoisiion];
 
                     for (int direction = 0; direction <= 6; direction += 2)
@@ -1130,32 +1150,28 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                             {
                                 // pieceMovePosition[1][1][endPos][piece - 8]++;
                                 moveCount++;
-                                // Movement[state] -= Option::BishopMoveValueBlack[state][endPos];
-                                KingSafety[state][1][endPos] -= Option::PieceAttackArroundTheKing[state][piece];
+                                // movement -= taperedTable(Option::BishopMoveValueBlack, endPos);
                             }
                             else if ((Option::PowerTwo[endPos] & whitePieces) != 0)
                             {
                                 // pieceMovePosition[1][2][endPos][piece - 8]++;
-                                Movement[state] -= Option::BishopAttackValue[state][endPiece];
-                                KingSafety[state][1][endPos] -= Option::PieceAttackArroundTheKing[state][piece];
+                                movement -= taperedGroup1Table(Option::BishopAttackValue, endPiece);
                                 break;
                             }
                             else
                             {
-                                KingSafety[state][1][endPos] -= Option::PieceAttackArroundTheKing[state][piece];
                                 break;
                             }
                         }
                     }
-                    Movement[state] -= Option::BishopMoveCountValue[state][moveCount];
+                    movement -= taperedGroup1Table(Option::BishopMoveCountValue, moveCount);
                 }
                 break;
             case 12:
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
                     moveCount = 0;
-                    Movement[state] -= Option::RookInValueBlack[state][piecePoisiion];
-                    KingSafety[state][1][piecePoisiion] -= Option::PieceArroundTheKing[state][piece];
+                    movement -= taperedGroup2Table(Option::RookInValueBlack, piecePoisiion);
                     centerValue -= Option::RookInCenterValueBlack[piecePoisiion];
 
                     for (int direction = 0; direction <= 6; direction += 2)
@@ -1169,32 +1185,28 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                             {
                                 // pieceMovePosition[1][1][endPos][piece - 8]++;
                                 moveCount++;
-                                // Movement[state] -= Option::RookMoveValueBlack[state][endPos];
-                                KingSafety[state][1][endPos] -= Option::PieceAttackArroundTheKing[state][piece];
+                                // movement -= taperedTable(Option::RookMoveValueBlack, endPos);
                             }
                             else if ((Option::PowerTwo[endPos] & whitePieces) != 0)
                             {
                                 // pieceMovePosition[1][2][endPos][piece - 8]++;
-                                Movement[state] -= Option::RookAttackValue[state][endPiece];
-                                KingSafety[state][1][endPos] -= Option::PieceAttackArroundTheKing[state][piece];
+                                movement -= taperedGroup2Table(Option::RookAttackValue, endPiece);
                                 break;
                             }
                             else
                             {
-                                KingSafety[state][1][endPos] -= Option::PieceAttackArroundTheKing[state][piece];
                                 break;
                             }
                         }
                     }
-                    Movement[state] -= Option::RookMoveCountValue[state][moveCount];
+                    movement -= taperedGroup2Table(Option::RookMoveCountValue, moveCount);
                 }
                 break;
             case 13:
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
                     moveCount = 0;
-                    Movement[state] -= Option::QueenInValueBlack[state][piecePoisiion];
-                    KingSafety[state][1][piecePoisiion] -= Option::PieceArroundTheKing[state][piece];
+                    movement -= taperedGroup2Table(Option::QueenInValueBlack, piecePoisiion);
                     centerValue -= Option::QueenInCenterValueBlack[piecePoisiion];
 
                     int directions[] = {0, 2, 4, 6, 8, 10, 12, 14};
@@ -1210,22 +1222,19 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                             if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                             {
                                 moveCount++;
-                                KingSafety[state][1][endPos] -= Option::PieceAttackArroundTheKing[state][piece];
                             }
                             else if ((Option::PowerTwo[endPos] & whitePieces) != 0)
                             {
-                                Movement[state] -= Option::QueenAttackValue[state][endPiece];
-                                KingSafety[state][1][endPos] -= Option::PieceAttackArroundTheKing[state][piece];
+                                movement -= taperedGroup1Table(Option::QueenAttackValue, endPiece);
                                 break;
                             }
                             else
                             {
-                                KingSafety[state][1][endPos] -= Option::PieceAttackArroundTheKing[state][piece];
                                 break;
                             }
                         }
                     }
-                    Movement[state] -= Option::QueenMoveCountValue[state][moveCount];
+                    movement -= taperedGroup1Table(Option::QueenMoveCountValue, moveCount);
                 }
                 break;
             case 14:
@@ -1234,7 +1243,7 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
                     moveCount = 0;
-                    Movement[state] -= Option::KingInValueBlack[state][piecePoisiion];
+                    movement -= taperedTable(Option::KingInValueBlack, piecePoisiion);
                     centerValue -= Option::KingInCenterValueBlack[piecePoisiion];
                     for (int i = 0; i < 8; ++i)
                     {
@@ -1249,25 +1258,19 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int state)
                             }
                             else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                             {
-                                Movement[state] -= Option::KingAttackValue[state][mainBoard[endPlace]];
+                                movement -= taperedTable(Option::KingAttackValue, mainBoard[endPlace]);
                             }
                         }
                     }
-                    Movement[state] -= Option::KingMoveCountValue[state][moveCount];
+                    movement -= taperedTable(Option::KingMoveCountValue, moveCount);
                 }
                 break;
             }
         }
     }
     int *movementAndKingSafetyAndCenter = new int[3];
-    int kingSafety = 0;
-    for (int counter = 0; counter < 64; counter++)
-    {
-        kingSafety += Option::ArroundTheKingDangerMiddleGame[KingSetup::DistanceToKing[thisBoard.pieces[14].front()][counter]] * KingSafety[state][0][counter];
-        kingSafety += Option::ArroundTheKingDangerMiddleGame[KingSetup::DistanceToKing[thisBoard.pieces[6].front()][counter]] * KingSafety[state][1][counter];
-    }
-    movementAndKingSafetyAndCenter[0] = Movement[state];
-    movementAndKingSafetyAndCenter[1] = kingSafety;
+    movementAndKingSafetyAndCenter[0] = movement;
+    movementAndKingSafetyAndCenter[1] = 0;
     movementAndKingSafetyAndCenter[2] = centerValue;
     return movementAndKingSafetyAndCenter;
 }
