@@ -394,12 +394,12 @@ int Option::PawnMoveCountValue[3][3] = {};
 
 int Option::KnightMoveCountValueMiddleGame[9] = {-38, -25, -12, 0, 12, 25, 31, 38, 38};
 int Option::KnightMoveCountValue[3][9] = {};
-int Option::BishopMoveCountValueMiddleGame[16] = {-30, -20, -12, -6, -2, 0, 3, 6, 10, 15, 20, 25, 29, 32, 34, 35};
-int Option::BishopMoveCountValue[3][16] = {};
-int Option::RookMoveCountValueMiddleGame[16] = {-20, -14, -8, -2, 4, 10, 14, 19, 23, 26, 27, 28, 29, 30, 31, 32};
-int Option::RookMoveCountValue[3][16] = {};
-int Option::QueenMoveCountValueMiddleGame[33] = {-10, -8, -6, -3, -1, 1, 3, 5, 8, 10, 12, 15, 16, 17, 18, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20};
-int Option::QueenMoveCountValue[3][33] = {};
+int Option::BishopMoveCountValueMiddleGame[14] = {-30, -20, -12, -6, -2, 0, 3, 6, 10, 15, 20, 25, 29, 32};
+int Option::BishopMoveCountValue[3][14] = {};
+int Option::RookMoveCountValueMiddleGame[15] = {-20, -14, -8, -2, 4, 10, 14, 19, 23, 26, 27, 28, 29, 30, 31};
+int Option::RookMoveCountValue[3][15] = {};
+int Option::QueenMoveCountValueMiddleGame[28] = {-10, -8, -6, -3, -1, 1, 3, 5, 8, 10, 12, 15, 16, 17, 18, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20};
+int Option::QueenMoveCountValue[3][28] = {};
 int Option::KingMoveCountValueMiddleGame[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 int Option::KingMoveCountValue[3][9] = {};
 
@@ -752,9 +752,9 @@ int Option::KingMoveValueBlackEndGame[64] = {0};
 
 int Option::PawnMoveCountValueEndGame[3] = {0};
 int Option::KnightMoveCountValueEndGame[9] = {-33, -23, -13, -3, 7, 17, 22, 27, 27};
-int Option::BishopMoveCountValueEndGame[16] = {-35, -24, -15, -8, -3, 0, 4, 8, 13, 19, 25, 30, 34, 37, 39, 40};
-int Option::RookMoveCountValueEndGame[16] = {-36, -19, -3, 13, 29, 46, 62, 79, 95, 106, 111, 114, 116, 117, 118, 118};
-int Option::QueenMoveCountValueEndGame[33] = {-18, -13, -7, -2, 3, 8, 13, 19, 23, 27, 32, 34, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35};
+int Option::BishopMoveCountValueEndGame[14] = {-35, -24, -15, -8, -3, 0, 4, 8, 13, 19, 25, 30, 34, 37};
+int Option::RookMoveCountValueEndGame[15] = {-36, -19, -3, 13, 29, 46, 62, 79, 95, 106, 111, 114, 116, 117, 118};
+int Option::QueenMoveCountValueEndGame[28] = {-18, -13, -7, -2, 3, 8, 13, 19, 23, 27, 32, 34, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35};
 int Option::KingMoveCountValueEndGame[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 int Option::PawnAttackValueEndGame[16] = {0, 0, 70, 70, 99, 118, 0, 0, 0, 0, 70, 70, 99, 118, 0, 0};
@@ -974,17 +974,17 @@ void Option::Initialize()
             KnightMoveCountValue[0][counter] = KnightMoveCountValueMiddleGame[counter];
             KnightMoveCountValue[2][counter] = KnightMoveCountValueEndGame[counter];
         }
-        for (int counter = 0; counter < 16; counter++)
+        for (int counter = 0; counter < 14; counter++)
         {
             BishopMoveCountValue[0][counter] = BishopMoveCountValueMiddleGame[counter];
             BishopMoveCountValue[2][counter] = BishopMoveCountValueEndGame[counter];
         }
-        for (int counter = 0; counter < 16; counter++)
+        for (int counter = 0; counter < 15; counter++)
         {
             RookMoveCountValue[0][counter] = RookMoveCountValueMiddleGame[counter];
             RookMoveCountValue[2][counter] = RookMoveCountValueEndGame[counter];
         }
-        for (int counter = 0; counter < 33; counter++)
+        for (int counter = 0; counter < 28; counter++)
         {
             QueenMoveCountValue[0][counter] = QueenMoveCountValueMiddleGame[counter];
             QueenMoveCountValue[2][counter] = QueenMoveCountValueEndGame[counter];

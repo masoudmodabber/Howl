@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
 
     std::cout << "FEN: " << fen << "\n";
     std::cout << "Side to move: " << (board->sideToMove ? "Black" : "White")
-              << " | Phase: " << bd.phase << "/24 | State: " << bd.state << "\n";
+              << " | Phase: " << bd.phase << "/24\n";
     std::cout << "--------------------------------------------------------\n";
     std::cout << std::left << std::setw(22) << "Term" 
               << std::right << std::setw(10) << "White" 

@@ -5,7 +5,7 @@
 #include "PawnCache.h"
 #include <algorithm>
 
-PawnCache::PawnCache() : caches(2, std::vector<std::unordered_map<long, std::pair<std::chrono::system_clock::time_point, int>>>(3)) { }
+PawnCache::PawnCache() : caches(2, std::vector<std::unordered_map<long, std::pair<std::chrono::system_clock::time_point, int>>>(PhaseCount)) { }
 
 void PawnCache::Add(long key, int value, int i, int j) {
     return;
@@ -23,7 +23,7 @@ void PawnCache::EvictLeastRecentlyUsedItems() {
     // Flatten the 2D array and order by the time_point
     std::vector<std::tuple<int, int, long, std::chrono::system_clock::time_point>> allItems;
     for (int i = 0; i < 2; ++i) {
-        for (int j = 0; j < 3; ++j) {
+        for (int j = 0; j < PhaseCount; ++j) {
             for (const auto& [key, value] : caches[i][j]) {
                 allItems.emplace_back(i, j, key, value.first);
             }

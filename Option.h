@@ -91,12 +91,12 @@ public:
     static int PawnMoveCountValue[3][3];
     static int KnightMoveCountValueMiddleGame[9];
     static int KnightMoveCountValue[3][9];
-    static int BishopMoveCountValueMiddleGame[16];
-    static int BishopMoveCountValue[3][16];
-    static int RookMoveCountValueMiddleGame[16];
-    static int RookMoveCountValue[3][16];
-    static int QueenMoveCountValueMiddleGame[33];
-    static int QueenMoveCountValue[3][33];
+    static int BishopMoveCountValueMiddleGame[14];
+    static int BishopMoveCountValue[3][14];
+    static int RookMoveCountValueMiddleGame[15];
+    static int RookMoveCountValue[3][15];
+    static int QueenMoveCountValueMiddleGame[28];
+    static int QueenMoveCountValue[3][28];
     static int KingMoveCountValueMiddleGame[9];
     static int KingMoveCountValue[3][9];
 
@@ -211,9 +211,9 @@ public:
 
     static int PawnMoveCountValueEndGame[3];
     static int KnightMoveCountValueEndGame[9];
-    static int BishopMoveCountValueEndGame[16];
-    static int RookMoveCountValueEndGame[16];
-    static int QueenMoveCountValueEndGame[33];
+    static int BishopMoveCountValueEndGame[14];
+    static int RookMoveCountValueEndGame[15];
+    static int QueenMoveCountValueEndGame[28];
     static int KingMoveCountValueEndGame[9];
 
     static int PawnAttackValueEndGame[16];
