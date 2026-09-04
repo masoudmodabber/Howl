@@ -1031,7 +1031,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
     bool isNullWindow = (beta - alpha <= 1);
 
     // Two-stage null-window protocol:
-    if (isNullWindow && !nullWindowVerification && !isAggressivePreprobe && depth >= 1)
+    if (!MAtESearch && isNullWindow && !nullWindowVerification && !isAggressivePreprobe && depth >= 1)
     {
         // 1. Untrusted aggressive pre-probe (frontier collapse + LQP enabled, no trusted TT store)
         const int64_t preprobeNodesBefore = Search::searchNodeCount;
