@@ -42,10 +42,6 @@ struct EvaluationBreakdown
     int blackDefenderWeight = 0;
     int whiteEscapeSafety = 0;
     int blackEscapeSafety = 0;
-    int whiteSafeCheckPressure = 0;
-    int blackSafeCheckPressure = 0;
-    int whiteCheckEscapeInteraction = 0;
-    int blackCheckEscapeInteraction = 0;
     int whiteFilePressure = 0;
     int blackFilePressure = 0;
     int whiteDiagonalPressure = 0;

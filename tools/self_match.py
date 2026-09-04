@@ -500,15 +500,28 @@ def run_match(config: MatchConfig) -> List[GameResult]:
             for (idx, pos, fen, w_role, b_role) in tasks
         }
 
-        for future in as_completed(future_map):
-            res = future.result()
-            results.append(res)
-            # Display single-line summary on console
-            summary_term = res.termination.splitlines()[0] if "\n" in res.termination else res.termination
-            print(
-                f"[Game {res.game_index:02d}/08] {res.pos_name:<24} "
-                f"{res.white_engine} vs {res.black_engine} -> {res.result:<7} ({summary_term})"
-            )
+        pgn_file = (
+            open(config.pgn_output, "w", encoding="utf-8")
+            if config.pgn_output
+            else None
+        )
+        try:
+            for future in as_completed(future_map):
+                res = future.result()
+                results.append(res)
+                if pgn_file is not None:
+                    pgn_file.write(res.pgn_str + "\n\n")
+                    pgn_file.flush()
+                # Display single-line summary on console
+                summary_term = res.termination.splitlines()[0] if "\n" in res.termination else res.termination
+                print(
+                    f"[Game {res.game_index:02d}/08] {res.pos_name:<24} "
+                    f"{res.white_engine} vs {res.black_engine} -> {res.result:<7} ({summary_term})"
+                )
+        finally:
+            if pgn_file is not None:
+                pgn_file.flush()
+                pgn_file.close()
 
     results.sort(key=lambda r: r.game_index)
     return results
@@ -599,9 +612,6 @@ def main() -> int:
     results = run_match(match_cfg)
 
     if args.pgn:
-        with open(args.pgn, "w", encoding="utf-8") as f:
-            for r in results:
-                f.write(r.pgn_str + "\n\n")
         print(f"\nPGN written to {args.pgn}")
 
     print_summary(results)

@@ -1,6 +1,5 @@
 #include "QSearcher.h"
 #include "PVSSearch.h"
-#include <chrono>
 #ifdef _WIN32
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
@@ -13,10 +12,91 @@
 #include "PieceMoves.h"
 #include "AttackPlaces.h"
 #include <algorithm>
+#include <array>
+#include <cstddef>
 #include <cstdint>
 
 namespace
 {
+thread_local bool movePoolEnabled = false;
+
+union alignas(Move) MovePoolSlot
+{
+    std::byte storage[sizeof(Move)];
+    MovePoolSlot* next;
+};
+
+class MovePool
+{
+public:
+    MovePool()
+    {
+        for (std::size_t i = 0; i + 1 < slots.size(); ++i)
+            slots[i].next = &slots[i + 1];
+        slots.back().next = nullptr;
+        freeList = &slots.front();
+    }
+
+    void* Allocate()
+    {
+        if (freeList == nullptr)
+            return nullptr;
+        MovePoolSlot* slot = freeList;
+        freeList = slot->next;
+        return slot->storage;
+    }
+
+    bool Owns(void* pointer) const
+    {
+        const auto address = reinterpret_cast<std::uintptr_t>(pointer);
+        const auto begin = reinterpret_cast<std::uintptr_t>(slots.data());
+        const auto end = begin + sizeof(slots);
+        return address >= begin && address < end &&
+            (address - begin) % sizeof(MovePoolSlot) == 0;
+    }
+
+    void Deallocate(void* pointer)
+    {
+        auto* slot = reinterpret_cast<MovePoolSlot*>(pointer);
+        slot->next = freeList;
+        freeList = slot;
+    }
+
+private:
+    static constexpr std::size_t Capacity = 4096;
+    std::array<MovePoolSlot, Capacity> slots{};
+    MovePoolSlot* freeList = nullptr;
+};
+
+thread_local MovePool movePool;
+
+}
+
+void* Move::operator new(std::size_t size)
+{
+    if (!movePoolEnabled)
+        return ::operator new(size);
+    void* pointer = size == sizeof(Move) ? movePool.Allocate() : nullptr;
+    if (pointer == nullptr)
+        pointer = ::operator new(size);
+    return pointer;
+}
+
+void Move::operator delete(void* pointer) noexcept
+{
+    if (movePool.Owns(pointer))
+    {
+        movePool.Deallocate(pointer);
+        return;
+    }
+    ::operator delete(pointer);
+}
+
+void Move::SetPoolEnabled(bool enabled) { movePoolEnabled = enabled; }
+
+namespace
+{
+
 constexpr std::uint32_t PackedAttackerUnits[7] = {
     0,
     std::uint32_t{1} << 0,
@@ -2221,6 +2301,7 @@ MoveList MoveLogic::MaterializeStage2(Board &thisBoard, int depth, int depthGone
 
     return stage2List;
 }
+
 // NOTE: You must also replace all Moves->push_back and ComplicatedMoves->push_back in the body with the array logic as described above.
 // The rest of the function logic remains the same, just replace vector operations with array operations.
 

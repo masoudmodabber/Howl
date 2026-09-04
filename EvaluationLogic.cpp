@@ -8,10 +8,6 @@
 #include "AttackPlaces.h"
 #include "PassedPawnSetup.h"
 #include "PieceMoves.h"
-#include "MoveLogic.h"
-#include "GameLogic.h"
-#include "MissingInfoAboutPrevStateFromMove.h"
-#include "Search.h"
 #include <algorithm>
 #include <iostream>
 
@@ -74,8 +70,6 @@ struct KingDangerResult
     int attackerWeight = 0;
     int defenderWeight = 0;
     int escapeSafety = 0;
-    int safeCheckPressure = 0;
-    int checkEscapeInteraction = 0;
     int filePressure = 0;
     int diagonalPressure = 0;
     int pawnShelter = 0;
@@ -135,8 +129,7 @@ bool PieceAttacksSquare(Board& board, int pieceType, bool white,
     return true;
 }
 
-int CountSideAttacks(Board& board, bool white, int target,
-                     int excludedPiece = -1, int excludedSquare = -1)
+int CountSideAttacks(Board& board, bool white, int target)
 {
     int attackers = 0;
     const int firstPiece = white ? 1 : 9;
@@ -145,10 +138,6 @@ int CountSideAttacks(Board& board, bool white, int target,
         const int pieceType = white ? boardPiece : boardPiece - 8;
         for (int from : board.pieces[boardPiece])
         {
-            if (boardPiece == excludedPiece && from == excludedSquare)
-            {
-                continue;
-            }
             if (PieceAttacksSquare(board, pieceType, white, from, target))
             {
                 attackers++;
@@ -156,56 +145,6 @@ int CountSideAttacks(Board& board, bool white, int target,
         }
     }
     return attackers;
-}
-
-int SafeCheckPressure(Board& board, bool attackingWhite, int safeEscapes)
-{
-    Board* checkBoard = board.MakeCopy();
-    checkBoard->sideToMove = !attackingWhite;
-    MoveList moves = MoveLogic::MoveGenerator(*checkBoard, -1, -1);
-    Move previousMove{};
-    int pressure = 0;
-    const int moveCountBefore = Search::moveCount;
-
-    for (int i = 0; i < moves.count; ++i)
-    {
-        Move& move = *moves.moves[i];
-        const int originalPiece = checkBoard->mainBoard[move.beginPlace];
-        MissingInfoAboutPrevStateFromMove undo(*checkBoard);
-        GameLogic::DoMove(*checkBoard, move, previousMove, -1, -1);
-
-        const int friendlyKing = checkBoard->pieces[attackingWhite ? 6 : 14].front();
-        const int enemyKing = checkBoard->pieces[attackingWhite ? 14 : 6].front();
-        const bool legal = CountSideAttacks(*checkBoard, !attackingWhite, friendlyKing) == 0;
-        const bool givesCheck = legal &&
-            CountSideAttacks(*checkBoard, attackingWhite, enemyKing) != 0;
-        if (givesCheck)
-        {
-            const int pieceType = move.promotionPiece > 0
-                ? move.promotionPiece
-                : (originalPiece > 8 ? originalPiece - 8 : originalPiece);
-            const int movedBoardPiece = attackingWhite ? pieceType : pieceType + 8;
-            const bool defended = CountSideAttacks(
-                *checkBoard, attackingWhite, move.endPlace,
-                movedBoardPiece, move.endPlace) != 0;
-            const bool immediatelyCapturable =
-                CountSideAttacks(*checkBoard, !attackingWhite, move.endPlace) != 0;
-
-            int movePressure = (pieceType == 4 || pieceType == 5) ? 2 : 1;
-            movePressure += defended ? 1 : 0;
-            movePressure -= immediatelyCapturable && !defended ? 1 : 0;
-            movePressure += safeEscapes <= 1 ? 1 : 0;
-            pressure += std::max(0, movePressure);
-        }
-
-        GameLogic::UndoMove(*checkBoard, move, undo);
-    }
-
-    Search::moveCount = moveCountBefore;
-    for (int i = 0; i < moves.count; ++i)
-        delete moves.moves[i];
-    delete checkBoard;
-    return pressure;
 }
 
 std::vector<int> KingZone(int kingSquare)
@@ -330,7 +269,6 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
             }
         }
     }
-
     const int kingRank = kingSquare / 8;
     const int kingFile = kingSquare % 8;
     int safeEscapes = 0;
@@ -371,7 +309,6 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
 
         }
     }
-
     int filePressure = 0;
     for (int file = std::max(0, kingFile - 1); file <= std::min(7, kingFile + 1); file++)
     {
@@ -412,18 +349,13 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
             }
         }
     }
-
     const int escapeDanger = controlledEscapes * 6 + occupiedEscapes * 2 +
                              edgeDirections * 2 + std::max(0, 3 - safeEscapes) * 8;
-    const int safeChecks = SafeCheckPressure(board, attackingWhite, safeEscapes);
-    const int checkDanger = std::min(safeChecks, 4) * 7;
-    const int checkEscapeInteraction = std::min(48, checkDanger * escapeDanger / 64);
     const int balanceDanger = std::max(0, attackerParticipation - defenderParticipation) * 2 +
                               std::max(0, attackerCount - defenderCount) * 4;
     const int shelterDanger = ShelterDanger(board, whiteKing, kingSquare);
     const int lineDanger = filePressure + diagonalPressure;
-    int rawDanger = attackerParticipation * 2 + escapeDanger + checkDanger +
-                    checkEscapeInteraction +
+    int rawDanger = attackerParticipation * 2 + escapeDanger +
                     lineDanger + shelterDanger + balanceDanger;
 
     const int queenCount = board.pieces[attackingWhite ? 5 : 13].size();
@@ -434,10 +366,10 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
                                                      rookCount * 12 + minorCount * 5);
     rawDanger = rawDanger * attackingMaterialScale / 100;
     const int escalatedDanger = rawDanger + rawDanger * rawDanger / 180;
-    return {std::min(escalatedDanger, 450), attackerParticipation,
-            defenderParticipation, escapeDanger, checkDanger,
-            checkEscapeInteraction, filePressure,
+    KingDangerResult result{std::min(escalatedDanger, 450), attackerParticipation,
+            defenderParticipation, escapeDanger, filePressure,
             diagonalPressure, shelterDanger, attackingMaterialScale};
+    return result;
 }
 }
 
@@ -690,10 +622,6 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
         breakdown->blackDefenderWeight = blackKingDanger.defenderWeight;
         breakdown->whiteEscapeSafety = whiteKingDanger.escapeSafety;
         breakdown->blackEscapeSafety = blackKingDanger.escapeSafety;
-        breakdown->whiteSafeCheckPressure = whiteKingDanger.safeCheckPressure;
-        breakdown->blackSafeCheckPressure = blackKingDanger.safeCheckPressure;
-        breakdown->whiteCheckEscapeInteraction = whiteKingDanger.checkEscapeInteraction;
-        breakdown->blackCheckEscapeInteraction = blackKingDanger.checkEscapeInteraction;
         breakdown->whiteFilePressure = whiteKingDanger.filePressure;
         breakdown->blackFilePressure = blackKingDanger.filePressure;
         breakdown->whiteDiagonalPressure = whiteKingDanger.diagonalPressure;
