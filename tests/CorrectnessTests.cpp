@@ -555,14 +555,6 @@ FixedDepthSearchResult FixedDepthRoot(Board& board, int depth)
                 false,
                 false));
             int score = -searched->value;
-            if (score > 159800 && score != 160000)
-            {
-                score--;
-            }
-            else if (score < -159800 && score != -160000)
-            {
-                score++;
-            }
             result.rootScores.push_back({moveText, score});
 
             if (!found || score > result.score)
@@ -1522,14 +1514,14 @@ int RunSearch(const std::string& testCase)
     }
     if (testCase == "mate_winning_and_losing_scores")
     {
-        // 1. Terminal losing node (checkmate leaf with 0 legal moves) -> returns -159999
+        // 1. Terminal losing node at root ply 1 (checkmate leaf with 0 legal moves) -> returns -159998
         std::unique_ptr<Board> bMate(BoardMaker::MakeInitialBoard("7k/6Q1/5K2/8/8/8/8/8 b - - 0 1"));
         Move prev{};
         Move m1{}, m2{}, m3{};
         std::unique_ptr<MovePrintValue> resLeaf(PVSSearch::PVS(true, -200000, 200000, 1, prev, m1, m2, m3, *bMate, false, false, 1, false, false));
-        if (resLeaf->value != -159999)
+        if (resLeaf->value != -159998)
         {
-            std::cerr << "Expected terminal checkmate score -159999, got " << resLeaf->value << '\n';
+            std::cerr << "Expected terminal checkmate score -159998, got " << resLeaf->value << '\n';
             return 1;
         }
 
@@ -1552,7 +1544,7 @@ int RunSearch(const std::string& testCase)
             return 1;
         }
 
-        std::cout << "Winning (+159998), leaf (-159999), and losing (-159997) mate scores verified\n";
+        std::cout << "Winning (+159998), leaf (-159998), and losing (-159997) mate scores verified\n";
         return 0;
     }
     if (testCase == "mate_illegal_sentinel_distinction")

@@ -14,6 +14,31 @@
 #include "ChessStringManipulation.h"
 #include "MateScore.h"
 
+namespace {
+thread_local int qSearchPoolDepth = 0;
+
+class QSearchMovePoolScope
+{
+public:
+    QSearchMovePoolScope()
+        : outermost(qSearchPoolDepth++ == 0)
+    {
+        if (outermost)
+            Move::SetPoolEnabled(true);
+    }
+
+    ~QSearchMovePoolScope()
+    {
+        qSearchPoolDepth--;
+        if (outermost)
+            Move::SetPoolEnabled(false);
+    }
+
+private:
+    bool outermost;
+};
+}
+
 int QSearcher::pieceValue100[15] = {
     0,    // pieceValue100[0]
     100,  // pieceValue100[1]
@@ -48,6 +73,7 @@ QSearchTestStatistics QSearcher::TestStatistics() {
 
 MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& prevMove, int depthGone, int lastCheck, bool kick, int depth, Move& move1, Move& move2, Move& move3, Board& board4, bool MAtESearch, int depthQuisStarted, bool nullWindowSearch)
 {
+    QSearchMovePoolScope movePoolScope;
     const int origAlpha = alpha;
     const int origBeta = beta;
     const int qsearchDistance = std::max(0, depthGone - depthQuisStarted);
@@ -60,12 +86,13 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
     if (isPVNode) {
         extention = Option::checkExtension;
     }
+
+    const auto evaluate = [&]() { return EvaluationLogic::Evaluate(board4); };
     
     MovePrintValue* retValue = new MovePrintValue();
     retValue->printString = "";
     
-    MovePrintValue* MPValue = new MovePrintValue();
-    MPValue->printString = "";
+    MovePrintValue* MPValue = nullptr;
     
     int turn;
     if (!board4.sideToMove) {
@@ -87,7 +114,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
     }
     
     if (depth == 0 && lastCheck == 0 && !kick && !currentSideInCheck) {
-        retValue->value = EvaluationLogic::Evaluate(board4);
+        retValue->value = evaluate();
         retValue->bound = retValue->value <= origAlpha ? SearchBound::Upper
             : (retValue->value >= origBeta ? SearchBound::Lower : SearchBound::Exact);
         retValue->selective = true;
@@ -125,7 +152,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         return QSearch(isPVNode, alpha, beta, prevMove, depthGone, 0, false, 1, move1, move2, move3, board4, MAtESearch, depthQuisStarted, nullWindowSearch);
     }
     if (depth == 0) {
-        retValue->value = EvaluationLogic::Evaluate(board4);
+        retValue->value = evaluate();
         retValue->bound = retValue->value <= origAlpha ? SearchBound::Upper
             : (retValue->value >= origBeta ? SearchBound::Lower : SearchBound::Exact);
         retValue->selective = true;
@@ -135,7 +162,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
     }
     int valueTemp2 = -200000;
     if (!checkChecked && !currentSideInCheck) {
-        valueTemp2 = EvaluationLogic::Evaluate(board4);
+        valueTemp2 = evaluate();
         if (valueTemp2 >= beta) {
             retValue->value = valueTemp2;
             retValue->bound = SearchBound::Lower;
@@ -167,9 +194,9 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         qSearchTestStatistics.rootGeneratedMoves = moveList.count + deferredCount;
     }
 #endif
-    std::string SelectedPV = "";
+    std::string SelectedPV;
     int availMoves = 0;
-    int standPot = (!checkChecked && !currentSideInCheck) ? valueTemp2 : EvaluationLogic::Evaluate(board4);
+    int standPot = (!checkChecked && !currentSideInCheck) ? valueTemp2 : evaluate();
     bool firstMove = true;
 
     int currentStage = 1;
