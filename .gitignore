@@ -212,3 +212,8 @@ __pycache__/
 venv/
 match-engines/
 *.pgn
+
+# Tuner datasets and output files
+tuner-corpus/
+*.tsv
+
