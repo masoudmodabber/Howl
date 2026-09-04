@@ -13,7 +13,6 @@
 #include "MissingInfoAboutPrevStateFromMove.h"
 #include "RepetitionHistory.h"
 #include "TranspositionTable.h"
-#include "SearchAccounting.h"
 #include "MateScore.h"
 #include <iostream>
 #include <algorithm>
@@ -42,13 +41,11 @@ int PVSSearch::moveOrderingDepth[20] = {
     10};
 
 PVSSearch::KillerMove PVSSearch::killers[PVSSearch::MaxKillerPly][2] = {};
-PVSSearch::NullMoveProfile PVSSearch::nullMoveProfile{};
 
 namespace
 {
 
 
-    bool rootChildDiagnosticActive = false;
 
     constexpr int HistoryLimit = 16384;
     constexpr size_t ContinuationTableSize = 1u << 16;
@@ -365,11 +362,6 @@ namespace
         evidence.discoveryScore = score;
         evidence.hasDiscoveryScore = true;
     }
-}
-
-void PVSSearch::SetRootChildDiagnosticActive(bool active)
-{
-    rootChildDiagnosticActive = active;
 }
 
 void PVSSearch::ResetCandidateMemory()
@@ -917,7 +909,7 @@ void PVSSearch::PrintNullMoveStatsForTesting()
 }
 #endif
 
-MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool nullWindowVerification, bool isAggressivePreprobe)
+MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool selectiveSearch)
 {
     Move *SelectedMove = nullptr;
     Board *boardCopy = nullptr;
@@ -1026,58 +1018,11 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
     }
 
     Search::searchNodeCount++;
-    g_searchAccounting.pvsNodes++;
 
     bool isNullWindow = (beta - alpha <= 1);
 
-    // Two-stage null-window protocol:
-    if (!MAtESearch && isNullWindow && !nullWindowVerification && !isAggressivePreprobe && depth >= 1)
-    {
-        // 1. Untrusted aggressive pre-probe (frontier collapse + LQP enabled, no trusted TT store)
-        const int64_t preprobeNodesBefore = Search::searchNodeCount;
-        const bool prevPreprobeActive = g_searchAccounting.preprobeActive;
-        g_searchAccounting.preprobeActive = true;
-        MovePrintValue *aggRes = PVS(isPVNode, alpha, beta, depth, prevMove, move1, move2, move3, board4, MAtESearch, isNullMoveAllowed, depthGone, previousMoveWasCheck, nullWindowSearch, false, true);
-        g_searchAccounting.preprobeActive = prevPreprobeActive;
-        g_searchAccounting.preprobeNodes += static_cast<uint64_t>(Search::searchNodeCount - preprobeNodesBefore);
-
-        // 2. Check if an existing valid TT entry independently confirms the same bound direction:
-        TTEntry ttEntry{};
-        bool ttHit = TranspositionTable::Probe(board4.ZobristHashCode, ttEntry);
-        if (ttHit)
-            ttEntry.score = MateScore::FromTranspositionTable(ttEntry.score, depthGone);
-        if (!IsMateScore(aggRes->value) && TranspositionTable::CutoffsEnabled() &&
-            ttHit && ttEntry.depth >= depth && TTFlagIsRigorous(ttEntry.flag))
-        {
-            if (aggRes->value >= beta)
-            {
-                if ((ttEntry.flag == TT_EXACT && ttEntry.score >= beta) || (ttEntry.flag == TT_LOWER_BOUND && ttEntry.score >= beta))
-                {
-                    delete retValue;
-                    delete MPValue;
-                    return aggRes;
-                }
-            }
-            else if (aggRes->value <= alpha)
-            {
-                if ((ttEntry.flag == TT_EXACT && ttEntry.score <= alpha) || (ttEntry.flag == TT_UPPER_BOUND && ttEntry.score <= alpha))
-                {
-                    delete retValue;
-                    delete MPValue;
-                    return aggRes;
-                }
-            }
-        }
-        delete aggRes;
-
-        // 3. Safe verification probe (nullWindowVerification=true: frontier collapse & LQP disabled at null-window nodes)
-        delete retValue;
-        delete MPValue;
-        return PVS(isPVNode, alpha, beta, depth, prevMove, move1, move2, move3, board4, MAtESearch, isNullMoveAllowed, depthGone, previousMoveWasCheck, nullWindowSearch, true, false);
-    }
-
     // Frontier collapse at non-PV depth <= 4:
-    bool allowFrontierCollapse = isAggressivePreprobe || !isNullWindow;
+    bool allowFrontierCollapse = selectiveSearch || !isNullWindow;
     if (false && allowFrontierCollapse && !isPVNode && depth <= 4)
     {
         delete retValue;
@@ -1147,20 +1092,12 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                 MissingInfoAboutPrevStateFromMove undoInfo(board4);
                 GameLogic::DoMove(board4, nullMove, prevMove, depthGone, depthGone);
 
-                nullMoveProfile.attempts++;
-                const int64_t nullNodesBefore = Search::searchNodeCount;
-                std::unique_ptr<MovePrintValue> nullRes(PVS(false, -beta, -beta + 1, depth - 1 - R, nullMove, move2, move3, prevMove, board4, MAtESearch, false, depthGone + 1, previousMoveWasCheck, true, false, isAggressivePreprobe));
-                nullMoveProfile.nullSearchNodes += static_cast<uint64_t>(
-                    Search::searchNodeCount - nullNodesBefore);
-                g_searchAccounting.nullMoveNodes += static_cast<uint64_t>(
-                    Search::searchNodeCount - nullNodesBefore);
+                std::unique_ptr<MovePrintValue> nullRes(PVS(false, -beta, -beta + 1, depth - 1 - R, nullMove, move2, move3, prevMove, board4, MAtESearch, false, depthGone + 1, previousMoveWasCheck, true, selectiveSearch));
                 int nullScore = -nullRes->value;
 
                 GameLogic::UndoMove(board4, nullMove, undoInfo);
 
                 const bool nullFailedHigh = nullScore >= beta;
-                if (nullFailedHigh)
-                    nullMoveProfile.failHighs++;
                 bool verificationPerformed = false;
                 bool cutoffAccepted = nullFailedHigh;
                 const int staticMargin = staticEval - beta;
@@ -1177,28 +1114,14 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                 if (verificationRequired)
                 {
                     verificationPerformed = true;
-                    nullMoveProfile.verificationsStarted++;
                     const int verificationReduction = uncertainty >= 3 ? 2 : 3;
                     const int verificationDepth = std::max(0, depth - verificationReduction);
-                    const int64_t verificationNodesBefore = Search::searchNodeCount;
                     std::unique_ptr<MovePrintValue> verification(PVS(
                         false, beta - 1, beta, verificationDepth, prevMove,
                         move1, move2, move3, board4, MAtESearch, false,
-                        depthGone, previousMoveWasCheck, true, false,
-                        isAggressivePreprobe));
-                    nullMoveProfile.verificationNodes += static_cast<uint64_t>(
-                        Search::searchNodeCount - verificationNodesBefore);
-                    g_searchAccounting.nullMoveNodes += static_cast<uint64_t>(
-                        Search::searchNodeCount - verificationNodesBefore);
+                        depthGone, previousMoveWasCheck, true,
+                        selectiveSearch));
                     cutoffAccepted = verification->value >= beta;
-                    if (cutoffAccepted)
-                        nullMoveProfile.verificationsConfirmed++;
-                    else
-                        nullMoveProfile.verificationsRejected++;
-                }
-                else if (nullFailedHigh)
-                {
-                    nullMoveProfile.immediateCutoffs++;
                 }
 
 #if HOWL_CORRECTNESS_TESTING
@@ -1453,7 +1376,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     std::unique_ptr<MovePrintValue> reducedResult(PVS(
                         false, -probBeta, -probBeta + 1, depth - 4, probMove,
                         move2, move3, prevMove, board4, false, true,
-                        depthGone + 1, givesCheck, true, false, true));
+                        depthGone + 1, givesCheck, true, true));
                     probValue = -reducedResult->value;
                     if (probValue >= probBeta && !IsMateScore(probValue))
                     {
@@ -1474,32 +1397,10 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
         for (int i = 0; i < moveList.count; ++i)
         {
             Move *move = moveList.moves[i];
-            const int64_t rootReplyNodesBefore = Search::searchNodeCount;
-            const bool childDiagnosticMove = rootChildDiagnosticActive &&
-                depthGone == 1 && prevMove.beginPlace == 29 && prevMove.endPlace == 22;
-            const std::string childDiagnosticMoveName = childDiagnosticMove
-                ? ChessStringManipulation::PVToString(*move, 0, false, board4)
-                : std::string();
-            int64_t childDiagnosticNodesBefore = 0;
-            bool childDiagnosticSearched = false;
             const int alphaBeforeMove = alpha;
             if (useCandidateProbes)
                 MarkCandidateSeen(positionKey, *move);
             int LMRDepth = 0;
-            bool reducedRetryOccurred = false;
-            bool wasResearchedAtFullDepth = false;
-            if (Search::overAllIteration == 1 && move->beginPlace == 60 && move->endPlace == 53)
-            {
-                //std::cout << "here" << std::endl;
-                // std::cout << "Object is still in use after 15 seconds." << std::endl;
-                //  throw std::runtime_error("Object is still in use after 15 seconds.");
-            }
-            if (move->beginPlace == 60 && move->endPlace == 53 && depth == 1 && depthGone == 1)
-            {
-                std::cout << "here" << std::endl;
-                // std::cout << "Object is still in use after 15 seconds." << std::endl;
-                //  throw std::runtime_error("Object is still in use after 15 seconds.");
-            }
             if (firstMove)
             {
                 bool firstMoveWasRepetition = false;
@@ -1522,24 +1423,19 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                         tempPVNode = true;
                     }
                     delete MPValue;
-                    if (childDiagnosticMove)
-                    {
-                        childDiagnosticNodesBefore = Search::searchNodeCount;
-                        childDiagnosticSearched = true;
-                    }
                     MPValue = PVS(tempPVNode, -beta, -alpha,
                                   depth - 1, *move, move2, move3, prevMove, board4, MAtESearch, true,
                                   depthGone + 1, previousMoveWasCheck, nullWindowSearch,
-                                  false, isAggressivePreprobe);
+                                  selectiveSearch);
                     bestMoveValue = -MPValue->value;
-                    bestMoveSelective = MPValue->selective || isAggressivePreprobe;
+                    bestMoveSelective = MPValue->selective || selectiveSearch;
                     SelectedMove = move;
                     SelectedPV = MPValue->printString;
                     if (bestMoveValue != -160000)
                     {
                         availMoves++;
                     }
-                    if (isAggressivePreprobe)
+                    if (selectiveSearch)
                         bestMoveSelective = true;
                     move->value = bestMoveValue;
                 }
@@ -1552,35 +1448,10 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     delete boardCopy;
                     boardCopy = nullptr;
                 }
-                if (false && depthGone == 1 && depth + 1 == 17 &&
-                    prevMove.beginPlace == 29 && prevMove.endPlace == 22)
-                {
-                    std::cout << "rootreply depth=" << depth + 1
-                              << " move=" << ChessStringManipulation::PVToString(*move, 0, false, board4)
-                              << " nodes=" << (Search::searchNodeCount - rootReplyNodesBefore)
-                              << " score=" << bestMoveValue
-                              << " search_depth=" << depth
-                              << " alpha=" << alphaBeforeMove
-                              << " beta=" << beta
-                              << " pv=" << (isPVNode ? "yes" : "no")
-                              << " lmr=0 retry=no full_confirm=no"
-                              << " selective=" << (bestMoveSelective ? "yes" : "no")
-                              << " MAtESearch=" << (MAtESearch ? "yes" : "no")
-                              << '\n';
-                }
-                if (childDiagnosticSearched)
-                {
-                    std::cout << "childresult move=" << childDiagnosticMoveName
-                              << " value=" << bestMoveValue
-                              << " selective=" << (bestMoveSelective ? "yes" : "no")
-                              << " nodes_spent="
-                              << (Search::searchNodeCount - childDiagnosticNodesBefore)
-                              << '\n';
-                }
                 firstMove = false;
                 if (bestMoveValue > alpha)
                 {
-                    if (!firstMoveWasRepetition && !isAggressivePreprobe &&
+                    if (!firstMoveWasRepetition && !selectiveSearch &&
                         IsQuietMove(*move) && !IsMateScore(bestMoveValue))
                     {
                         UpdateHistory(turn, *move, depth, true);
@@ -1591,7 +1462,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
 #if HOWL_CORRECTNESS_TESTING
                         RecordMoveOrderingCutoff(i, hasTTMove, *move, depth, depthGone);
 #endif
-                        if (!isAggressivePreprobe)
+                        if (!selectiveSearch)
                         {
                             RecordKiller(depthGone, *move);
                             if (isPVNode)
@@ -1631,8 +1502,8 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             }
             else
             {
-                // Late quiet pruning: enabled during aggressive pre-probe or at wide-window nodes; disabled during null-window verification
-                bool allowLQP = isAggressivePreprobe || !isNullWindow;
+                // Late quiet pruning is enabled for selective searches or at wide-window nodes.
+                bool allowLQP = selectiveSearch || !isNullWindow;
                 if (false && allowLQP && !isPVNode && depth <= 4 && availMoves > 0 && move->endPiece == 0 && move->promotionPiece <= 0 &&
                     (move->CastleFlag & 15) == 0 &&
                     alpha > -159800 && beta < 159800)
@@ -1802,36 +1673,19 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     }
 
                     const bool reducedSearch = LMRDepth > 0;
-                    int rawReducedScore = 0;
-                    int rawRetryScore = 0;
                     delete MPValue;
-                    if (childDiagnosticMove)
-                    {
-                        childDiagnosticNodesBefore = Search::searchNodeCount;
-                        childDiagnosticSearched = true;
-                    }
-                    const int64_t lmrReducedBefore = Search::searchNodeCount;
-                    if (reducedSearch)
-                    {
-                        g_searchAccounting.lmrInitialCalls++;
-                    }
                     MPValue = PVS(reducedSearch ? false : tempPVNode,
                                   -alpha - Option::nullWindowSize, -alpha,
                                   depth - 1 - LMRDepth, *move, move2, move3, prevMove, board4, MAtESearch, true,
-                                  depthGone + 1, previousMoveWasCheck, true, false,
-                                  isAggressivePreprobe || reducedSearch);
-                    if (reducedSearch)
-                    {
-                        g_searchAccounting.lmrReducedNodes += static_cast<uint64_t>(Search::searchNodeCount - lmrReducedBefore);
-                    }
-                    rawReducedScore = -MPValue->value;
-                    value = rawReducedScore;
+                                  depthGone + 1, previousMoveWasCheck, true,
+                                  selectiveSearch || reducedSearch);
+                    value = -MPValue->value;
                     if (value != -160000)
                     {
                         availMoves++;
                     }
                     valueSelective = MPValue->selective || reducedSearch ||
-                        isAggressivePreprobe;
+                        selectiveSearch;
                     if (!reducedSearch)
                     {
                         trustedValue = true;
@@ -1845,27 +1699,13 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
 
                     if (reducedSearch && value > alpha)
                     {
-                        reducedRetryOccurred = true;
                         const int smallerReduction = LMRDepth / 2;
                         delete MPValue;
-                        const int64_t lmrRetryBefore = Search::searchNodeCount;
-                        g_searchAccounting.lmrSmallerRetryCalls++;
-                        if (IsMateScore(rawReducedScore))
-                        {
-                            g_searchAccounting.mateLmrSmallerRetryCalls++;
-                        }
                         MPValue = PVS(false, -alpha - Option::nullWindowSize, -alpha,
                                       depth - 1 - smallerReduction, *move, move2, move3,
                                       prevMove, board4, MAtESearch, true, depthGone + 1,
-                                      previousMoveWasCheck, true, false, true);
-                        const uint64_t smallerRetryDelta = static_cast<uint64_t>(Search::searchNodeCount - lmrRetryBefore);
-                        g_searchAccounting.lmrRetryNodes += smallerRetryDelta;
-                        if (IsMateScore(rawReducedScore))
-                        {
-                            g_searchAccounting.mateLmrSmallerRetryNodes += smallerRetryDelta;
-                        }
-                        rawRetryScore = -MPValue->value;
-                        value = rawRetryScore;
+                                      previousMoveWasCheck, true, true);
+                        value = -MPValue->value;
                         valueSelective = true;
                     }
 
@@ -1877,33 +1717,12 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                         int origBetaForLMR = beta;
 #endif
                         delete MPValue;
-                        const int64_t lmrResearchBefore = Search::searchNodeCount;
-                        const bool mateTriggeredFullRetry = reducedSearch &&
-                            (reducedRetryOccurred ? IsMateScore(rawRetryScore) : IsMateScore(rawReducedScore));
-                        if (reducedSearch)
-                        {
-                            g_searchAccounting.lmrFullRetryCalls++;
-                            if (mateTriggeredFullRetry)
-                            {
-                                g_searchAccounting.mateLmrFullRetryCalls++;
-                            }
-                        }
                         MPValue = PVS(confirmationPVNode, -beta, -alpha, depth - 1,
                                       *move, move2, move3, prevMove, board4, MAtESearch,
                                       true, depthGone + 1, previousMoveWasCheck,
-                                      nullWindowSearch, false, isAggressivePreprobe);
-                        if (reducedSearch)
-                        {
-                            const uint64_t fullRetryDelta = static_cast<uint64_t>(Search::searchNodeCount - lmrResearchBefore);
-                            g_searchAccounting.lmrRetryNodes += fullRetryDelta;
-                            if (mateTriggeredFullRetry)
-                            {
-                                g_searchAccounting.mateLmrFullRetryNodes += fullRetryDelta;
-                            }
-                        }
-                        wasResearchedAtFullDepth = true;
+                                      nullWindowSearch, selectiveSearch);
                         value = -MPValue->value;
-                        valueSelective = MPValue->selective || isAggressivePreprobe;
+                        valueSelective = MPValue->selective || selectiveSearch;
                         trustedValue = true;
 #if HOWL_CORRECTNESS_TESTING
                         if (reducedSearch)
@@ -1918,7 +1737,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                 }
                 if (trustedValue && value > alpha)
                 {
-                    if (!tempRepeat && !isAggressivePreprobe && IsQuietMove(*move) &&
+                    if (!tempRepeat && !selectiveSearch && IsQuietMove(*move) &&
                         !IsMateScore(value))
                     {
                         UpdateHistory(turn, *move, depth, true);
@@ -1926,7 +1745,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     }
                     alpha = value;
                 }
-                else if (trustedValue && !tempRepeat && !isAggressivePreprobe &&
+                else if (trustedValue && !tempRepeat && !selectiveSearch &&
                          IsQuietMove(*move) && SelectedMove != nullptr &&
                          bestMoveValue > value && alphaBeforeMove >= value &&
                          !IsMateScore(value))
@@ -1943,33 +1762,6 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     delete boardCopy;
                     boardCopy = nullptr;
                 }
-                if (false && depthGone == 1 && depth + 1 == 17 &&
-                    prevMove.beginPlace == 29 && prevMove.endPlace == 22)
-                {
-                    std::cout << "rootreply depth=" << depth + 1
-                              << " move=" << ChessStringManipulation::PVToString(*move, 0, false, board4)
-                              << " nodes=" << (Search::searchNodeCount - rootReplyNodesBefore)
-                              << " score=" << value
-                              << " search_depth=" << depth
-                              << " alpha=" << alphaBeforeMove
-                              << " beta=" << beta
-                              << " pv=" << (isPVNode ? "yes" : "no")
-                              << " lmr=" << LMRDepth
-                              << " retry=" << (reducedRetryOccurred ? "yes" : "no")
-                              << " full_confirm=" << (wasResearchedAtFullDepth ? "yes" : "no")
-                              << " selective=" << (valueSelective ? "yes" : "no")
-                              << " MAtESearch=" << (MAtESearch ? "yes" : "no")
-                              << '\n';
-                }
-                if (childDiagnosticSearched)
-                {
-                    std::cout << "childresult move=" << childDiagnosticMoveName
-                              << " value=" << value
-                              << " selective=" << (valueSelective ? "yes" : "no")
-                              << " nodes_spent="
-                              << (Search::searchNodeCount - childDiagnosticNodesBefore)
-                              << '\n';
-                }
                 if (trustedValue && value > bestMoveValue)
                 {
                     if (value >= beta)
@@ -1977,7 +1769,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
 #if HOWL_CORRECTNESS_TESTING
                         RecordMoveOrderingCutoff(i, false, *move, depth, depthGone);
 #endif
-                        if (!isAggressivePreprobe)
+                        if (!selectiveSearch)
                         {
                             RecordKiller(depthGone, *move);
                             if (isPVNode)
@@ -2042,10 +1834,10 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
         }
         else
         {
-            const bool resultSelective = bestMoveSelective || isAggressivePreprobe;
+            const bool resultSelective = bestMoveSelective || selectiveSearch;
             const SearchBound resultBound = ClassifyBound(
                 bestMoveValue, origAlpha, origBeta);
-            if (!isAggressivePreprobe && SelectedMove != nullptr && bestMoveValue != 0)
+            if (!selectiveSearch && SelectedMove != nullptr && bestMoveValue != 0)
             {
                 uint8_t flag = resultBound == SearchBound::Exact
                     ? TT_EXACT

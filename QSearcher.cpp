@@ -12,7 +12,6 @@
 #include "MoveLogic.h"
 #include "RepetitionHistory.h"
 #include "ChessStringManipulation.h"
-#include "SearchAccounting.h"
 #include "MateScore.h"
 
 int QSearcher::pieceValue100[15] = {
@@ -53,11 +52,6 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
     const int origBeta = beta;
     const int qsearchDistance = std::max(0, depthGone - depthQuisStarted);
     Search::searchNodeCount++;
-    g_searchAccounting.qsearchNodes++;
-    if (g_searchAccounting.preprobeActive)
-    {
-        g_searchAccounting.preprobeQSearchNodes++;
-    }
     MoveList moveList;
     Move* SelectedMove = nullptr;
     Move selectedMoveStorage{};

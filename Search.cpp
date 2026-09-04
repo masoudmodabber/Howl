@@ -23,10 +23,8 @@
 #include "PassedPawnSetup.h"
 #include "PieceMoves.h"
 #include "DiagnosticLogger.h"
-#include "SearchAccounting.h"
 #include "MateScore.h"
 
-SearchAccounting g_searchAccounting{};
 
 std::atomic<bool> Search::active{false};
 time_t Search::beginTime{0};
@@ -93,7 +91,6 @@ void Search::PrintBestMove()
 
 void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Board &board4)
 {
-    PVSSearch::nullMoveProfile = PVSSearch::NullMoveProfile{};
     PVSSearch::ResetCandidateMemory();
     PVSSearch::ResetHistory();
     bestMove = "";
@@ -127,7 +124,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     int beta = 200000;
     moveCount = 0;
     searchNodeCount = 0;
-    g_searchAccounting.reset();
 
     bool previousMoveWasCheck = false;
     if (BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove))
@@ -306,12 +302,10 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 }
 
                 Move *move = moveList.moves[counter];
-                const int64_t rootMoveNodesBefore = searchNodeCount;
                 bool rootMoveReceivedFullSearch = false;
                 bool rootMoveExactMate = false;
                 bool rootMoveAuthoritativeResult = false;
                 bool rootMoveRepetitionResult = false;
-                PVSSearch::SetRootChildDiagnosticActive(false);
                 if (recDepth == 2 && move->beginPlace == 17 && move->endPlace == 53)
                 {
                     overAllIteration++;
@@ -523,9 +517,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 iterationHasAuthoritativeResult = true;
             }
 
-            PVSSearch::SetRootChildDiagnosticActive(false);
-            g_searchAccounting.rootMoveNodes[ChessStringManipulation::PVToString(*move, 0, false, board4)] +=
-                static_cast<uint64_t>(searchNodeCount - rootMoveNodesBefore);
 
             if (!active)
             {
@@ -820,7 +811,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         }
     }
 
-    g_searchAccounting.printSummary();
     PrintBestMove();
     finiteSearch = false;
     active = false;

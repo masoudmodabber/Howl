@@ -10,18 +10,7 @@ class PVSSearch {
     static constexpr bool ProductionIGGEnabled = false;
 
 public:
-    struct NullMoveProfile {
-        uint64_t attempts = 0;
-        uint64_t failHighs = 0;
-        uint64_t immediateCutoffs = 0;
-        uint64_t verificationsStarted = 0;
-        uint64_t verificationsConfirmed = 0;
-        uint64_t verificationsRejected = 0;
-        uint64_t nullSearchNodes = 0;
-        uint64_t verificationNodes = 0;
-    };
-    static NullMoveProfile nullMoveProfile;
-    static MovePrintValue* PVS(bool isPVNode, int alpha, int beta, int depth, Move& prevMove, Move& move1, Move& move2, Move& move3, Board& board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool nullWindowVerification = false, bool isAggressivePreprobe = false);
+    static MovePrintValue* PVS(bool isPVNode, int alpha, int beta, int depth, Move& prevMove, Move& move1, Move& move2, Move& move3, Board& board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool selectiveSearch = false);
     static void IGG(bool isPVNode, int alpha, int beta, int depth, Move& prevMove, Move& move1, Move& move2, Move& move3, Board& board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool lastCheck, bool nullWindowSearch, MoveList moveList);
     static void deleteMoveList(MoveList moveList);
     struct KillerMove {
@@ -48,7 +37,6 @@ public:
     static void ResetCandidateMemory();
     static void ResetHistory();
     static void RecordKiller(int ply, const Move& move);
-    static void SetRootChildDiagnosticActive(bool active);
 
 #if HOWL_CORRECTNESS_TESTING
     static constexpr bool ProductionIGGEnabledForTesting()

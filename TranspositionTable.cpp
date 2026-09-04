@@ -1,5 +1,4 @@
 #include "TranspositionTable.h"
-#include "SearchAccounting.h"
 #include <iostream>
 #include <cstdio>
 
@@ -224,12 +223,10 @@ bool TranspositionTable::Probe(uint64_t key, TTEntry& entry)
         return false;
     }
     stats.probes++;
-    g_searchAccounting.ttProbes++;
     std::size_t idx = key & entryMask;
     if (entries[idx].key == key && entries[idx].flag != TT_NONE)
     {
         stats.hits++;
-        g_searchAccounting.ttHits++;
         entry = entries[idx];
         return true;
     }
@@ -338,7 +335,6 @@ void TranspositionTable::RecordHitStats(bool usableBestMove, bool alreadyFirst)
 void TranspositionTable::RecordCutoff()
 {
     stats.cutoffs++;
-    g_searchAccounting.ttCutoffs++;
 }
 
 void TranspositionTable::SetCutoffsEnabled(bool enabled)
