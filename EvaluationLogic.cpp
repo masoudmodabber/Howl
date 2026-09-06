@@ -54,6 +54,228 @@ int TaperGroup3Value(int middleGameValue, int endGameValue, int phase)
     return (middleGameValue * (10000 - w) + endGameValue * w) / 10000;
 }
 
+inline int ChebyshevDistance(int sq1, int sq2)
+{
+    return std::max(std::abs((sq1 % 8) - (sq2 % 8)), std::abs((sq1 / 8) - (sq2 / 8)));
+}
+
+int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKingSq)
+{
+    static const int rankWeight[8] = {0, 0, 0, 1, 5, 8, 14, 22};
+
+    int whiteAdjustment = 0;
+    for (int pawnPlace : board.pieces[1])
+    {
+        if ((PassedPawnSetup::WhitePassedMask[pawnPlace] & board.blackPawns) == 0)
+        {
+            int blockSq = pawnPlace + 8;
+            int promoSq = 56 + (pawnPlace % 8);
+
+            int blockRace = ChebyshevDistance(blackKingSq, blockSq) - ChebyshevDistance(whiteKingSq, blockSq);
+            int promotionRace = ChebyshevDistance(blackKingSq, promoSq) - ChebyshevDistance(whiteKingSq, promoSq);
+
+            int mult = rankWeight[(pawnPlace / 8) + 1];
+            whiteAdjustment += (blockRace + promotionRace) * mult;
+        }
+    }
+
+    int blackAdjustment = 0;
+    for (int pawnPlace : board.pieces[9])
+    {
+        if ((PassedPawnSetup::BlackPassedMask[pawnPlace] & board.whitePawns) == 0)
+        {
+            int blockSq = pawnPlace - 8;
+            int promoSq = pawnPlace % 8;
+
+            int blockRace = ChebyshevDistance(whiteKingSq, blockSq) - ChebyshevDistance(blackKingSq, blockSq);
+            int promotionRace = ChebyshevDistance(whiteKingSq, promoSq) - ChebyshevDistance(blackKingSq, promoSq);
+
+            int mult = rankWeight[8 - (pawnPlace / 8)];
+            blackAdjustment += (blockRace + promotionRace) * mult;
+        }
+    }
+
+    return whiteAdjustment - blackAdjustment;
+}
+
+static int KnightDistance[64][64];
+static bool knightDistanceInitialized = false;
+
+static void InitializeKnightDistance()
+{
+    if (knightDistanceInitialized) return;
+
+    for (int src = 0; src < 64; ++src)
+    {
+        for (int dst = 0; dst < 64; ++dst)
+        {
+            KnightDistance[src][dst] = -1;
+        }
+
+        int queue[64];
+        int head = 0, tail = 0;
+
+        KnightDistance[src][src] = 0;
+        queue[tail++] = src;
+
+        while (head < tail)
+        {
+            int curr = queue[head++];
+            int currDist = KnightDistance[src][curr];
+
+            int cf = curr % 8;
+            int cr = curr / 8;
+
+            static const int dx[8] = {1, 2, 2, 1, -1, -2, -2, -1};
+            static const int dy[8] = {2, 1, -1, -2, -2, -1, 1, 2};
+
+            for (int i = 0; i < 8; ++i)
+            {
+                int nf = cf + dx[i];
+                int nr = cr + dy[i];
+                if (nf >= 0 && nf < 8 && nr >= 0 && nr < 8)
+                {
+                    int nxt = nr * 8 + nf;
+                    if (KnightDistance[src][nxt] == -1)
+                    {
+                        KnightDistance[src][nxt] = currDist + 1;
+                        queue[tail++] = nxt;
+                    }
+                }
+            }
+        }
+    }
+    knightDistanceInitialized = true;
+}
+
+int EvaluatePassedPawnMinorAccessibility(Board &board)
+{
+    InitializeKnightDistance();
+
+    static const int rankScalePercent[8] = {0, 0, 0, 25, 50, 75, 100, 100};
+    long long wholeBoard = board.whitePieces | board.blackPieces;
+
+    auto bishopCorridorValue = [&](int bishopSq, long long corridorMask) -> int
+    {
+        int count = 0;
+        for (int direction = 0; direction <= 6; direction += 2)
+        {
+            for (size_t i = 0; i < PieceMoves::BishopMoves[bishopSq][direction].size(); ++i)
+            {
+                int endPos = PieceMoves::BishopMoves[bishopSq][direction][i]->endPlace;
+                if ((corridorMask & Option::PowerTwo[endPos]) != 0)
+                {
+                    count++;
+                }
+                if ((wholeBoard & Option::PowerTwo[endPos]) != 0)
+                {
+                    break;
+                }
+            }
+        }
+        if (count == 1) return 8;
+        if (count == 2) return 16;
+        if (count >= 3) return 24;
+        return 0;
+    };
+
+    auto knightCorridorValue = [&](int knightSq, int pawnPlace, bool isWhite) -> int
+    {
+        int minDist = 99;
+        if (isWhite)
+        {
+            for (int sq = pawnPlace + 8; sq < 64; sq += 8)
+            {
+                int d = KnightDistance[knightSq][sq];
+                if (d < minDist) minDist = d;
+            }
+        }
+        else
+        {
+            for (int sq = pawnPlace - 8; sq >= 0; sq -= 8)
+            {
+                int d = KnightDistance[knightSq][sq];
+                if (d < minDist) minDist = d;
+            }
+        }
+        if (minDist == 0) return 20;
+        if (minDist == 1) return 15;
+        if (minDist == 2) return 10;
+        if (minDist == 3) return 5;
+        return 0;
+    };
+
+    int whiteNet = 0;
+    for (int pawnPlace : board.pieces[1])
+    {
+        if ((PassedPawnSetup::WhitePassedMask[pawnPlace] & board.blackPawns) == 0)
+        {
+            long long corridorMask = 0;
+            for (int sq = pawnPlace + 8; sq < 64; sq += 8)
+            {
+                corridorMask |= Option::PowerTwo[sq];
+            }
+
+            int accessibility = 0;
+            for (int bSq : board.pieces[3])
+            {
+                accessibility += bishopCorridorValue(bSq, corridorMask);
+            }
+            for (int bSq : board.pieces[11])
+            {
+                accessibility -= bishopCorridorValue(bSq, corridorMask);
+            }
+            for (int kSq : board.pieces[2])
+            {
+                accessibility += knightCorridorValue(kSq, pawnPlace, true);
+            }
+            for (int kSq : board.pieces[10])
+            {
+                accessibility -= knightCorridorValue(kSq, pawnPlace, true);
+            }
+
+            int relRank = (pawnPlace / 8) + 1;
+            whiteNet += (accessibility * rankScalePercent[relRank]) / 100;
+        }
+    }
+
+    int blackNet = 0;
+    for (int pawnPlace : board.pieces[9])
+    {
+        if ((PassedPawnSetup::BlackPassedMask[pawnPlace] & board.whitePawns) == 0)
+        {
+            long long corridorMask = 0;
+            for (int sq = pawnPlace - 8; sq >= 0; sq -= 8)
+            {
+                corridorMask |= Option::PowerTwo[sq];
+            }
+
+            int accessibility = 0;
+            for (int bSq : board.pieces[11])
+            {
+                accessibility += bishopCorridorValue(bSq, corridorMask);
+            }
+            for (int bSq : board.pieces[3])
+            {
+                accessibility -= bishopCorridorValue(bSq, corridorMask);
+            }
+            for (int kSq : board.pieces[10])
+            {
+                accessibility += knightCorridorValue(kSq, pawnPlace, false);
+            }
+            for (int kSq : board.pieces[2])
+            {
+                accessibility -= knightCorridorValue(kSq, pawnPlace, false);
+            }
+
+            int relRank = 8 - (pawnPlace / 8);
+            blackNet += (accessibility * rankScalePercent[relRank]) / 100;
+        }
+    }
+
+    return whiteNet - blackNet;
+}
+
 bool RooksAreConnected(int firstRook, int secondRook, long long occupiedSquares)
 {
     return (AttackPlaces::RookAttack[firstRook][secondRook] & occupiedSquares) ==
@@ -589,6 +811,10 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
 
     // Pawn Structure
     int pawnStructure = EvaluationLogic::GetPawnStructureValue(thisBoard, phase);
+    int passedPawnKingRace = EvaluatePassedPawnKingRace(thisBoard, whiteKingSq, blackKingSq);
+    pawnStructure += passedPawnKingRace;
+    int passedPawnMinorAccessibility = EvaluatePassedPawnMinorAccessibility(thisBoard);
+    pawnStructure += passedPawnMinorAccessibility;
 
     // Rook Connection
     int rookValue = RookConnectionValue(pieces, piecesBinary);
@@ -828,15 +1054,15 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int phase)
     int moveCount;
     const auto taperedTable = [phase](const auto& values, int index)
     {
-        return TaperEvaluationValue(values[0][index], values[1][index], phase);
+        return TaperEvaluationValue(values[0][index], values[2][index], phase);
     };
     const auto taperedGroup1Table = [phase](const auto& values, int index)
     {
-        return TaperGroup1Value(values[0][index], values[1][index], phase);
+        return TaperGroup1Value(values[0][index], values[2][index], phase);
     };
     const auto taperedGroup2Table = [phase](const auto& values, int index)
     {
-        return TaperGroup2Value(values[0][index], values[1][index], phase);
+        return TaperGroup2Value(values[0][index], values[2][index], phase);
     };
     {
         for (int piece = 1; piece < 7; piece++)
