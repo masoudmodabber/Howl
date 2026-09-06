@@ -217,3 +217,5 @@ match-engines/
 tuner-corpus/
 *.tsv
 
+# Scratch / temporary investigation files
+scratch/
