@@ -2,6 +2,7 @@
 """Runner for Howl chess engine diagnostic position suite."""
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import csv
 from datetime import datetime
 import os
@@ -9,7 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 def parse_info_line(line: str) -> Dict[str, str]:
@@ -32,12 +33,16 @@ def parse_info_line(line: str) -> Dict[str, str]:
             parsed["nodes"] = tokens[i + 1]
             i += 2
         elif token == "score" and i + 1 < len(tokens):
-            score_type = tokens[i + 1]
-            if score_type in ("cp", "mate") and i + 2 < len(tokens):
-                parsed["score"] = f"{score_type} {tokens[i + 2]}"
+            st = tokens[i + 1]
+            if st in ("cp", "mate") and i + 2 < len(tokens):
+                parsed["score_type"] = st
+                parsed["score_value"] = tokens[i + 2]
+                parsed["score"] = f"{st} {tokens[i + 2]}"
                 i += 3
             else:
-                parsed["score"] = tokens[i + 1]
+                parsed["score_type"] = "cp"
+                parsed["score_value"] = st
+                parsed["score"] = st
                 i += 2
         elif token == "pv":
             pv_tokens = []
@@ -52,76 +57,79 @@ def parse_info_line(line: str) -> Dict[str, str]:
     return parsed
 
 
-class UCIEngine:
-    def __init__(self, binary_path: str, timeout: float = 30.0):
-        self.binary_path = binary_path
-        self.timeout = timeout
-        self.proc: Optional[subprocess.Popen] = None
+def run_single_position(
+    engine_bin: str,
+    fen: str,
+    movetime_ms: int = 20000,
+    nodes_budget: Optional[int] = None,
+    timeout_sec: float = 35.0,
+) -> Dict[str, str]:
+    """Execute a single-threaded Howl search on one position."""
+    if not os.path.isfile(engine_bin):
+        raise FileNotFoundError(f"Engine binary not found: {engine_bin}")
+    if not os.access(engine_bin, os.X_OK):
+        raise PermissionError(f"Engine binary is not executable: {engine_bin}")
 
-    def start(self) -> None:
-        if not os.path.isfile(self.binary_path):
-            raise FileNotFoundError(f"Engine binary not found: {self.binary_path}")
-        if not os.access(self.binary_path, os.X_OK):
-            raise PermissionError(f"Engine binary is not executable: {self.binary_path}")
+    proc = subprocess.Popen(
+        [engine_bin],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
 
-        self.proc = subprocess.Popen(
-            [self.binary_path],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-        )
+    try:
+        def send(cmd: str) -> None:
+            proc.stdin.write(f"{cmd}\n")
+            proc.stdin.flush()
 
-        self._send("uci")
-        self._wait_for("uciok")
-        self._send("isready")
-        self._wait_for("readyok")
-
-    def _send(self, command: str) -> None:
-        if not self.proc or self.proc.stdin is None:
-            raise RuntimeError("Engine process is not running")
-        self.proc.stdin.write(f"{command}\n")
-        self.proc.stdin.flush()
-
-    def _wait_for(self, expected: str) -> None:
-        if not self.proc or self.proc.stdout is None:
-            raise RuntimeError("Engine process is not running")
-        start_time = time.monotonic()
+        send("uci")
         while True:
-            if time.monotonic() - start_time > self.timeout:
-                raise TimeoutError(f"Timed out waiting for '{expected}' from engine")
-            line = self.proc.stdout.readline()
+            line = proc.stdout.readline()
             if not line:
-                raise RuntimeError("Engine process closed stdout unexpectedly")
-            if line.strip() == expected:
+                raise RuntimeError("Howl stdout closed unexpectedly during uci handshake")
+            if line.strip() == "uciok":
                 break
 
-    def search_position(self, fen: str, budget: int) -> Dict[str, str]:
-        if not self.proc or self.proc.stdout is None:
-            raise RuntimeError("Engine process is not running")
+        send("isready")
+        while True:
+            line = proc.stdout.readline()
+            if not line:
+                raise RuntimeError("Howl stdout closed unexpectedly during isready")
+            if line.strip() == "readyok":
+                break
 
-        self._send("ucinewgame")
-        self._send("isready")
-        self._wait_for("readyok")
+        send("ucinewgame")
+        send("isready")
+        while True:
+            line = proc.stdout.readline()
+            if not line:
+                raise RuntimeError("Howl stdout closed unexpectedly during ucinewgame")
+            if line.strip() == "readyok":
+                break
 
-        self._send(f"position fen {fen}")
-        self._send(f"go nodes {budget}")
+        send(f"position fen {fen}")
+        if nodes_budget is not None and nodes_budget > 0:
+            send(f"go nodes {nodes_budget}")
+        else:
+            send(f"go movetime {movetime_ms}")
 
         completed_depth = ""
         nodes = ""
-        score = ""
+        score_type = ""
+        score_value = ""
         pv = ""
         best_move = ""
 
         start_time = time.monotonic()
         while True:
-            if time.monotonic() - start_time > self.timeout:
+            if time.monotonic() - start_time > timeout_sec:
                 raise TimeoutError(f"Timed out during search for FEN: {fen}")
 
-            line = self.proc.stdout.readline()
+            line = proc.stdout.readline()
             if not line:
-                raise RuntimeError("Engine process closed stdout unexpectedly during search")
+                raise RuntimeError("Howl stdout closed unexpectedly during search")
 
             line_str = line.strip()
             if line_str.startswith("info"):
@@ -130,8 +138,10 @@ class UCIEngine:
                     completed_depth = info["depth"]
                 if "nodes" in info:
                     nodes = info["nodes"]
-                if "score" in info:
-                    score = info["score"]
+                if "score_type" in info:
+                    score_type = info["score_type"]
+                if "score_value" in info:
+                    score_value = info["score_value"]
                 if "pv" in info:
                     pv = info["pv"]
             elif line_str.startswith("bestmove"):
@@ -142,38 +152,51 @@ class UCIEngine:
                     best_move = "(none)"
                 break
 
+        send("quit")
+        try:
+            proc.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
         return {
             "completed_depth": completed_depth,
             "nodes": nodes,
-            "score": score,
+            "score_type": score_type,
+            "score_value": score_value,
             "best_move": best_move,
             "pv": pv,
         }
-
-    def close(self) -> None:
-        if self.proc:
+    finally:
+        if proc.poll() is None:
             try:
-                if self.proc.poll() is None:
-                    self._send("quit")
-                    try:
-                        self.proc.wait(timeout=2.0)
-                    except subprocess.TimeoutExpired:
-                        self.proc.kill()
+                proc.kill()
             except Exception:
-                try:
-                    self.proc.kill()
-                except Exception:
-                    pass
-            finally:
-                self.proc = None
+                pass
+
+
+def load_tsv_dict(filepath: Path, key_col: str = "id") -> Dict[str, Dict[str, str]]:
+    """Load TSV file as a dictionary keyed by key_col."""
+    if not filepath.exists():
+        return {}
+    data: Dict[str, Dict[str, str]] = {}
+    with open(filepath, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        for row in reader:
+            k = row.get(key_col, "")
+            if k:
+                data[k] = row
+    return data
 
 
 def run_diagnostics(
     positions_file: str,
     engine_bin: str,
-    budget: int,
+    movetime_ms: int = 20000,
+    nodes_budget: Optional[int] = None,
+    concurrency: int = 12,
+    reference_file: str = "diagnostics/reference.tsv",
     output_file: Optional[str] = None,
-    timeout: float = 30.0,
+    timeout_buffer: float = 15.0,
 ) -> str:
     positions_path = Path(positions_file)
     if not positions_path.exists():
@@ -188,6 +211,8 @@ def run_diagnostics(
     if not positions:
         raise ValueError(f"No positions found in {positions_file}")
 
+    ref_data = load_tsv_dict(Path(reference_file), key_col="id")
+
     if not output_file:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         results_dir = Path("diagnostics/results")
@@ -197,56 +222,133 @@ def run_diagnostics(
         out_path = Path(output_file)
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    engine = UCIEngine(binary_path=engine_bin, timeout=timeout)
-    engine.start()
-
     fieldnames = [
         "id",
         "fen",
-        "category",
-        "reference_move",
-        "budget",
+        "game_phase",
+        "movetime_ms",
         "completed_depth",
         "nodes",
-        "score",
+        "score_type",
+        "score_value",
         "best_move",
         "pv",
-        "match",
+        "stockfish_move_1",
+        "stockfish_score_1_type",
+        "stockfish_score_1_value",
+        "stockfish_pv_1",
+        "stockfish_move_2",
+        "stockfish_score_2_type",
+        "stockfish_score_2_value",
+        "stockfish_pv_2",
+        "stockfish_move_3",
+        "stockfish_score_3_type",
+        "stockfish_score_3_value",
+        "stockfish_pv_3",
+        "stockfish_rank_of_howl_move",
     ]
 
-    results: List[Dict[str, str]] = []
-    try:
-        for pos in positions:
-            pos_id = pos.get("id", "")
-            fen = pos.get("fen", "")
-            category = pos.get("category", "")
-            reference_move = pos.get("reference_move", "")
+    total_timeout = (movetime_ms / 1000.0) + timeout_buffer if movetime_ms > 0 else 60.0
 
-            search_result = engine.search_position(fen=fen, budget=budget)
-            best_move = search_result["best_move"]
-            is_match = "true" if best_move == reference_move else "false"
+    print(
+        f"Running diagnostics for {len(positions)} positions using {concurrency} concurrent Howl processes..."
+    )
+    t_start = time.monotonic()
 
-            record = {
-                "id": pos_id,
-                "fen": fen,
-                "category": category,
-                "reference_move": reference_move,
-                "budget": str(budget),
-                "completed_depth": search_result["completed_depth"],
-                "nodes": search_result["nodes"],
-                "score": search_result["score"],
-                "best_move": best_move,
-                "pv": search_result["pv"],
-                "match": is_match,
-            }
-            results.append(record)
-    finally:
-        engine.close()
+    results_by_index: Dict[int, Dict[str, str]] = {}
+
+    def worker(idx: int, pos: Dict[str, str]) -> Tuple[int, Dict[str, str]]:
+        pos_id = pos.get("id", "")
+        fen = pos.get("fen", "")
+        game_phase = pos.get("game_phase", "")
+
+        t0 = time.monotonic()
+        search_res = run_single_position(
+            engine_bin=engine_bin,
+            fen=fen,
+            movetime_ms=movetime_ms,
+            nodes_budget=nodes_budget,
+            timeout_sec=total_timeout,
+        )
+        elapsed = time.monotonic() - t0
+
+        ref = ref_data.get(pos_id, {})
+        sf_m1 = ref.get("stockfish_move_1", "")
+        sf_m2 = ref.get("stockfish_move_2", "")
+        sf_m3 = ref.get("stockfish_move_3", "")
+
+        best_move = search_res["best_move"]
+        if best_move and best_move != "(none)":
+            if best_move == sf_m1:
+                rank = "1"
+            elif best_move == sf_m2:
+                rank = "2"
+            elif best_move == sf_m3:
+                rank = "3"
+            else:
+                rank = "outside_top_3"
+        else:
+            rank = "outside_top_3"
+
+        row = {
+            "id": pos_id,
+            "fen": fen,
+            "game_phase": game_phase,
+            "movetime_ms": str(movetime_ms),
+            "completed_depth": search_res["completed_depth"],
+            "nodes": search_res["nodes"],
+            "score_type": search_res["score_type"],
+            "score_value": search_res["score_value"],
+            "best_move": best_move,
+            "pv": search_res["pv"],
+            "stockfish_move_1": sf_m1,
+            "stockfish_score_1_type": ref.get("stockfish_score_1_type", ""),
+            "stockfish_score_1_value": ref.get("stockfish_score_1_value", ""),
+            "stockfish_pv_1": ref.get("stockfish_pv_1", ""),
+            "stockfish_move_2": sf_m2,
+            "stockfish_score_2_type": ref.get("stockfish_score_2_type", ""),
+            "stockfish_score_2_value": ref.get("stockfish_score_2_value", ""),
+            "stockfish_pv_2": ref.get("stockfish_pv_2", ""),
+            "stockfish_move_3": sf_m3,
+            "stockfish_score_3_type": ref.get("stockfish_score_3_type", ""),
+            "stockfish_score_3_value": ref.get("stockfish_score_3_value", ""),
+            "stockfish_pv_3": ref.get("stockfish_pv_3", ""),
+            "stockfish_rank_of_howl_move": rank,
+        }
+        print(
+            f"[{pos_id}] finished in {elapsed:.1f}s | depth={search_res['completed_depth']} "
+            f"best={best_move} (SF rank: {rank})",
+            flush=True,
+        )
+        return idx, row
+
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        futures = [
+            executor.submit(worker, idx, pos) for idx, pos in enumerate(positions)
+        ]
+        for f in as_completed(futures):
+            idx, res_row = f.result()
+            results_by_index[idx] = res_row
+
+    ordered_results = [results_by_index[i] for i in range(len(positions))]
 
     with open(out_path, "w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter="\t")
         writer.writeheader()
-        writer.writerows(results)
+        writer.writerows(ordered_results)
+
+    total_time = time.monotonic() - t_start
+    print(f"\nAll {len(positions)} positions completed in {total_time:.1f}s.")
+    print(f"Results written to: {out_path}")
+
+    # Summary of Stockfish ranks
+    rank_counts: Dict[str, int] = {}
+    for r in ordered_results:
+        rk = r["stockfish_rank_of_howl_move"]
+        rank_counts[rk] = rank_counts.get(rk, 0) + 1
+    print("Rank distribution of Howl moves:")
+    for k in ["1", "2", "3", "outside_top_3"]:
+        print(f"  {k}: {rank_counts.get(k, 0)}")
 
     return str(out_path)
 
@@ -259,42 +361,52 @@ def main() -> None:
         help="Path to TSV position file (default: diagnostics/positions.tsv)",
     )
     parser.add_argument(
+        "--reference",
+        default="diagnostics/reference.tsv",
+        help="Path to Stockfish reference TSV (default: diagnostics/reference.tsv)",
+    )
+    parser.add_argument(
         "--engine",
         default="./build/howl",
         help="Path to engine binary (default: ./build/howl)",
+    )
+    parser.add_argument(
+        "--movetime",
+        type=int,
+        default=20000,
+        help="Movetime in milliseconds per position (default: 20000)",
     )
     parser.add_argument(
         "--nodes",
         "--budget",
         dest="budget",
         type=int,
-        default=1000,
-        help="Fixed node budget per position (default: 1000)",
+        default=None,
+        help="Fixed node budget per position (optional)",
+    )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=12,
+        help="Maximum concurrent Howl instances (default: 12)",
     )
     parser.add_argument(
         "--output",
-        default=None,
-        help="Output TSV file path (default: diagnostics/results/results_<timestamp>.tsv)",
-    )
-    parser.add_argument(
-        "--timeout",
-        type=float,
-        default=30.0,
-        help="Timeout in seconds per position (default: 30.0)",
+        default="diagnostics/results/howl_diagnostics_20s.tsv",
+        help="Output TSV file path (default: diagnostics/results/howl_diagnostics_20s.tsv)",
     )
 
     args = parser.parse_args()
 
-    out_file = run_diagnostics(
+    run_diagnostics(
         positions_file=args.positions,
         engine_bin=args.engine,
-        budget=args.budget,
+        movetime_ms=args.movetime,
+        nodes_budget=args.budget,
+        concurrency=args.concurrency,
+        reference_file=args.reference,
         output_file=args.output,
-        timeout=args.timeout,
     )
-
-    print(f"Diagnostics completed successfully.")
-    print(f"Results written to: {out_file}")
 
 
 if __name__ == "__main__":
