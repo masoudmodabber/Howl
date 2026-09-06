@@ -3563,7 +3563,7 @@ int RunEvaluationCorrectness(const std::string& testCase)
 
         const Group3Case g3Cases[] = {
             {"passed pawn d5", Option::WhitePassedPawnValueMiddleGam[35],
-                Option::WhitePassedPawnValueEndGame[35], 20, 20, 55, 90, 90},
+                Option::WhitePassedPawnValueEndGame[35], 20, 20, 40, 60, 60},
             {"pawn advancement rank 4", 0, 8, 0, 0, 4, 8, 8}
         };
 
@@ -3713,7 +3713,7 @@ int RunEvaluationCorrectness(const std::string& testCase)
             return 1;
         }
 
-        // 2. EG Endpoint (phase = 0): White pawn on d5 (Option::WhitePassedPawnValueEndGame[35] = 90, goForward = 4*2 = 8)
+        // 2. EG Endpoint (phase = 0): White pawn on d5 (Option::WhitePassedPawnValueEndGame[35] = 60, goForward = 4*2 = 8)
         std::unique_ptr<Board> egBoard(BoardMaker::MakeInitialBoard("8/8/8/3P4/8/8/4k3/4K3 w - - 0 1"));
         int egPhase = EvaluationLogic::CalculatePhase(*egBoard);
         if (egPhase != 0)
@@ -3722,14 +3722,14 @@ int RunEvaluationCorrectness(const std::string& testCase)
             return 1;
         }
         int egPawnVal = EvaluationLogic::GetPawnStructureValue(*egBoard, egPhase);
-        if (egPawnVal != (90 + 8))
+        if (egPawnVal != (60 + 8))
         {
-            std::cerr << "Expected EG passed pawn value 98 (90+8), got " << egPawnVal << '\n';
+            std::cerr << "Expected EG passed pawn value 68 (60+8), got " << egPawnVal << '\n';
             return 1;
         }
 
         // 3. Intermediate interpolation (phase = 12): White Q(4)+R(2)=6, Black Q(4)+R(2)=6 -> Total = 12
-        // Passed pawn bonus = 55; tapered endgame advancement = 4.
+        // Passed pawn bonus = 40; tapered endgame advancement = 4.
         std::unique_ptr<Board> midBoard(BoardMaker::MakeInitialBoard("3rqk2/8/8/3P4/8/8/3RQK2/8 w - - 0 1"));
         int midPhase = EvaluationLogic::CalculatePhase(*midBoard);
         if (midPhase != 12)
@@ -3738,9 +3738,9 @@ int RunEvaluationCorrectness(const std::string& testCase)
             return 1;
         }
         int midPassed = EvaluationLogic::GetPawnStructureValue(*midBoard, midPhase);
-        if (midPassed != 59)
+        if (midPassed != 44)
         {
-            std::cerr << "Expected mid phase pawn value 59, got " << midPassed << '\n';
+            std::cerr << "Expected mid phase pawn value 44, got " << midPassed << '\n';
             return 1;
         }
 
