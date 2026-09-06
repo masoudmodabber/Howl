@@ -1,10 +1,11 @@
-﻿#ifdef _WIN32
+#ifdef _WIN32
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
 #endif
 // BoardInitializer.cpp
 #include "BoardInitializer.h"
 #include <climits>
+#include <cstdint>
 
 Board *BoardInitializer::beginBoard = nullptr;
 long long BoardInitializer::ZCode[16][64];
@@ -16,8 +17,8 @@ void BoardInitializer::Initialize()
 {
     if (!initialized)
     {
-        std::random_device rd;
-        std::mt19937 gen(rd());
+        constexpr std::uint32_t DeterministicZobristSeed = 0xD3708157;
+        std::mt19937 gen(DeterministicZobristSeed);
         std::uniform_int_distribution<long long> dis(LLONG_MIN, LLONG_MAX);
 
         for (int counter = 0; counter < 64; counter++)
