@@ -2230,7 +2230,17 @@ MoveList MoveLogic::QSearchStage1Generator(Board &thisBoard, int depth, int dept
 
         if (isPromotion)
         {
-            stage1List.moves[stage1List.count++] = m;
+            const int promoType = NormalizeExchangePiece(m->promotionPiece);
+            m->givesCheck = MoveWouldGiveCheck(thisBoard, *m);
+
+            if (promoType == 5 || m->givesCheck)
+            {
+                stage1List.moves[stage1List.count++] = m;
+            }
+            else
+            {
+                delete m;
+            }
         }
         else if (isCapture)
         {
