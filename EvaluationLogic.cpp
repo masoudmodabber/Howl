@@ -578,10 +578,12 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     KingDangerResult blackKingDanger = EvaluateKingDanger(thisBoard, false);
     int kingDangerNet = blackKingDanger.danger - whiteKingDanger.danger;
 
-    int whiteKingPlacement = Option::WhiteKingPlaceSafetyMiddleGame[pieces[6].front()];
-    int blackKingPlacement = Option::BlackKingPlaceSafetyMiddleGame[pieces[14].front()];
-    whiteKingPlacement = whiteKingPlacement * phase / 24;
-    blackKingPlacement = blackKingPlacement * phase / 24;
+    int whiteKingSq = pieces[6].front();
+    int blackKingSq = pieces[14].front();
+    int whiteKingPlacement = (Option::WhiteKingPlaceSafetyMiddleGame[whiteKingSq] * phase
+                              + Option::KingInValueWhiteEndGame[whiteKingSq] * (24 - phase)) / 24;
+    int blackKingPlacement = (Option::BlackKingPlaceSafetyMiddleGame[blackKingSq] * phase
+                              + Option::KingInValueBlackEndGame[blackKingSq] * (24 - phase)) / 24;
     int kingPlacementNet = whiteKingPlacement - blackKingPlacement;
     int kingSafety = kingDangerNet + kingPlacementNet;
 
