@@ -62,6 +62,8 @@ inline int ChebyshevDistance(int sq1, int sq2)
 int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKingSq)
 {
     static const int rankWeight[8] = {0, 0, 0, 1, 5, 8, 14, 22};
+    int whiteRaceTempo = (!board.sideToMove) ? 1 : -1;
+    int blackRaceTempo = (board.sideToMove) ? 1 : -1;
 
     int whiteAdjustment = 0;
     for (int pawnPlace : board.pieces[1])
@@ -75,7 +77,7 @@ int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKingSq)
             int promotionRace = ChebyshevDistance(blackKingSq, promoSq) - ChebyshevDistance(whiteKingSq, promoSq);
 
             int mult = rankWeight[(pawnPlace / 8) + 1];
-            whiteAdjustment += (blockRace + promotionRace) * mult;
+            whiteAdjustment += (blockRace + promotionRace + whiteRaceTempo) * mult;
         }
     }
 
@@ -91,7 +93,7 @@ int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKingSq)
             int promotionRace = ChebyshevDistance(whiteKingSq, promoSq) - ChebyshevDistance(blackKingSq, promoSq);
 
             int mult = rankWeight[8 - (pawnPlace / 8)];
-            blackAdjustment += (blockRace + promotionRace) * mult;
+            blackAdjustment += (blockRace + promotionRace + blackRaceTempo) * mult;
         }
     }
 
@@ -153,31 +155,6 @@ int EvaluatePassedPawnMinorAccessibility(Board &board)
     InitializeKnightDistance();
 
     static const int rankScalePercent[8] = {0, 0, 0, 25, 50, 75, 100, 100};
-    long long wholeBoard = board.whitePieces | board.blackPieces;
-
-    auto bishopCorridorValue = [&](int bishopSq, long long corridorMask) -> int
-    {
-        int count = 0;
-        for (int direction = 0; direction <= 6; direction += 2)
-        {
-            for (size_t i = 0; i < PieceMoves::BishopMoves[bishopSq][direction].size(); ++i)
-            {
-                int endPos = PieceMoves::BishopMoves[bishopSq][direction][i]->endPlace;
-                if ((corridorMask & Option::PowerTwo[endPos]) != 0)
-                {
-                    count++;
-                }
-                if ((wholeBoard & Option::PowerTwo[endPos]) != 0)
-                {
-                    break;
-                }
-            }
-        }
-        if (count == 1) return 8;
-        if (count == 2) return 16;
-        if (count >= 3) return 24;
-        return 0;
-    };
 
     auto knightCorridorValue = [&](int knightSq, int pawnPlace, bool isWhite) -> int
     {
@@ -199,7 +176,7 @@ int EvaluatePassedPawnMinorAccessibility(Board &board)
             }
         }
         if (minDist == 0) return 20;
-        if (minDist == 1) return 15;
+        if (minDist == 1) return 0;
         if (minDist == 2) return 10;
         if (minDist == 3) return 5;
         return 0;
@@ -210,21 +187,7 @@ int EvaluatePassedPawnMinorAccessibility(Board &board)
     {
         if ((PassedPawnSetup::WhitePassedMask[pawnPlace] & board.blackPawns) == 0)
         {
-            long long corridorMask = 0;
-            for (int sq = pawnPlace + 8; sq < 64; sq += 8)
-            {
-                corridorMask |= Option::PowerTwo[sq];
-            }
-
             int accessibility = 0;
-            for (int bSq : board.pieces[3])
-            {
-                accessibility += bishopCorridorValue(bSq, corridorMask);
-            }
-            for (int bSq : board.pieces[11])
-            {
-                accessibility -= bishopCorridorValue(bSq, corridorMask);
-            }
             for (int kSq : board.pieces[2])
             {
                 accessibility += knightCorridorValue(kSq, pawnPlace, true);
@@ -244,21 +207,7 @@ int EvaluatePassedPawnMinorAccessibility(Board &board)
     {
         if ((PassedPawnSetup::BlackPassedMask[pawnPlace] & board.whitePawns) == 0)
         {
-            long long corridorMask = 0;
-            for (int sq = pawnPlace - 8; sq >= 0; sq -= 8)
-            {
-                corridorMask |= Option::PowerTwo[sq];
-            }
-
             int accessibility = 0;
-            for (int bSq : board.pieces[11])
-            {
-                accessibility += bishopCorridorValue(bSq, corridorMask);
-            }
-            for (int bSq : board.pieces[3])
-            {
-                accessibility -= bishopCorridorValue(bSq, corridorMask);
-            }
             for (int kSq : board.pieces[10])
             {
                 accessibility += knightCorridorValue(kSq, pawnPlace, false);
@@ -274,6 +223,153 @@ int EvaluatePassedPawnMinorAccessibility(Board &board)
     }
 
     return whiteNet - blackNet;
+}
+
+static bool IsSquareAttackedBySide(Board &board, int sq, bool byWhite)
+{
+    long long wholeBoardWithTarget = (board.whitePieces | board.blackPieces) | Option::PowerTwo[sq];
+    int pawnPiece = byWhite ? 1 : 9;
+    int knightPiece = byWhite ? 2 : 10;
+    int bishopPiece = byWhite ? 3 : 11;
+    int rookPiece = byWhite ? 4 : 12;
+    int queenPiece = byWhite ? 5 : 13;
+    int kingPiece = byWhite ? 6 : 14;
+
+    if (byWhite)
+    {
+        for (int pSq : board.pieces[pawnPiece])
+        {
+            if ((AttackPlaces::WhitePawnAttackPlaces[pSq] & Option::PowerTwo[sq]) != 0)
+            {
+                return true;
+            }
+        }
+    }
+    else
+    {
+        for (int pSq : board.pieces[pawnPiece])
+        {
+            if ((AttackPlaces::BlackPawnAttackPlaces[pSq] & Option::PowerTwo[sq]) != 0)
+            {
+                return true;
+            }
+        }
+    }
+
+    for (int kSq : board.pieces[knightPiece])
+    {
+        if ((AttackPlaces::KnightAttackPlaces[kSq] & Option::PowerTwo[sq]) != 0)
+        {
+            return true;
+        }
+    }
+
+    for (int kSq : board.pieces[kingPiece])
+    {
+        if ((AttackPlaces::KingAttackPlaces[kSq] & Option::PowerTwo[sq]) != 0)
+        {
+            return true;
+        }
+    }
+
+    for (int bSq : board.pieces[bishopPiece])
+    {
+        if ((AttackPlaces::BishopAttack[bSq][sq] & wholeBoardWithTarget) == Option::PowerTwo[sq])
+        {
+            return true;
+        }
+    }
+
+    for (int rSq : board.pieces[rookPiece])
+    {
+        if ((AttackPlaces::RookAttack[rSq][sq] & wholeBoardWithTarget) == Option::PowerTwo[sq])
+        {
+            return true;
+        }
+    }
+
+    for (int qSq : board.pieces[queenPiece])
+    {
+        if ((AttackPlaces::QueenAttack[qSq][sq] & wholeBoardWithTarget) == Option::PowerTwo[sq])
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+int EvaluatePassedPawnCorridorSafety(Board &board)
+{
+    static const int rankScalePercent[8] = {0, 0, 0, 25, 50, 75, 100, 100};
+
+    int whiteTotal = 0;
+    for (int pawnPlace : board.pieces[1])
+    {
+        if ((PassedPawnSetup::WhitePassedMask[pawnPlace] & board.blackPawns) == 0)
+        {
+            int corridorControl = 0;
+            for (int sq = pawnPlace + 8; sq < 64; sq += 8)
+            {
+                bool friendly = IsSquareAttackedBySide(board, sq, true);
+                bool enemy = IsSquareAttackedBySide(board, sq, false);
+
+                if (enemy && !friendly)
+                {
+                    corridorControl -= 8;
+                }
+                else if (friendly && !enemy)
+                {
+                    corridorControl += 4;
+                }
+                else if (friendly && enemy)
+                {
+                    corridorControl -= 2;
+                }
+            }
+
+            int relRank = (pawnPlace / 8) + 1;
+            int scaled = (corridorControl * rankScalePercent[relRank]) / 100;
+            if (scaled < -32) scaled = -32;
+            if (scaled > 24) scaled = 24;
+            whiteTotal += scaled;
+        }
+    }
+
+    int blackTotal = 0;
+    for (int pawnPlace : board.pieces[9])
+    {
+        if ((PassedPawnSetup::BlackPassedMask[pawnPlace] & board.whitePawns) == 0)
+        {
+            int corridorControl = 0;
+            for (int sq = pawnPlace - 8; sq >= 0; sq -= 8)
+            {
+                bool friendly = IsSquareAttackedBySide(board, sq, false);
+                bool enemy = IsSquareAttackedBySide(board, sq, true);
+
+                if (enemy && !friendly)
+                {
+                    corridorControl -= 8;
+                }
+                else if (friendly && !enemy)
+                {
+                    corridorControl += 4;
+                }
+                else if (friendly && enemy)
+                {
+                    corridorControl -= 2;
+                }
+            }
+
+            int relRank = 8 - (pawnPlace / 8);
+            int scaled = (corridorControl * rankScalePercent[relRank]) / 100;
+            if (scaled < -32) scaled = -32;
+            if (scaled > 24) scaled = 24;
+            blackTotal += scaled;
+        }
+    }
+
+    return whiteTotal - blackTotal;
 }
 
 bool RooksAreConnected(int firstRook, int secondRook, long long occupiedSquares)
@@ -815,6 +911,8 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     pawnStructure += passedPawnKingRace;
     int passedPawnMinorAccessibility = EvaluatePassedPawnMinorAccessibility(thisBoard);
     pawnStructure += passedPawnMinorAccessibility;
+    int passedPawnCorridorSafety = EvaluatePassedPawnCorridorSafety(thisBoard);
+    pawnStructure += passedPawnCorridorSafety;
 
     // Rook Connection
     int rookValue = RookConnectionValue(pieces, piecesBinary);
@@ -822,38 +920,63 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     const int taperedTempo = TaperGroup1Value(24, 11, phase);
     int temp = (!thisBoard.sideToMove) ? taperedTempo : -taperedTempo;
 
-    double oppositeColorBishop = 1;
+    double oppositeColorBishop = 1.0;
     if (pieces[3].size() == 1 && pieces[11].size() == 1 && ((pieces[3].front() / 8 + pieces[3].front() % 8) % 2) != ((pieces[11].front() / 8 + pieces[11].front() % 8) % 2))
     {
         oppositeColorBishop = (0.9 * phase + 0.75 * (24 - phase)) / 24;
     }
 
     int unscaled = pieceEvaluation + bishopPairVaue + movement + pawnStructure + kingSafety + rookValue + center + temp;
-    int evaluation = (int)(unscaled * oppositeColorBishop); 
-    bool drawAdjustment = false;
-    if (evaluation > 0)
+
+    double endgameScaleFactor = oppositeColorBishop;
+    if (unscaled > 0)
     {
-        if (pieces[1].size() == 0 && pieces[3].size() == 0 && pieces[4].size() == 0 && pieces[5].size() == 0)
+        if (pieces[1].size() == 0 && pieces[4].size() == 0 && pieces[5].size() == 0 &&
+            (pieces[2].size() + pieces[3].size() == 1) &&
+            pieces[9].size() >= 1)
         {
-            evaluation = 30;
-            drawAdjustment = true;
-        }
-        else if (pieces[1].size() == 0 && pieces[2].size() == 0 && pieces[3].size() < 2 && pieces[4].size() == 0 && pieces[5].size() == 0)
-        {
-            evaluation = 30;
-            drawAdjustment = true;
+            endgameScaleFactor *= 0.25;
         }
     }
-    else if (evaluation < 0)
+    else if (unscaled < 0)
     {
-        if (pieces[9].size() == 0 && pieces[11].size() == 0 && pieces[12].size() == 0 && pieces[13].size() == 0)
+        if (pieces[9].size() == 0 && pieces[12].size() == 0 && pieces[13].size() == 0 &&
+            (pieces[10].size() + pieces[11].size() == 1) &&
+            pieces[1].size() >= 1)
         {
-            evaluation = -30;
+            endgameScaleFactor *= 0.25;
+        }
+    }
+
+    int evaluation = (int)(unscaled * endgameScaleFactor); 
+    bool drawAdjustment = false;
+    bool noPawns = (pieces[1].size() == 0 && pieces[9].size() == 0);
+    bool noMajorPieces = (pieces[4].size() == 0 && pieces[12].size() == 0 &&
+                          pieces[5].size() == 0 && pieces[13].size() == 0);
+
+    if (noPawns && noMajorPieces)
+    {
+        int whiteKnights = pieces[2].size();
+        int whiteBishops = pieces[3].size();
+        int blackKnights = pieces[10].size();
+        int blackBishops = pieces[11].size();
+
+        int whiteMinors = whiteKnights + whiteBishops;
+        int blackMinors = blackKnights + blackBishops;
+
+        if (whiteMinors == 0 && blackMinors == 0)
+        {
+            evaluation = 0;
             drawAdjustment = true;
         }
-        else if (pieces[9].size() == 0 && pieces[10].size() == 0 && pieces[11].size() < 2 && pieces[12].size() == 0 && pieces[13].size() == 0)
+        else if (blackMinors == 0 && ((whiteBishops == 0 && whiteKnights <= 2) || (whiteKnights == 0 && whiteBishops < 2)))
         {
-            evaluation = -30;
+            evaluation = 0;
+            drawAdjustment = true;
+        }
+        else if (whiteMinors == 0 && ((blackBishops == 0 && blackKnights <= 2) || (blackKnights == 0 && blackBishops < 2)))
+        {
+            evaluation = 0;
             drawAdjustment = true;
         }
     }
@@ -906,9 +1029,9 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
         breakdown->rookConnectionNet = rookValue;
         breakdown->tempoNet = temp;
 
-        breakdown->oppositeColorBishopScale = oppositeColorBishop;
+        breakdown->oppositeColorBishopScale = endgameScaleFactor;
         breakdown->unscaledTotal = unscaled;
-        breakdown->scaledTotal = (int)(unscaled * oppositeColorBishop);
+        breakdown->scaledTotal = (int)(unscaled * endgameScaleFactor);
         breakdown->drawAdjustmentApplied = drawAdjustment;
         breakdown->whitePerspectiveTotal = evaluation;
         breakdown->sideToMoveTotal = thisBoard.sideToMove ? -evaluation : evaluation;
