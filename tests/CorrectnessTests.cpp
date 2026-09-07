@@ -3974,10 +3974,22 @@ int RunMultiPVCorrectnessTest()
             size_t scorePos = line.find(" score cp ");
             size_t pvPos = line.find(" pv ");
             size_t multiPos = line.find(" multipv ");
-            if (scorePos != std::string::npos && multiPos != std::string::npos)
+            if (scorePos != std::string::npos && multiPos != std::string::npos && pvPos != std::string::npos)
             {
-                int sc = std::stoi(line.substr(scorePos + 10, multiPos - (scorePos + 10)));
-                std::string pv = line.substr(pvPos + 4, scorePos - (pvPos + 4));
+                int sc = 0;
+                std::string pv = "";
+                if (multiPos < scorePos && scorePos < pvPos)
+                {
+                    size_t scoreValStart = scorePos + 10;
+                    size_t scoreValEnd = line.find(' ', scoreValStart);
+                    sc = std::stoi(line.substr(scoreValStart, scoreValEnd - scoreValStart));
+                    pv = line.substr(pvPos + 4);
+                }
+                else
+                {
+                    sc = std::stoi(line.substr(scorePos + 10, multiPos - (scorePos + 10)));
+                    pv = line.substr(pvPos + 4, scorePos - (pvPos + 4));
+                }
                 scores.push_back(sc);
                 pvs.push_back(pv);
             }
