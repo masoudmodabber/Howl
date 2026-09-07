@@ -35,6 +35,32 @@ public:
             }
         }
     }
+    bool replace(int oldVal, int newVal) {
+        for (int i = 0; i < count; ++i) {
+            if (data[i] == oldVal) {
+                data[i] = newVal;
+                return true;
+            }
+        }
+        return false;
+    }
+    int find(int v) const {
+        for (int i = 0; i < count; ++i) {
+            if (data[i] == v) return i;
+        }
+        return -1;
+    }
+    void insert(int idx, int v) {
+        assert(idx >= 0 && idx <= count && count < capacity);
+        for (int j = count; j > idx; --j) data[j] = data[j - 1];
+        data[idx] = v;
+        ++count;
+    }
+    void erase_at(int idx) {
+        assert(idx >= 0 && idx < count);
+        for (int j = idx; j < count - 1; ++j) data[j] = data[j + 1];
+        --count;
+    }
     int* begin() { return data; }
     int* end() { return data + count; }
     int front() const { return count > 0 ? data[0] : -1; }
@@ -50,6 +76,16 @@ public:
     const int& operator[](int idx) const {
         assert(idx >= 0 && idx < count);
         return data[idx];
+    }
+    bool operator==(const MyList& other) const {
+        if (count != other.count) return false;
+        for (int i = 0; i < count; ++i) {
+            if (data[i] != other.data[i]) return false;
+        }
+        return true;
+    }
+    bool operator!=(const MyList& other) const {
+        return !(*this == other);
     }
 };
 

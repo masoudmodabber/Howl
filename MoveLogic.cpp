@@ -11,6 +11,9 @@
 #include "Option.h"
 #include "PieceMoves.h"
 #include "AttackPlaces.h"
+#include "GameLogic.h"
+#include "BoardLogic.h"
+#include "MissingInfoAboutPrevStateFromMove.h"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -2317,6 +2320,376 @@ MoveList MoveLogic::MaterializeStage2(Board &thisBoard, int depth, int depthGone
     ScoreAndSortMoves(thisBoard, stage2List, depth, depthGone, whiteAttacker, blackAttacker);
 
     return stage2List;
+}
+
+bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int depthGone)
+{
+    const bool side = thisBoard.sideToMove;
+    const int turn = side ? 1 : 0;
+    const int offset = side ? 8 : 0;
+    const long long wholeBoard = thisBoard.whitePieces | thisBoard.blackPieces;
+    const long long ownPieces = side ? thisBoard.blackPieces : thisBoard.whitePieces;
+    const long long enemyPieces = side ? thisBoard.whitePieces : thisBoard.blackPieces;
+    const int* mainBoard = thisBoard.mainBoard;
+
+    auto isLegal = [&](Move& m) -> bool {
+        MissingInfoAboutPrevStateFromMove undo(thisBoard, m);
+        GameLogic::DoMove(thisBoard, m, const_cast<Move&>(prevMove), depthGone, depthGone, &undo);
+        bool legal = !BoardLogic::UnderAttack(
+            thisBoard, thisBoard.pieces[turn * 8 + 6].front(), thisBoard.sideToMove);
+        GameLogic::UndoMove(thisBoard, m, undo);
+        return legal;
+    };
+
+    for (int pieceCounter = 1; pieceCounter < 7; pieceCounter++)
+    {
+        int piece = pieceMoveStack[pieceCounter + (side ? 8 : 0)];
+        switch (piece)
+        {
+        case 2:
+        case 10:
+        {
+            for (int pos : thisBoard.pieces[piece])
+            {
+                for (int i = 0; i < 8; ++i)
+                {
+                    Move* tm = PieceMoves::KnightMoves[pos][i * 2];
+                    if (!tm) continue;
+                    int dest = tm->endPlace;
+                    if ((Option::PowerTwo[dest] & wholeBoard) == 0)
+                    {
+                        Move m = *tm;
+                        m.endPiece = 0;
+                        if (isLegal(m)) return true;
+                    }
+                    else if ((Option::PowerTwo[dest] & enemyPieces) != 0)
+                    {
+                        Move m = *PieceMoves::KnightMoves[pos][i * 2 + 1];
+                        m.endPiece = mainBoard[dest];
+                        if (isLegal(m)) return true;
+                    }
+                }
+            }
+            break;
+        }
+        case 3:
+        case 11:
+        {
+            for (int pos : thisBoard.pieces[piece])
+            {
+                for (int r = 0; r < 4; ++r)
+                {
+                    int quietRay = r * 2;
+                    int capRay = r * 2 + 1;
+                    const auto& quietVec = PieceMoves::BishopMoves[pos][quietRay];
+                    const auto& capVec = PieceMoves::BishopMoves[pos][capRay];
+                    for (size_t c = 0; c < quietVec.size(); ++c)
+                    {
+                        int dest = quietVec[c]->endPlace;
+                        if ((Option::PowerTwo[dest] & wholeBoard) == 0)
+                        {
+                            Move m = *quietVec[c];
+                            m.endPiece = 0;
+                            if (isLegal(m)) return true;
+                        }
+                        else
+                        {
+                            if ((Option::PowerTwo[dest] & enemyPieces) != 0)
+                            {
+                                Move m = *capVec[c];
+                                m.endPiece = mainBoard[dest];
+                                if (isLegal(m)) return true;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            break;
+        }
+        case 4:
+        case 12:
+        {
+            for (int pos : thisBoard.pieces[piece])
+            {
+                for (int r = 0; r < 4; ++r)
+                {
+                    int quietRay = r * 2;
+                    int capRay = r * 2 + 1;
+                    const auto& quietVec = PieceMoves::RookMoves[pos][quietRay];
+                    const auto& capVec = PieceMoves::RookMoves[pos][capRay];
+                    for (size_t c = 0; c < quietVec.size(); ++c)
+                    {
+                        int dest = quietVec[c]->endPlace;
+                        if ((Option::PowerTwo[dest] & wholeBoard) == 0)
+                        {
+                            Move m = *quietVec[c];
+                            m.endPiece = 0;
+                            if (isLegal(m)) return true;
+                        }
+                        else
+                        {
+                            if ((Option::PowerTwo[dest] & enemyPieces) != 0)
+                            {
+                                Move m = *capVec[c];
+                                m.endPiece = mainBoard[dest];
+                                if (isLegal(m)) return true;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            break;
+        }
+        case 5:
+        case 13:
+        {
+            for (int pos : thisBoard.pieces[piece])
+            {
+                for (int r = 0; r < 8; ++r)
+                {
+                    int quietRay = r * 2;
+                    int capRay = r * 2 + 1;
+                    const auto& quietVec = PieceMoves::QueenMoves[pos][quietRay];
+                    const auto& capVec = PieceMoves::QueenMoves[pos][capRay];
+                    for (size_t c = 0; c < quietVec.size(); ++c)
+                    {
+                        int dest = quietVec[c]->endPlace;
+                        if ((Option::PowerTwo[dest] & wholeBoard) == 0)
+                        {
+                            Move m = *quietVec[c];
+                            m.endPiece = 0;
+                            if (isLegal(m)) return true;
+                        }
+                        else
+                        {
+                            if ((Option::PowerTwo[dest] & enemyPieces) != 0)
+                            {
+                                Move m = *capVec[c];
+                                m.endPiece = mainBoard[dest];
+                                if (isLegal(m)) return true;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            break;
+        }
+        case 1:
+        {
+            for (int pos : thisBoard.pieces[1])
+            {
+                if (PieceMoves::WhitePawnMoves[pos][0] != nullptr && (PieceMoves::pawnTwoMove[pos] & wholeBoard) == 0)
+                {
+                    Move m = *PieceMoves::WhitePawnMoves[pos][0];
+                    m.endPiece = 0;
+                    if (isLegal(m)) return true;
+                }
+                if (PieceMoves::WhitePawnMoves[pos][1] != nullptr && (Option::PowerTwo[pos + 8] & wholeBoard) == 0)
+                {
+                    Move m = *PieceMoves::WhitePawnMoves[pos][1];
+                    m.endPiece = 0;
+                    if (isLegal(m)) return true;
+                }
+                if (PieceMoves::WhitePawnMoves[pos][2] != nullptr && (Option::PowerTwo[pos + 8] & wholeBoard) == 0)
+                {
+                    for (int i = 2; i <= 5; ++i)
+                    {
+                        Move m = *PieceMoves::WhitePawnMoves[pos][i];
+                        m.endPiece = 0;
+                        if (isLegal(m)) return true;
+                    }
+                }
+                if (PieceMoves::WhitePawnMoves[pos][6] != nullptr && pos + 7 == thisBoard.unpassentPlace)
+                {
+                    Move m = *PieceMoves::WhitePawnMoves[pos][6];
+                    m.endPiece = 9;
+                    if (isLegal(m)) return true;
+                }
+                if (PieceMoves::WhitePawnMoves[pos][7] != nullptr && pos + 9 == thisBoard.unpassentPlace)
+                {
+                    Move m = *PieceMoves::WhitePawnMoves[pos][7];
+                    m.endPiece = 9;
+                    if (isLegal(m)) return true;
+                }
+                if (PieceMoves::WhitePawnMoves[pos][8] != nullptr && (Option::PowerTwo[pos + 7] & enemyPieces) != 0)
+                {
+                    Move m = *PieceMoves::WhitePawnMoves[pos][8];
+                    m.endPiece = mainBoard[pos + 7];
+                    if (isLegal(m)) return true;
+                }
+                if (PieceMoves::WhitePawnMoves[pos][9] != nullptr && (Option::PowerTwo[pos + 7] & enemyPieces) != 0)
+                {
+                    for (int i = 9; i <= 12; ++i)
+                    {
+                        Move m = *PieceMoves::WhitePawnMoves[pos][i];
+                        m.endPiece = mainBoard[pos + 7];
+                        if (isLegal(m)) return true;
+                    }
+                }
+                if (PieceMoves::WhitePawnMoves[pos][13] != nullptr && (Option::PowerTwo[pos + 9] & enemyPieces) != 0)
+                {
+                    Move m = *PieceMoves::WhitePawnMoves[pos][13];
+                    m.endPiece = mainBoard[pos + 9];
+                    if (isLegal(m)) return true;
+                }
+                if (PieceMoves::WhitePawnMoves[pos][14] != nullptr && (Option::PowerTwo[pos + 9] & enemyPieces) != 0)
+                {
+                    for (int i = 14; i <= 17; ++i)
+                    {
+                        Move m = *PieceMoves::WhitePawnMoves[pos][i];
+                        m.endPiece = mainBoard[pos + 9];
+                        if (isLegal(m)) return true;
+                    }
+                }
+            }
+            break;
+        }
+        case 9:
+        {
+            for (int pos : thisBoard.pieces[9])
+            {
+                if (PieceMoves::BlackPawnMoves[pos][0] != nullptr && (PieceMoves::pawnTwoMove[pos] & wholeBoard) == 0)
+                {
+                    Move m = *PieceMoves::BlackPawnMoves[pos][0];
+                    m.endPiece = 0;
+                    if (isLegal(m)) return true;
+                }
+                if (PieceMoves::BlackPawnMoves[pos][1] != nullptr && (Option::PowerTwo[pos - 8] & wholeBoard) == 0)
+                {
+                    Move m = *PieceMoves::BlackPawnMoves[pos][1];
+                    m.endPiece = 0;
+                    if (isLegal(m)) return true;
+                }
+                if (PieceMoves::BlackPawnMoves[pos][2] != nullptr && (Option::PowerTwo[pos - 8] & wholeBoard) == 0)
+                {
+                    for (int i = 2; i <= 5; ++i)
+                    {
+                        Move m = *PieceMoves::BlackPawnMoves[pos][i];
+                        m.endPiece = 0;
+                        if (isLegal(m)) return true;
+                    }
+                }
+                if (PieceMoves::BlackPawnMoves[pos][6] != nullptr && pos - 7 == thisBoard.unpassentPlace)
+                {
+                    Move m = *PieceMoves::BlackPawnMoves[pos][6];
+                    m.endPiece = 1;
+                    if (isLegal(m)) return true;
+                }
+                if (PieceMoves::BlackPawnMoves[pos][7] != nullptr && pos - 9 == thisBoard.unpassentPlace)
+                {
+                    Move m = *PieceMoves::BlackPawnMoves[pos][7];
+                    m.endPiece = 1;
+                    if (isLegal(m)) return true;
+                }
+                if (PieceMoves::BlackPawnMoves[pos][8] != nullptr && (Option::PowerTwo[pos - 7] & enemyPieces) != 0)
+                {
+                    Move m = *PieceMoves::BlackPawnMoves[pos][8];
+                    m.endPiece = mainBoard[pos - 7];
+                    if (isLegal(m)) return true;
+                }
+                if (PieceMoves::BlackPawnMoves[pos][9] != nullptr && (Option::PowerTwo[pos - 7] & enemyPieces) != 0)
+                {
+                    for (int i = 9; i <= 12; ++i)
+                    {
+                        Move m = *PieceMoves::BlackPawnMoves[pos][i];
+                        m.endPiece = mainBoard[pos - 7];
+                        if (isLegal(m)) return true;
+                    }
+                }
+                if (PieceMoves::BlackPawnMoves[pos][13] != nullptr && (Option::PowerTwo[pos - 9] & enemyPieces) != 0)
+                {
+                    Move m = *PieceMoves::BlackPawnMoves[pos][13];
+                    m.endPiece = mainBoard[pos - 9];
+                    if (isLegal(m)) return true;
+                }
+                if (PieceMoves::BlackPawnMoves[pos][14] != nullptr && (Option::PowerTwo[pos - 9] & enemyPieces) != 0)
+                {
+                    for (int i = 14; i <= 17; ++i)
+                    {
+                        Move m = *PieceMoves::BlackPawnMoves[pos][i];
+                        m.endPiece = mainBoard[pos - 9];
+                        if (isLegal(m)) return true;
+                    }
+                }
+            }
+            break;
+        }
+        case 6:
+        case 14:
+        {
+            if (thisBoard.pieces[piece].count > 0)
+            {
+                int kingPos = thisBoard.pieces[piece].front();
+                Move** kingMoves = side ? PieceMoves::BlackKingMoves[kingPos] : PieceMoves::WhiteKingMoves[kingPos];
+                for (int i = 0; i < 8; ++i)
+                {
+                    Move* tm = kingMoves[i * 2];
+                    if (!tm) continue;
+                    int dest = tm->endPlace;
+                    if ((Option::PowerTwo[dest] & wholeBoard) == 0)
+                    {
+                        Move m = *tm;
+                        m.endPiece = 0;
+                        if (isLegal(m)) return true;
+                    }
+                    else if ((Option::PowerTwo[dest] & enemyPieces) != 0)
+                    {
+                        Move m = *kingMoves[i * 2 + 1];
+                        m.endPiece = mainBoard[dest];
+                        if (isLegal(m)) return true;
+                    }
+                }
+                if (!side)
+                {
+                    if (thisBoard.whiteSmallCastle && mainBoard[5] == 0 && mainBoard[6] == 0
+                        && !BoardLogic::UnderAttack(thisBoard, 4, true)
+                        && !BoardLogic::UnderAttack(thisBoard, 5, true)
+                        && !BoardLogic::UnderAttack(thisBoard, 6, true))
+                    {
+                        Move m = *PieceMoves::WhiteKingMoves[kingPos][16];
+                        m.endPiece = 0;
+                        if (isLegal(m)) return true;
+                    }
+                    if (thisBoard.whiteBigCastle && mainBoard[3] == 0 && mainBoard[2] == 0 && mainBoard[1] == 0
+                        && !BoardLogic::UnderAttack(thisBoard, 4, true)
+                        && !BoardLogic::UnderAttack(thisBoard, 3, true)
+                        && !BoardLogic::UnderAttack(thisBoard, 2, true))
+                    {
+                        Move m = *PieceMoves::WhiteKingMoves[kingPos][17];
+                        m.endPiece = 0;
+                        if (isLegal(m)) return true;
+                    }
+                }
+                else
+                {
+                    if (thisBoard.blackSmallCastle && mainBoard[61] == 0 && mainBoard[62] == 0
+                        && !BoardLogic::UnderAttack(thisBoard, 60, false)
+                        && !BoardLogic::UnderAttack(thisBoard, 61, false)
+                        && !BoardLogic::UnderAttack(thisBoard, 62, false))
+                    {
+                        Move m = *PieceMoves::BlackKingMoves[kingPos][16];
+                        m.endPiece = 0;
+                        if (isLegal(m)) return true;
+                    }
+                    if (thisBoard.blackBigCastle && mainBoard[59] == 0 && mainBoard[58] == 0 && mainBoard[57] == 0
+                        && !BoardLogic::UnderAttack(thisBoard, 60, false)
+                        && !BoardLogic::UnderAttack(thisBoard, 59, false)
+                        && !BoardLogic::UnderAttack(thisBoard, 58, false))
+                    {
+                        Move m = *PieceMoves::BlackKingMoves[kingPos][17];
+                        m.endPiece = 0;
+                        if (isLegal(m)) return true;
+                    }
+                }
+            }
+            break;
+        }
+        }
+    }
+    return false;
 }
 
 // NOTE: You must also replace all Moves->push_back and ComplicatedMoves->push_back in the body with the array logic as described above.

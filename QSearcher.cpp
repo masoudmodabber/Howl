@@ -10,7 +10,6 @@
 #include "MoveLogic.h"
 #include "UCI.h"
 #include "GameLogic.h"
-#include "MoveLogic.h"
 #include "RepetitionHistory.h"
 #include "ChessStringManipulation.h"
 #include "MateScore.h"
@@ -231,9 +230,9 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
             }
             Move* move = moveList.moves[i];
             boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
-            MissingInfoAboutPrevStateFromMove* missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
+            MissingInfoAboutPrevStateFromMove* missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
 
-            GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone);
+            GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone, missingInfoAboutPrevStateFromMove);
             bool legalMove = !BoardLogic::UnderAttack(
                 board4,
                 board4.pieces[turn * 8 + 6].front(),
@@ -487,17 +486,8 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
     }
 #endif
     if (availMoves == 0 && !currentSideInCheck) {
-        bool hasLegalMove = false;
-        MoveList legalMoveList = MoveLogic::MoveGenerator(board4, depth, depthGone, false);
-        for (int i = 0; i < legalMoveList.count && !hasLegalMove; ++i) {
-            Move* move = legalMoveList.moves[i];
-            MissingInfoAboutPrevStateFromMove undo(board4);
-            GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone);
-            hasLegalMove = !BoardLogic::UnderAttack(
-                board4, board4.pieces[turn * 8 + 6].front(), board4.sideToMove);
-            GameLogic::UndoMove(board4, *move, undo);
-        }
-        deleteMoveList(legalMoveList);
+        bool hasLegalMove = MoveLogic::HasAnyLegalMove(board4, prevMove, depthGone);
+
         retValue->value = hasLegalMove ? standPot : 0;
         retValue->bound = retValue->value <= origAlpha ? SearchBound::Upper
             : (retValue->value >= origBeta ? SearchBound::Lower : SearchBound::Exact);

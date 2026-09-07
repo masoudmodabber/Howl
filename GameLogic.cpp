@@ -21,7 +21,7 @@ void GameLogic::HaveReachedToMoveSequence(Move &move, Move &prevMove, int depth,
     }
 }
 
-void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int depth, int depthGone)
+void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int depth, int depthGone, MissingInfoAboutPrevStateFromMove* missingInfo)
 {
     if (UCI::IsTest())
         HaveReachedToMoveSequence(thisMove, prevMove, depth, depthGone);
@@ -47,11 +47,11 @@ void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int dep
         }
         else if ((thisMove.PublicFlag & Option::PowerTwo[6]) != 0)
         {
-            Unpassent(thisBoard, thisMove);
+            Unpassent(thisBoard, thisMove, missingInfo);
         }
         else if (thisMove.promotionPiece > 0)
         {
-            Promote(thisBoard, thisMove);
+            Promote(thisBoard, thisMove, missingInfo);
         }
         else
         {
@@ -59,7 +59,7 @@ void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int dep
 
             if ((thisMove.PublicFlag & Option::PowerTwo[7]) != 0)
             {
-                Capture(thisBoard, thisMove);
+                Capture(thisBoard, thisMove, missingInfo);
             }
             else
             {
@@ -68,27 +68,26 @@ void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int dep
         }
         UpdateBoardCastleRights(thisBoard, thisMove);
         SetUnpassent(thisBoard, thisMove);
-        // if ((thisMove.PublicFlag & Option.PowerTwo[5]) != 0)
-        //{
-        //     thisBoard.fiftyMoveRule++;
-        // }
-        // else
-        //{
-        //     thisBoard.fiftyMoveRule = 0;
-        // }
     }
     else
     {
         SetUnpassent(thisBoard, thisMove);
-        // thisBoard.fiftyMoveRule++;
     }
     ChangeSide(thisBoard);
     SetCastleFlags(thisBoard, thisMove);
     RepetitionHistory::Push(thisBoard.ZobristHashCode);
-    // if (thisBoard.pieces[0].size() != 0)
-    //{
-    //    std::cout << "Breakpoint here" << std::endl;
-    //}
+}
+
+void GameLogic::DoMove(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevStateFromMove* missingInfo)
+{
+    Move dummy;
+    DoMove(thisBoard, thisMove, dummy, -1, -1, missingInfo);
+}
+
+void GameLogic::DoMove(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevStateFromMove& missingInfo)
+{
+    Move dummy;
+    DoMove(thisBoard, thisMove, dummy, -1, -1, &missingInfo);
 }
 
 void GameLogic::SetUnpassent(Board &thisBoard, Move &thisMove)
@@ -155,13 +154,10 @@ void GameLogic::SimpleMove(Board &thisBoard, Move &thisMove)
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
     int beginPiece = thisBoard.mainBoard[beginPlace];
-    int endPiece = thisMove.endPiece;
     thisBoard.mainBoard[beginPlace] = 0;
     thisBoard.mainBoard[endPlace] = beginPiece;
-    auto &pieceList = thisBoard.pieces[beginPiece];
-    pieceList.erase(beginPlace);
+    thisBoard.pieces[beginPiece].replace(beginPlace, endPlace);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
-    thisBoard.pieces[beginPiece].push_back(endPlace);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][endPlace];
     if (!thisBoard.sideToMove)
     {
@@ -175,7 +171,7 @@ void GameLogic::SimpleMove(Board &thisBoard, Move &thisMove)
     }
 }
 
-void GameLogic::Capture(Board &thisBoard, Move &thisMove)
+void GameLogic::Capture(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevStateFromMove* missingInfo)
 {
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
@@ -184,15 +180,24 @@ void GameLogic::Capture(Board &thisBoard, Move &thisMove)
     thisBoard.mainBoard[beginPlace] = 0;
     thisBoard.mainBoard[endPlace] = beginPiece;
 
-    auto &beginPieceList = thisBoard.pieces[beginPiece];
-    beginPieceList.erase(beginPlace);
+    thisBoard.pieces[beginPiece].replace(beginPlace, endPlace);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
-    thisBoard.pieces[beginPiece].push_back(endPlace);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][endPlace];
 
     auto &endPieceList = thisBoard.pieces[endPiece];
-    endPieceList.erase(endPlace);
-    // todo: are these erases correct?
+    int capIdx = endPieceList.find(endPlace);
+    if (missingInfo != nullptr)
+    {
+        missingInfo->capturedPieceIndex = capIdx;
+    }
+    if (capIdx >= 0)
+    {
+        endPieceList.erase_at(capIdx);
+    }
+    else
+    {
+        endPieceList.erase(endPlace);
+    }
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[endPiece][endPlace];
     if (!thisBoard.sideToMove)
     {
@@ -264,7 +269,7 @@ void GameLogic::UpdateBoardCastleRights(Board &thisBoard, Move &thisMove)
     }
 }
 
-void GameLogic::Promote(Board &thisBoard, Move &thisMove)
+void GameLogic::Promote(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevStateFromMove* missingInfo)
 {
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
@@ -278,18 +283,42 @@ void GameLogic::Promote(Board &thisBoard, Move &thisMove)
     {
         thisBoard.blackPawns &= Option::PowerTwoComplement[beginPlace];
     }
+
+    int movedIdx = thisBoard.pieces[beginPiece].find(beginPlace);
+    if (missingInfo != nullptr)
+    {
+        missingInfo->movedPieceIndex = movedIdx;
+    }
+    if (movedIdx >= 0)
+    {
+        thisBoard.pieces[beginPiece].erase_at(movedIdx);
+    }
+    else
+    {
+        thisBoard.pieces[beginPiece].erase(beginPlace);
+    }
+    thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
+
+    thisBoard.mainBoard[beginPlace] = 0;
+    thisBoard.mainBoard[endPlace] = thisMove.promotionPiece;
+    thisBoard.pieces[thisMove.promotionPiece].push_back(endPlace);
+    thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[thisMove.promotionPiece][endPlace];
+
     if ((thisMove.PublicFlag & Option::PowerTwo[7]) != 0)
     {
-        thisBoard.mainBoard[beginPlace] = 0;
-        thisBoard.mainBoard[endPlace] = thisMove.promotionPiece;
-        auto &beginPieceList = thisBoard.pieces[beginPiece];
-        beginPieceList.erase(beginPlace);
-        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
-        thisBoard.pieces[thisMove.promotionPiece].push_back(endPlace);
-        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[thisMove.promotionPiece][endPlace];
-
-        auto &endPieceList = thisBoard.pieces[endPiece];
-        endPieceList.erase(endPlace);
+        int capIdx = thisBoard.pieces[endPiece].find(endPlace);
+        if (missingInfo != nullptr)
+        {
+            missingInfo->capturedPieceIndex = capIdx;
+        }
+        if (capIdx >= 0)
+        {
+            thisBoard.pieces[endPiece].erase_at(capIdx);
+        }
+        else
+        {
+            thisBoard.pieces[endPiece].erase(endPlace);
+        }
         thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[endPiece][endPlace];
         if (!thisBoard.sideToMove)
         {
@@ -306,13 +335,6 @@ void GameLogic::Promote(Board &thisBoard, Move &thisMove)
     }
     else
     {
-        thisBoard.mainBoard[beginPlace] = 0;
-        thisBoard.mainBoard[endPlace] = thisMove.promotionPiece;
-        auto &pieceList = thisBoard.pieces[beginPiece];
-        pieceList.erase(beginPlace);
-        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
-        thisBoard.pieces[thisMove.promotionPiece].push_back(endPlace);
-        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[thisMove.promotionPiece][endPlace];
         if (!thisBoard.sideToMove)
         {
             thisBoard.whitePieces &= Option::PowerTwoComplement[beginPlace];
@@ -331,12 +353,10 @@ void GameLogic::UnSimpleMove(Board &thisBoard, Move &thisMove)
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
     int beginPiece = thisBoard.mainBoard[endPlace];
-    int endPiece = thisMove.endPiece;
     thisBoard.mainBoard[beginPlace] = beginPiece;
     thisBoard.mainBoard[endPlace] = 0;
-    thisBoard.pieces[beginPiece].push_back(beginPlace);
+    thisBoard.pieces[beginPiece].replace(endPlace, beginPlace);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
-    thisBoard.pieces[beginPiece].erase(endPlace);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][endPlace];
     if (!thisBoard.sideToMove)
     {
@@ -350,7 +370,7 @@ void GameLogic::UnSimpleMove(Board &thisBoard, Move &thisMove)
     }
 }
 
-void GameLogic::UnCapture(Board &thisBoard, Move &thisMove)
+void GameLogic::UnCapture(Board &thisBoard, Move &thisMove, const MissingInfoAboutPrevStateFromMove &missingInfo)
 {
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
@@ -358,11 +378,18 @@ void GameLogic::UnCapture(Board &thisBoard, Move &thisMove)
     int endPiece = thisMove.endPiece;
     thisBoard.mainBoard[beginPlace] = beginPiece;
     thisBoard.mainBoard[endPlace] = endPiece;
-    thisBoard.pieces[beginPiece].push_back(beginPlace);
+    thisBoard.pieces[beginPiece].replace(endPlace, beginPlace);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
-    thisBoard.pieces[beginPiece].erase(endPlace);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][endPlace];
-    thisBoard.pieces[endPiece].push_back(endPlace);
+
+    if (missingInfo.capturedPieceIndex >= 0)
+    {
+        thisBoard.pieces[endPiece].insert(missingInfo.capturedPieceIndex, endPlace);
+    }
+    else
+    {
+        thisBoard.pieces[endPiece].push_back(endPlace);
+    }
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[endPiece][endPlace];
     if (!thisBoard.sideToMove)
     {
@@ -378,7 +405,7 @@ void GameLogic::UnCapture(Board &thisBoard, Move &thisMove)
     }
 }
 
-void GameLogic::UnPromote(Board &thisBoard, Move &thisMove)
+void GameLogic::UnPromote(Board &thisBoard, Move &thisMove, const MissingInfoAboutPrevStateFromMove &missingInfo)
 {
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
@@ -393,27 +420,41 @@ void GameLogic::UnPromote(Board &thisBoard, Move &thisMove)
     {
         thisBoard.blackPawns |= Option::PowerTwo[beginPlace];
     }
+
+    thisBoard.pieces[thisMove.promotionPiece].erase(endPlace);
+    thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[thisMove.promotionPiece][endPlace];
+
+    if (missingInfo.movedPieceIndex >= 0)
+    {
+        thisBoard.pieces[beginPiece].insert(missingInfo.movedPieceIndex, beginPlace);
+    }
+    else
+    {
+        thisBoard.pieces[beginPiece].push_back(beginPlace);
+    }
+    thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
+
     if ((thisMove.PublicFlag & Option::PowerTwo[7]) != 0)
     {
+        thisBoard.mainBoard[beginPlace] = beginPiece;
         thisBoard.mainBoard[endPlace] = endPiece;
-        thisBoard.pieces[thisMove.promotionPiece].erase(endPlace);
-        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[thisMove.promotionPiece][endPlace];
-        thisBoard.pieces[endPiece].push_back(endPlace);
+        if (missingInfo.capturedPieceIndex >= 0)
+        {
+            thisBoard.pieces[endPiece].insert(missingInfo.capturedPieceIndex, endPlace);
+        }
+        else
+        {
+            thisBoard.pieces[endPiece].push_back(endPlace);
+        }
         thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[endPiece][endPlace];
         if (!thisBoard.sideToMove)
         {
-            thisBoard.mainBoard[beginPlace] = 1;
-            thisBoard.pieces[1].push_back(beginPlace);
-            thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[1][beginPlace];
             thisBoard.whitePieces |= Option::PowerTwo[beginPlace];
             thisBoard.whitePieces &= Option::PowerTwoComplement[endPlace];
             thisBoard.blackPieces |= Option::PowerTwo[endPlace];
         }
         else
         {
-            thisBoard.mainBoard[beginPlace] = 9;
-            thisBoard.pieces[9].push_back(beginPlace);
-            thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[9][beginPlace];
             thisBoard.blackPieces |= Option::PowerTwo[beginPlace];
             thisBoard.blackPieces &= Option::PowerTwoComplement[endPlace];
             thisBoard.whitePieces |= Option::PowerTwo[endPlace];
@@ -421,29 +462,22 @@ void GameLogic::UnPromote(Board &thisBoard, Move &thisMove)
     }
     else
     {
+        thisBoard.mainBoard[beginPlace] = beginPiece;
         thisBoard.mainBoard[endPlace] = 0;
-        thisBoard.pieces[thisMove.promotionPiece].erase(endPlace);
-        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[thisMove.promotionPiece][endPlace];
         if (!thisBoard.sideToMove)
         {
-            thisBoard.mainBoard[beginPlace] = 1;
-            thisBoard.pieces[1].push_back(beginPlace);
-            thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[1][beginPlace];
             thisBoard.whitePieces |= Option::PowerTwo[beginPlace];
             thisBoard.whitePieces &= Option::PowerTwoComplement[endPlace];
         }
         else
         {
-            thisBoard.mainBoard[beginPlace] = 9;
-            thisBoard.pieces[9].push_back(beginPlace);
-            thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[9][beginPlace];
             thisBoard.blackPieces |= Option::PowerTwo[beginPlace];
             thisBoard.blackPieces &= Option::PowerTwoComplement[endPlace];
         }
     }
 }
 
-void GameLogic::UnUnpassent(Board &thisBoard, Move &thisMove)
+void GameLogic::UnUnpassent(Board &thisBoard, Move &thisMove, const MissingInfoAboutPrevStateFromMove &missingInfo)
 {
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
@@ -459,12 +493,18 @@ void GameLogic::UnUnpassent(Board &thisBoard, Move &thisMove)
         thisBoard.mainBoard[endPlace - 8] = 9;
         thisBoard.whitePieces |= Option::PowerTwo[beginPlace];
         thisBoard.whitePieces &= Option::PowerTwoComplement[endPlace];
-        thisBoard.pieces[beginPiece].push_back(beginPlace);
+        thisBoard.pieces[beginPiece].replace(endPlace, beginPlace);
         thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
-        thisBoard.pieces[beginPiece].erase(endPlace);
         thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][endPlace];
         thisBoard.blackPieces |= Option::PowerTwo[endPlace - 8];
-        thisBoard.pieces[9].push_back(endPlace - 8);
+        if (missingInfo.capturedPieceIndex >= 0)
+        {
+            thisBoard.pieces[9].insert(missingInfo.capturedPieceIndex, endPlace - 8);
+        }
+        else
+        {
+            thisBoard.pieces[9].push_back(endPlace - 8);
+        }
         thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[9][endPlace - 8];
     }
     else
@@ -477,12 +517,18 @@ void GameLogic::UnUnpassent(Board &thisBoard, Move &thisMove)
         thisBoard.mainBoard[endPlace + 8] = 1;
         thisBoard.blackPieces |= Option::PowerTwo[beginPlace];
         thisBoard.blackPieces &= Option::PowerTwoComplement[endPlace];
-        thisBoard.pieces[beginPiece].push_back(beginPlace);
+        thisBoard.pieces[beginPiece].replace(endPlace, beginPlace);
         thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
-        thisBoard.pieces[beginPiece].erase(endPlace);
         thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][endPlace];
         thisBoard.whitePieces |= Option::PowerTwo[endPlace + 8];
-        thisBoard.pieces[1].push_back(endPlace + 8);
+        if (missingInfo.capturedPieceIndex >= 0)
+        {
+            thisBoard.pieces[1].insert(missingInfo.capturedPieceIndex, endPlace + 8);
+        }
+        else
+        {
+            thisBoard.pieces[1].push_back(endPlace + 8);
+        }
         thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[1][endPlace + 8];
     }
 }
@@ -491,8 +537,6 @@ void GameLogic::UnBlackLeftCastle(Board &thisBoard, Move &thisMove)
 {
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
-    int beginPiece = thisBoard.mainBoard[endPlace];
-    int endPiece = thisMove.endPiece;
     thisBoard.mainBoard[beginPlace] = 14;
     thisBoard.mainBoard[beginPlace - 4] = 12;
     thisBoard.mainBoard[beginPlace - 2] = 0;
@@ -501,13 +545,11 @@ void GameLogic::UnBlackLeftCastle(Board &thisBoard, Move &thisMove)
     thisBoard.blackPieces |= Option::PowerTwo[beginPlace - 4];
     thisBoard.blackPieces &= Option::PowerTwoComplement[beginPlace - 2];
     thisBoard.blackPieces &= Option::PowerTwoComplement[beginPlace - 1];
-    thisBoard.pieces[12].push_back(beginPlace - 4);
+    thisBoard.pieces[12].replace(beginPlace - 1, beginPlace - 4);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[12][beginPlace - 4];
-    thisBoard.pieces[12].erase(beginPlace - 1);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[12][beginPlace - 1];
-    thisBoard.pieces[14].push_back(beginPlace);
+    thisBoard.pieces[14].replace(beginPlace - 2, beginPlace);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[14][beginPlace];
-    thisBoard.pieces[14].erase(beginPlace - 2);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[14][beginPlace - 2];
 }
 
@@ -515,8 +557,6 @@ void GameLogic::UnBlackRightCastle(Board &thisBoard, Move &thisMove)
 {
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
-    int beginPiece = thisBoard.mainBoard[endPlace];
-    int endPiece = thisMove.endPiece;
     thisBoard.mainBoard[beginPlace] = 14;
     thisBoard.mainBoard[beginPlace + 3] = 12;
     thisBoard.mainBoard[beginPlace + 2] = 0;
@@ -525,13 +565,11 @@ void GameLogic::UnBlackRightCastle(Board &thisBoard, Move &thisMove)
     thisBoard.blackPieces |= Option::PowerTwo[beginPlace + 3];
     thisBoard.blackPieces &= Option::PowerTwoComplement[beginPlace + 2];
     thisBoard.blackPieces &= Option::PowerTwoComplement[beginPlace + 1];
-    thisBoard.pieces[12].push_back(beginPlace + 3);
+    thisBoard.pieces[12].replace(beginPlace + 1, beginPlace + 3);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[12][beginPlace + 3];
-    thisBoard.pieces[12].erase(beginPlace + 1);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[12][beginPlace + 1];
-    thisBoard.pieces[14].push_back(beginPlace);
+    thisBoard.pieces[14].replace(beginPlace + 2, beginPlace);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[14][beginPlace];
-    thisBoard.pieces[14].erase(beginPlace + 2);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[14][beginPlace + 2];
 }
 
@@ -539,8 +577,6 @@ void GameLogic::UnWhiteLeftCastle(Board &thisBoard, Move &thisMove)
 {
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
-    int beginPiece = thisBoard.mainBoard[endPlace];
-    int endPiece = thisMove.endPiece;
     thisBoard.mainBoard[beginPlace] = 6;
     thisBoard.mainBoard[beginPlace - 4] = 4;
     thisBoard.mainBoard[beginPlace - 2] = 0;
@@ -549,13 +585,11 @@ void GameLogic::UnWhiteLeftCastle(Board &thisBoard, Move &thisMove)
     thisBoard.whitePieces |= Option::PowerTwo[beginPlace - 4];
     thisBoard.whitePieces &= Option::PowerTwoComplement[beginPlace - 2];
     thisBoard.whitePieces &= Option::PowerTwoComplement[beginPlace - 1];
-    thisBoard.pieces[4].push_back(beginPlace - 4);
+    thisBoard.pieces[4].replace(beginPlace - 1, beginPlace - 4);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[4][beginPlace - 4];
-    thisBoard.pieces[4].erase(beginPlace - 1);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[4][beginPlace - 1];
-    thisBoard.pieces[6].push_back(beginPlace);
+    thisBoard.pieces[6].replace(beginPlace - 2, beginPlace);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[6][beginPlace];
-    thisBoard.pieces[6].erase(beginPlace - 2);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[6][beginPlace - 2];
 }
 
@@ -563,8 +597,6 @@ void GameLogic::UnWhiteRightCastle(Board &thisBoard, Move &thisMove)
 {
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
-    int beginPiece = thisBoard.mainBoard[endPlace];
-    int endPiece = thisMove.endPiece;
     thisBoard.mainBoard[beginPlace] = 6;
     thisBoard.mainBoard[beginPlace + 3] = 4;
     thisBoard.mainBoard[beginPlace + 2] = 0;
@@ -573,13 +605,11 @@ void GameLogic::UnWhiteRightCastle(Board &thisBoard, Move &thisMove)
     thisBoard.whitePieces |= Option::PowerTwo[beginPlace + 3];
     thisBoard.whitePieces &= Option::PowerTwoComplement[beginPlace + 2];
     thisBoard.whitePieces &= Option::PowerTwoComplement[beginPlace + 1];
-    thisBoard.pieces[4].push_back(beginPlace + 3);
+    thisBoard.pieces[4].replace(beginPlace + 1, beginPlace + 3);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[4][beginPlace + 3];
-    thisBoard.pieces[4].erase(beginPlace + 1);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[4][beginPlace + 1];
-    thisBoard.pieces[6].push_back(beginPlace);
+    thisBoard.pieces[6].replace(beginPlace + 2, beginPlace);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[6][beginPlace];
-    thisBoard.pieces[6].erase(beginPlace + 2);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[6][beginPlace + 2];
 }
 
@@ -593,21 +623,22 @@ void GameLogic::BlackRightCastle(Board &thisBoard, int beginPlace)
     thisBoard.blackPieces &= Option::PowerTwoComplement[beginPlace + 3];
     thisBoard.blackPieces |= Option::PowerTwo[beginPlace + 2];
     thisBoard.blackPieces |= Option::PowerTwo[beginPlace + 1];
-    auto &rookList = thisBoard.pieces[12];
-    rookList.erase(beginPlace + 3);
+    thisBoard.pieces[12].replace(beginPlace + 3, beginPlace + 1);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[12][beginPlace + 3];
-    thisBoard.pieces[12].push_back(beginPlace + 1);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[12][beginPlace + 1];
 
-    auto &kingList = thisBoard.pieces[14];
-    kingList.erase(beginPlace);
+    thisBoard.pieces[14].replace(beginPlace, beginPlace + 2);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[14][beginPlace];
-    thisBoard.pieces[14].push_back(beginPlace + 2);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[14][beginPlace + 2];
     if (thisBoard.blackSmallCastle)
     {
         thisBoard.blackSmallCastle = false;
         thisBoard.ZobristHashCode ^= BoardInitializer::ZCodeFlag[4];
+    }
+    if (thisBoard.blackBigCastle)
+    {
+        thisBoard.blackBigCastle = false;
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCodeFlag[3];
     }
 }
 
@@ -621,16 +652,12 @@ void GameLogic::BlackLeftCastle(Board &thisBoard, int beginPlace)
     thisBoard.blackPieces &= Option::PowerTwoComplement[beginPlace - 4];
     thisBoard.blackPieces |= Option::PowerTwo[beginPlace - 2];
     thisBoard.blackPieces |= Option::PowerTwo[beginPlace - 1];
-    auto &rookList = thisBoard.pieces[12];
-    rookList.erase(beginPlace - 4);
+    thisBoard.pieces[12].replace(beginPlace - 4, beginPlace - 1);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[12][beginPlace - 4];
-    thisBoard.pieces[12].push_back(beginPlace - 1);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[12][beginPlace - 1];
 
-    auto &kingList = thisBoard.pieces[14];
-    kingList.erase(beginPlace);
+    thisBoard.pieces[14].replace(beginPlace, beginPlace - 2);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[14][beginPlace];
-    thisBoard.pieces[14].push_back(beginPlace - 2);
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[14][beginPlace - 2];
     if (thisBoard.blackSmallCastle)
     {
@@ -658,12 +685,8 @@ void GameLogic::WhiteLeftCastle(Board &thisBoard, int beginPlace)
     thisBoard.whitePieces &= Option::PowerTwoComplement[beginPlace - 4];
     thisBoard.whitePieces |= Option::PowerTwo[beginPlace - 2];
     thisBoard.whitePieces |= Option::PowerTwo[beginPlace - 1];
-    auto &rookList = thisBoard.pieces[4];
-    rookList.erase(beginPlace - 4);
-    thisBoard.pieces[4].push_back(beginPlace - 1);
-    auto &queenList = thisBoard.pieces[6];
-    queenList.erase(beginPlace);
-    thisBoard.pieces[6].push_back(beginPlace - 2);
+    thisBoard.pieces[4].replace(beginPlace - 4, beginPlace - 1);
+    thisBoard.pieces[6].replace(beginPlace, beginPlace - 2);
     if (thisBoard.whiteSmallCastle)
     {
         thisBoard.whiteSmallCastle = false;
@@ -690,12 +713,8 @@ void GameLogic::WhiteRightCastle(Board &thisBoard, int beginPlace)
     thisBoard.whitePieces &= Option::PowerTwoComplement[beginPlace + 3];
     thisBoard.whitePieces |= Option::PowerTwo[beginPlace + 2];
     thisBoard.whitePieces |= Option::PowerTwo[beginPlace + 1];
-    auto &rookList = thisBoard.pieces[4];
-    rookList.erase(beginPlace + 3);
-    thisBoard.pieces[4].push_back(beginPlace + 1);
-    auto &queenList = thisBoard.pieces[6];
-    queenList.erase(beginPlace);
-    thisBoard.pieces[6].push_back(beginPlace + 2);
+    thisBoard.pieces[4].replace(beginPlace + 3, beginPlace + 1);
+    thisBoard.pieces[6].replace(beginPlace, beginPlace + 2);
     if (thisBoard.whiteSmallCastle)
     {
         thisBoard.whiteSmallCastle = false;
@@ -708,7 +727,7 @@ void GameLogic::WhiteRightCastle(Board &thisBoard, int beginPlace)
     }
 }
 
-void GameLogic::Unpassent(Board &thisBoard, Move &thisMove)
+void GameLogic::Unpassent(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevStateFromMove* missingInfo)
 {
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
@@ -724,15 +743,25 @@ void GameLogic::Unpassent(Board &thisBoard, Move &thisMove)
         thisBoard.mainBoard[endPlace - 8] = 0;
         thisBoard.whitePieces &= Option::PowerTwoComplement[beginPlace];
         thisBoard.whitePieces |= Option::PowerTwo[endPlace];
-        auto &beginPieceList = thisBoard.pieces[beginPiece];
-        beginPieceList.erase(beginPlace);
+        thisBoard.pieces[beginPiece].replace(beginPlace, endPlace);
         thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
-        thisBoard.pieces[beginPiece].push_back(endPlace);
         thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][endPlace];
         thisBoard.blackPieces &= Option::PowerTwoComplement[endPlace - 8];
 
         auto &endPieceList = thisBoard.pieces[9];
-        endPieceList.erase(endPlace - 8);
+        int capIdx = endPieceList.find(endPlace - 8);
+        if (missingInfo != nullptr)
+        {
+            missingInfo->capturedPieceIndex = capIdx;
+        }
+        if (capIdx >= 0)
+        {
+            endPieceList.erase_at(capIdx);
+        }
+        else
+        {
+            endPieceList.erase(endPlace - 8);
+        }
         thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[9][endPlace - 8];
     }
     else
@@ -745,15 +774,25 @@ void GameLogic::Unpassent(Board &thisBoard, Move &thisMove)
         thisBoard.mainBoard[endPlace + 8] = 0;
         thisBoard.blackPieces &= Option::PowerTwoComplement[beginPlace];
         thisBoard.blackPieces |= Option::PowerTwo[endPlace];
-        auto &beginPieceList = thisBoard.pieces[beginPiece];
-        beginPieceList.erase(beginPlace);
+        thisBoard.pieces[beginPiece].replace(beginPlace, endPlace);
         thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
-        thisBoard.pieces[beginPiece].push_back(endPlace);
         thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][endPlace];
         thisBoard.whitePieces &= Option::PowerTwoComplement[endPlace + 8];
 
-        auto &endpPieceList = thisBoard.pieces[1];
-        endpPieceList.erase(endPlace + 8);
+        auto &endPieceList = thisBoard.pieces[1];
+        int capIdx = endPieceList.find(endPlace + 8);
+        if (missingInfo != nullptr)
+        {
+            missingInfo->capturedPieceIndex = capIdx;
+        }
+        if (capIdx >= 0)
+        {
+            endPieceList.erase_at(capIdx);
+        }
+        else
+        {
+            endPieceList.erase(endPlace + 8);
+        }
         thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[1][endPlace + 8];
     }
 }
@@ -763,10 +802,6 @@ void GameLogic::UndoMove(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevS
     UnSideChange(thisBoard, thisMove);
     if (thisMove.promotionPiece >= 0)
     {
-        int beginPlace = thisMove.beginPlace;
-        int endPlace = thisMove.endPlace;
-        int beginPiece = thisBoard.mainBoard[endPlace];
-        int endPiece = thisMove.endPiece;
         if ((thisMove.CastleFlag & Option::PowerTwo[3]) != 0)
         {
             UnWhiteRightCastle(thisBoard, thisMove);
@@ -785,18 +820,18 @@ void GameLogic::UndoMove(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevS
         }
         else if ((thisMove.PublicFlag & Option::PowerTwo[6]) != 0)
         {
-            UnUnpassent(thisBoard, thisMove);
+            UnUnpassent(thisBoard, thisMove, missingInfo);
         }
         else if (thisMove.promotionPiece > 0)
         {
-            UnPromote(thisBoard, thisMove);
+            UnPromote(thisBoard, thisMove, missingInfo);
         }
         else
         {
             UnBoardPawnListsUpdate(thisBoard, thisMove);
             if ((thisMove.PublicFlag & Option::PowerTwo[7]) != 0)
             {
-                UnCapture(thisBoard, thisMove);
+                UnCapture(thisBoard, thisMove, missingInfo);
             }
             else
             {
@@ -809,7 +844,6 @@ void GameLogic::UndoMove(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevS
     else
     {
         UnSetUnpassentPlace(thisBoard, thisMove, missingInfo.previousUnpassentPlace);
-        // thisBoard.fiftyMoveRule--;
     }
     RepetitionHistory::Pop();
 }
