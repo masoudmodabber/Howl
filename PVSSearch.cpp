@@ -1640,7 +1640,8 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     LMRDepth = 1 + lateness / 2 + std::max(0, depth - 3) / 2;
                     if (IsQuietMove(*move))
                         LMRDepth -= HistoryReductionAdjustment(turn, prevMove, *move);
-                    LMRDepth = std::clamp(LMRDepth, 0, depth - 1);
+                    const int maxReduction = isPVNode ? std::min(3, depth - 2) : std::min(depth / 2, depth - 2);
+                    LMRDepth = std::clamp(LMRDepth, 0, maxReduction);
                 }
                 if (MAtESearch)
                     LMRDepth = 0;
@@ -1668,26 +1669,26 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                 const int moveCountDepthLimit =
                     1 + std::min(2, negativeHistoryStrength);
                 const bool moveCountPruningCandidate = pruningContext &&
-                    IsQuietMove(*move) && predictedDepth <= moveCountDepthLimit &&
+                    IsQuietMove(*move) && depth <= moveCountDepthLimit &&
                     i >= allowedQuietMoves;
 
                 bool valueFutilityCandidate = false;
                 const int valueFutilityDepthLimit =
                     2 + (negativeHistoryStrength >= 2 ? 1 : 0);
                 if (pruningContext && IsQuietMove(*move) &&
-                    predictedDepth <= valueFutilityDepthLimit)
+                    depth <= valueFutilityDepthLimit)
                 {
                     if (staticEval == -200000)
                         staticEval = EvaluationLogic::Evaluate(board4);
                     const int historyMarginAdjustment =
                         std::clamp(combinedHistory / 64, -240, 180);
                     const int futilityMargin = std::max(
-                        40, 100 + 120 * predictedDepth + historyMarginAdjustment);
+                        40, 100 + 120 * depth + historyMarginAdjustment);
                     valueFutilityCandidate = staticEval + futilityMargin <= alpha;
                 }
                 const bool seePruningCandidate = pruningContext &&
                     move->endPiece > 0 && move->promotionPiece <= 0 &&
-                    predictedDepth <= 1 && move->value <= -150;
+                    depth <= 1 && move->value <= -150;
 
                 boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
                 MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);

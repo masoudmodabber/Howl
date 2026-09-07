@@ -138,7 +138,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     {
         RepetitionHistory::ResetWithRoot(board4.ZobristHashCode);
     }
-    int MultiPV = finiteSearch ? 1 : Option::MultiPV;
+    int MultiPV = Option::MultiPV;
     MoveList moveList = MoveLogic::MoveGenerator(board4, -1, -1);
     if (moveList.count == 0)
     {
@@ -442,17 +442,23 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 if (nps < 0) {
                     std::cerr << "[DEBUG] Negative nps detected! searchNodeCount=" << safeNodeCount << ", elapsed_ms=" << elapsed_ms << std::endl;
                 }
+                movePrint->depth = recDepth;
+                movePrint->elapsed_ms = elapsed_ms;
+                movePrint->nodes = searchNodeCount;
+                movePrint->nps = nps;
+                movePrint->scoreText = Score;
+                movePrint->pv = ChessStringManipulation::PVToString(*move, 1, mated, board4) + ' ' + MPValue->printString;
                 movePrint->printString = "info depth " + std::to_string(recDepth) + " time " +
                     std::to_string(elapsed_ms) +
                     " nodes " + std::to_string(searchNodeCount) + " nps " +
                     std::to_string(nps) +
-                    " pv " + ChessStringManipulation::PVToString(*move, 1, mated, board4) + ' ' + MPValue->printString + " score " + Score;
+                    " pv " + movePrint->pv + " score " + Score;
                 if (ChessStringManipulation::PVToString(*move, 0, false, board4) == bestMove)
                 {
                     bestPVString = movePrint->printString;
                 }
                 movesPrintValue.push_back(movePrint);
-                if (!finiteSearch && Option::MultiPV > 1)
+                if (Option::MultiPV > 1)
                 {
                     KthBestValue = PrintKBest(movesPrintValue, MultiPV, finiteSearch);
                 }
@@ -545,11 +551,17 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
                 int64_t safeNodeCount = searchNodeCount;
                 int64_t nps = (elapsed_ms > 0) ? (safeNodeCount * 1000LL / elapsed_ms) : 0;
+                movePrint->depth = recDepth;
+                movePrint->elapsed_ms = elapsed_ms;
+                movePrint->nodes = searchNodeCount;
+                movePrint->nps = nps;
+                movePrint->scoreText = Score;
+                movePrint->pv = ChessStringManipulation::PVToString(*move, 1, mated, board4) + ' ' + MPValue->printString;
                 movePrint->printString = "info depth " + std::to_string(recDepth) + " time " +
                     std::to_string(elapsed_ms) +
                     " nodes " + std::to_string(searchNodeCount) + " nps " +
                     std::to_string(nps) +
-                    " pv " + ChessStringManipulation::PVToString(*move, 1, mated, board4) + ' ' + MPValue->printString + " score " + Score;
+                    " pv " + movePrint->pv + " score " + Score;
                 movesPrintValue.push_back(movePrint);
                 if (value > alpha)
                 {
@@ -566,7 +578,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                         ponderMove = "";
                     }
                 }
-                if (!finiteSearch && Option::MultiPV > 1)
+                if (Option::MultiPV > 1)
                 {
                     if (move->value > KthBestValue)
                     {
@@ -621,22 +633,9 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         }
         if (!stopRequested && Option::MultiPV > 1)
         {
-            if (!finiteSearch && Option::MultiPV > 1)
+            if (!movesPrintValue.empty())
             {
-                if (!movesPrintValue.empty())
-                {
-                    PrintKBest(movesPrintValue, MultiPV, finiteSearch);
-                }
-            }
-            else if (!bestPVString.empty())
-            {
-                DiagnosticLogger::Log("EMIT_INFO", bestPVString, DiagnosticLogger::currentSearchId.load());
-                std::cout << bestPVString << '\n';
-            }
-            else if (!movesPrintValue.empty())
-            {
-                DiagnosticLogger::Log("EMIT_INFO", movesPrintValue[0]->printString, DiagnosticLogger::currentSearchId.load());
-                std::cout << movesPrintValue[0]->printString << '\n';
+                PrintKBest(movesPrintValue, MultiPV, finiteSearch);
             }
         }
 
@@ -1026,7 +1025,7 @@ int Search::PrintKBest(std::vector<MovePrintValue *> &movesPrintValue, int KBest
     std::sort(movesPrintValue.begin(), movesPrintValue.end(), [](const MovePrintValue *a, const MovePrintValue *b)
               { return b->value < a->value; });
     int printNumber;
-    if (!finiteSearch)
+    if (KBest > 1)
     {
         if (movesPrintValue.size() > KBest)
         {
@@ -1038,7 +1037,21 @@ int Search::PrintKBest(std::vector<MovePrintValue *> &movesPrintValue, int KBest
         }
         for (int counter = 0; counter < printNumber; counter++)
         {
-            std::cout << (*(movesPrintValue[counter])).printString << " multipv " << (counter + 1) << '\n';
+            const MovePrintValue *mpv = movesPrintValue[counter];
+            if (!mpv->pv.empty())
+            {
+                std::cout << "info depth " << mpv->depth
+                          << " multipv " << (counter + 1)
+                          << " score " << mpv->scoreText
+                          << " time " << mpv->elapsed_ms
+                          << " nodes " << mpv->nodes
+                          << " nps " << mpv->nps
+                          << " pv " << mpv->pv << '\n';
+            }
+            else
+            {
+                std::cout << (*(movesPrintValue[counter])).printString << " multipv " << (counter + 1) << '\n';
+            }
         }
     }
     else
