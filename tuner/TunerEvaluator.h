@@ -426,6 +426,310 @@ inline int CalculatePhase(const Board& thisBoard)
     return std::clamp(phase, 0, 24);
 }
 
+inline int ChebyshevDistance(int sq1, int sq2)
+{
+    return std::max(std::abs((sq1 % 8) - (sq2 % 8)), std::abs((sq1 / 8) - (sq2 / 8)));
+}
+
+inline int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKingSq)
+{
+    static const int rankWeight[8] = {0, 0, 0, 1, 5, 8, 14, 22};
+    int whiteRaceTempo = (!board.sideToMove) ? 1 : -1;
+    int blackRaceTempo = (board.sideToMove) ? 1 : -1;
+
+    int whiteAdjustment = 0;
+    for (int pawnPlace : board.pieces[1])
+    {
+        if ((PassedPawnSetup::WhitePassedMask[pawnPlace] & board.blackPawns) == 0)
+        {
+            int blockSq = pawnPlace + 8;
+            int promoSq = 56 + (pawnPlace % 8);
+
+            int blockRace = ChebyshevDistance(blackKingSq, blockSq) - ChebyshevDistance(whiteKingSq, blockSq);
+            int promotionRace = ChebyshevDistance(blackKingSq, promoSq) - ChebyshevDistance(whiteKingSq, promoSq);
+
+            int mult = rankWeight[(pawnPlace / 8) + 1];
+            whiteAdjustment += (blockRace + promotionRace + whiteRaceTempo) * mult;
+        }
+    }
+
+    int blackAdjustment = 0;
+    for (int pawnPlace : board.pieces[9])
+    {
+        if ((PassedPawnSetup::BlackPassedMask[pawnPlace] & board.whitePawns) == 0)
+        {
+            int blockSq = pawnPlace - 8;
+            int promoSq = pawnPlace % 8;
+
+            int blockRace = ChebyshevDistance(whiteKingSq, blockSq) - ChebyshevDistance(blackKingSq, blockSq);
+            int promotionRace = ChebyshevDistance(whiteKingSq, promoSq) - ChebyshevDistance(blackKingSq, promoSq);
+
+            int mult = rankWeight[8 - (pawnPlace / 8)];
+            blackAdjustment += (blockRace + promotionRace + blackRaceTempo) * mult;
+        }
+    }
+
+    return whiteAdjustment - blackAdjustment;
+}
+
+static int KnightDistance[64][64];
+static bool knightDistanceInitialized = false;
+
+inline void InitializeKnightDistance()
+{
+    if (knightDistanceInitialized) return;
+
+    for (int src = 0; src < 64; ++src)
+    {
+        for (int dst = 0; dst < 64; ++dst)
+        {
+            KnightDistance[src][dst] = -1;
+        }
+
+        int queue[64];
+        int head = 0, tail = 0;
+
+        KnightDistance[src][src] = 0;
+        queue[tail++] = src;
+
+        while (head < tail)
+        {
+            int curr = queue[head++];
+            int currDist = KnightDistance[src][curr];
+
+            int cf = curr % 8;
+            int cr = curr / 8;
+
+            static const int dx[8] = {1, 2, 2, 1, -1, -2, -2, -1};
+            static const int dy[8] = {2, 1, -1, -2, -2, -1, 1, 2};
+
+            for (int i = 0; i < 8; ++i)
+            {
+                int nf = cf + dx[i];
+                int nr = cr + dy[i];
+                if (nf >= 0 && nf < 8 && nr >= 0 && nr < 8)
+                {
+                    int nxt = nr * 8 + nf;
+                    if (KnightDistance[src][nxt] == -1)
+                    {
+                        KnightDistance[src][nxt] = currDist + 1;
+                        queue[tail++] = nxt;
+                    }
+                }
+            }
+        }
+    }
+    knightDistanceInitialized = true;
+}
+
+inline int EvaluatePassedPawnMinorAccessibility(Board &board)
+{
+    InitializeKnightDistance();
+
+    static const int rankScalePercent[8] = {0, 0, 0, 25, 50, 75, 100, 100};
+
+    auto knightCorridorValue = [&](int knightSq, int pawnPlace, bool isWhite) -> int
+    {
+        int minDist = 99;
+        if (isWhite)
+        {
+            for (int sq = pawnPlace + 8; sq < 64; sq += 8)
+            {
+                int d = KnightDistance[knightSq][sq];
+                if (d < minDist) minDist = d;
+            }
+        }
+        else
+        {
+            for (int sq = pawnPlace - 8; sq >= 0; sq -= 8)
+            {
+                int d = KnightDistance[knightSq][sq];
+                if (d < minDist) minDist = d;
+            }
+        }
+        if (minDist == 0) return 20;
+        if (minDist == 1) return 0;
+        if (minDist == 2) return 10;
+        if (minDist == 3) return 5;
+        return 0;
+    };
+
+    int whiteNet = 0;
+    for (int pawnPlace : board.pieces[1])
+    {
+        if ((PassedPawnSetup::WhitePassedMask[pawnPlace] & board.blackPawns) == 0)
+        {
+            int accessibility = 0;
+            for (int kSq : board.pieces[2])
+            {
+                accessibility += knightCorridorValue(kSq, pawnPlace, true);
+            }
+            for (int kSq : board.pieces[10])
+            {
+                accessibility -= knightCorridorValue(kSq, pawnPlace, true);
+            }
+
+            int relRank = (pawnPlace / 8) + 1;
+            whiteNet += (accessibility * rankScalePercent[relRank]) / 100;
+        }
+    }
+
+    int blackNet = 0;
+    for (int pawnPlace : board.pieces[9])
+    {
+        if ((PassedPawnSetup::BlackPassedMask[pawnPlace] & board.whitePawns) == 0)
+        {
+            int accessibility = 0;
+            for (int kSq : board.pieces[10])
+            {
+                accessibility += knightCorridorValue(kSq, pawnPlace, false);
+            }
+            for (int kSq : board.pieces[2])
+            {
+                accessibility -= knightCorridorValue(kSq, pawnPlace, false);
+            }
+
+            int relRank = 8 - (pawnPlace / 8);
+            blackNet += (accessibility * rankScalePercent[relRank]) / 100;
+        }
+    }
+
+    return whiteNet - blackNet;
+}
+
+inline bool IsSquareAttackedBySide(Board &board, int sq, bool byWhite)
+{
+    long long wholeBoardWithTarget = (board.whitePieces | board.blackPieces) | Option::PowerTwo[sq];
+    int pawnPiece = byWhite ? 1 : 9;
+    int knightPiece = byWhite ? 2 : 10;
+    int bishopPiece = byWhite ? 3 : 11;
+    int rookPiece = byWhite ? 4 : 12;
+    int queenPiece = byWhite ? 5 : 13;
+    int kingPiece = byWhite ? 6 : 14;
+
+    if (byWhite)
+    {
+        for (int pSq : board.pieces[pawnPiece])
+        {
+            if ((AttackPlaces::WhitePawnAttackPlaces[pSq] & Option::PowerTwo[sq]) != 0)
+            {
+                return true;
+            }
+        }
+    }
+    else
+    {
+        for (int pSq : board.pieces[pawnPiece])
+        {
+            if ((AttackPlaces::BlackPawnAttackPlaces[pSq] & Option::PowerTwo[sq]) != 0)
+            {
+                return true;
+            }
+        }
+    }
+
+    for (int kSq : board.pieces[knightPiece])
+    {
+        if ((AttackPlaces::KnightAttackPlaces[kSq] & Option::PowerTwo[sq]) != 0)
+        {
+            return true;
+        }
+    }
+
+    for (int kSq : board.pieces[kingPiece])
+    {
+        if ((AttackPlaces::KingAttackPlaces[kSq] & Option::PowerTwo[sq]) != 0)
+        {
+            return true;
+        }
+    }
+
+    for (int bSq : board.pieces[bishopPiece])
+    {
+        if ((AttackPlaces::BishopAttack[bSq][sq] & wholeBoardWithTarget) == Option::PowerTwo[sq])
+        {
+            return true;
+        }
+    }
+
+    for (int rSq : board.pieces[rookPiece])
+    {
+        if ((AttackPlaces::RookAttack[rSq][sq] & wholeBoardWithTarget) == Option::PowerTwo[sq])
+        {
+            return true;
+        }
+    }
+
+    for (int qSq : board.pieces[queenPiece])
+    {
+        if ((AttackPlaces::QueenAttack[qSq][sq] & wholeBoardWithTarget) == Option::PowerTwo[sq])
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+inline int EvaluatePassedPawnCorridorSafety(Board &board)
+{
+    static const int rankScalePercent[8] = {0, 0, 0, 25, 50, 75, 100, 100};
+
+    int whiteTotal = 0;
+    for (int pawnPlace : board.pieces[1])
+    {
+        if ((PassedPawnSetup::WhitePassedMask[pawnPlace] & board.blackPawns) == 0)
+        {
+            int corridorControl = 0;
+            for (int sq = pawnPlace + 8; sq < 64; sq += 8)
+            {
+                bool friendly = IsSquareAttackedBySide(board, sq, true);
+                bool enemy = IsSquareAttackedBySide(board, sq, false);
+
+                if (enemy && !friendly)
+                {
+                    corridorControl -= 8;
+                }
+                else if (friendly && !enemy)
+                {
+                    corridorControl += 4;
+                }
+            }
+
+            int relRank = (pawnPlace / 8) + 1;
+            whiteTotal += (corridorControl * rankScalePercent[relRank]) / 100;
+        }
+    }
+
+    int blackTotal = 0;
+    for (int pawnPlace : board.pieces[9])
+    {
+        if ((PassedPawnSetup::BlackPassedMask[pawnPlace] & board.whitePawns) == 0)
+        {
+            int corridorControl = 0;
+            for (int sq = pawnPlace - 8; sq >= 0; sq -= 8)
+            {
+                bool friendly = IsSquareAttackedBySide(board, sq, false);
+                bool enemy = IsSquareAttackedBySide(board, sq, true);
+
+                if (enemy && !friendly)
+                {
+                    corridorControl -= 8;
+                }
+                else if (friendly && !enemy)
+                {
+                    corridorControl += 4;
+                }
+            }
+
+            int relRank = 8 - (pawnPlace / 8);
+            blackTotal += (corridorControl * rankScalePercent[relRank]) / 100;
+        }
+    }
+
+    return whiteTotal - blackTotal;
+}
+
 inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const TunerEvaluationState& state)
 {
     long long whitePieces = thisBoard.whitePieces;
@@ -434,19 +738,23 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
     long long wholeBoard = whitePieces | blackPieces;
     int movement = 0;
     int centerValue = 0;
+    int whiteAttackValue = 0;
+    int blackAttackValue = 0;
+    int whiteRookFileBonus = 0;
+    int blackRookFileBonus = 0;
     int moveCount;
 
     const auto taperedTable = [phase](const auto& values, int index)
     {
-        return TaperEvaluationValue(values[0][index], values[1][index], phase);
+        return TaperEvaluationValue(values[0][index], values[2][index], phase);
     };
     const auto taperedGroup1Table = [phase](const auto& values, int index)
     {
-        return TaperGroup1Value(values[0][index], values[1][index], phase);
+        return TaperGroup1Value(values[0][index], values[2][index], phase);
     };
     const auto taperedGroup2Table = [phase](const auto& values, int index)
     {
-        return TaperGroup2Value(values[0][index], values[1][index], phase);
+        return TaperGroup2Value(values[0][index], values[2][index], phase);
     };
 
     // White pieces (1..6)
@@ -473,19 +781,19 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                 }
                 if (PieceMoves::WhitePawnMoves[piecePoisiion][6] != nullptr && piecePoisiion + 7 == thisBoard.unpassentPlace)
                 {
-                    movement += taperedGroup1Table(state.PawnAttackValue, 9);
+                    whiteAttackValue += taperedGroup1Table(state.PawnAttackValue, 9);
                 }
                 if (PieceMoves::WhitePawnMoves[piecePoisiion][7] != nullptr && piecePoisiion + 9 == thisBoard.unpassentPlace)
                 {
-                    movement += taperedGroup1Table(state.PawnAttackValue, 9);
+                    whiteAttackValue += taperedGroup1Table(state.PawnAttackValue, 9);
                 }
                 if (PieceMoves::WhitePawnMoves[piecePoisiion][8] != nullptr && (Option::PowerTwo[piecePoisiion + 7] & blackPieces) != 0)
                 {
-                    movement += taperedGroup1Table(state.PawnAttackValue, mainBoard[piecePoisiion + 7]);
+                    whiteAttackValue += taperedGroup1Table(state.PawnAttackValue, mainBoard[piecePoisiion + 7]);
                 }
                 if (PieceMoves::WhitePawnMoves[piecePoisiion][13] != nullptr && (Option::PowerTwo[piecePoisiion + 9] & blackPieces) != 0)
                 {
-                    movement += taperedGroup1Table(state.PawnAttackValue, mainBoard[piecePoisiion + 9]);
+                    whiteAttackValue += taperedGroup1Table(state.PawnAttackValue, mainBoard[piecePoisiion + 9]);
                 }
                 if (PieceMoves::WhitePawnMoves[piecePoisiion][8] != nullptr)
                 {
@@ -519,7 +827,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
-                            movement += taperedGroup1Table(state.KnightAttackValue, mainBoard[endPlace]);
+                            whiteAttackValue += taperedGroup1Table(state.KnightAttackValue, mainBoard[endPlace]);
                         }
                     }
                 }
@@ -534,7 +842,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                 centerValue += state.BishopInCenterValueWhite[piecePoisiion];
                 for (int direction = 0; direction <= 6; direction += 2)
                 {
-                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePoisiion][direction].size(); counter++)
+                    for (size_t counter = 0; counter < PieceMoves::BishopMoves[piecePoisiion][direction].size(); counter++)
                     {
                         int endPos = PieceMoves::BishopMoves[piecePoisiion][direction][counter]->endPlace;
                         int endPiece = mainBoard[endPos];
@@ -545,7 +853,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                         }
                         else if ((Option::PowerTwo[endPos] & blackPieces) != 0)
                         {
-                            movement += taperedGroup1Table(state.BishopAttackValue, endPiece);
+                            whiteAttackValue += taperedGroup1Table(state.BishopAttackValue, endPiece);
                             break;
                         }
                         else
@@ -560,12 +868,28 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
         case 4:
             for (int piecePoisiion : thisBoard.pieces[piece])
             {
+                int file = piecePoisiion % 8;
+                unsigned long long fileMask = 0x0101010101010101ULL << file;
+                bool friendlyPawn = (thisBoard.whitePawns & fileMask) != 0;
+                if (!friendlyPawn)
+                {
+                    bool enemyPawn = (thisBoard.blackPawns & fileMask) != 0;
+                    if (!enemyPawn)
+                    {
+                        whiteRookFileBonus += TaperGroup2Value(state.RookOpenFileMiddleGame, state.RookOpenFileEndGame, phase);
+                    }
+                    else
+                    {
+                        whiteRookFileBonus += TaperGroup2Value(state.RookSemiOpenFileMiddleGame, state.RookSemiOpenFileEndGame, phase);
+                    }
+                }
+
                 moveCount = 0;
                 movement += taperedGroup2Table(state.RookInValueWhite, piecePoisiion);
                 centerValue += state.RookInCenterValueWhite[piecePoisiion];
                 for (int direction = 0; direction <= 6; direction += 2)
                 {
-                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePoisiion][direction].size(); counter++)
+                    for (size_t counter = 0; counter < PieceMoves::RookMoves[piecePoisiion][direction].size(); counter++)
                     {
                         int endPos = PieceMoves::RookMoves[piecePoisiion][direction][counter]->endPlace;
                         int endPiece = mainBoard[endPos];
@@ -576,7 +900,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                         }
                         else if ((Option::PowerTwo[endPos] & blackPieces) != 0)
                         {
-                            movement += taperedGroup2Table(state.RookAttackValue, endPiece);
+                            whiteAttackValue += taperedGroup2Table(state.RookAttackValue, endPiece);
                             break;
                         }
                         else
@@ -596,7 +920,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                 centerValue += state.QueenInCenterValueWhite[piecePoisiion];
                 for (int direction = 0; direction <= 14; direction += 2)
                 {
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePoisiion][direction].size(); counter++)
+                    for (size_t counter = 0; counter < PieceMoves::QueenMoves[piecePoisiion][direction].size(); counter++)
                     {
                         int endPos = PieceMoves::QueenMoves[piecePoisiion][direction][counter]->endPlace;
                         int endPiece = mainBoard[endPos];
@@ -607,7 +931,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                         }
                         else if ((Option::PowerTwo[endPos] & blackPieces) != 0)
                         {
-                            movement += taperedGroup1Table(state.QueenAttackValue, endPiece);
+                            whiteAttackValue += taperedGroup1Table(state.QueenAttackValue, endPiece);
                             break;
                         }
                         else
@@ -640,7 +964,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
-                            movement += taperedTable(state.KingAttackValue, mainBoard[endPlace]);
+                            whiteAttackValue += taperedTable(state.KingAttackValue, mainBoard[endPlace]);
                         }
                     }
                 }
@@ -675,19 +999,19 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                 }
                 if (PieceMoves::BlackPawnMoves[piecePoisiion][6] != nullptr && piecePoisiion - 7 == thisBoard.unpassentPlace)
                 {
-                    movement -= taperedGroup1Table(state.PawnAttackValue, 1);
+                    blackAttackValue += taperedGroup1Table(state.PawnAttackValue, 1);
                 }
                 if (PieceMoves::BlackPawnMoves[piecePoisiion][7] != nullptr && piecePoisiion - 9 == thisBoard.unpassentPlace)
                 {
-                    movement -= taperedGroup1Table(state.PawnAttackValue, 1);
+                    blackAttackValue += taperedGroup1Table(state.PawnAttackValue, 1);
                 }
                 if (PieceMoves::BlackPawnMoves[piecePoisiion][8] != nullptr && (Option::PowerTwo[piecePoisiion - 7] & whitePieces) != 0)
                 {
-                    movement -= taperedGroup1Table(state.PawnAttackValue, mainBoard[piecePoisiion - 7]);
+                    blackAttackValue += taperedGroup1Table(state.PawnAttackValue, mainBoard[piecePoisiion - 7]);
                 }
                 if (PieceMoves::BlackPawnMoves[piecePoisiion][13] != nullptr && (Option::PowerTwo[piecePoisiion - 9] & whitePieces) != 0)
                 {
-                    movement -= taperedGroup1Table(state.PawnAttackValue, mainBoard[piecePoisiion - 9]);
+                    blackAttackValue += taperedGroup1Table(state.PawnAttackValue, mainBoard[piecePoisiion - 9]);
                 }
                 if (PieceMoves::BlackPawnMoves[piecePoisiion][8] != nullptr)
                 {
@@ -721,7 +1045,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
-                            movement -= taperedGroup1Table(state.KnightAttackValue, mainBoard[endPlace]);
+                            blackAttackValue += taperedGroup1Table(state.KnightAttackValue, mainBoard[endPlace]);
                         }
                     }
                 }
@@ -737,7 +1061,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
 
                 for (int direction = 0; direction <= 6; direction += 2)
                 {
-                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePoisiion][direction].size(); counter++)
+                    for (size_t counter = 0; counter < PieceMoves::BishopMoves[piecePoisiion][direction].size(); counter++)
                     {
                         int endPos = PieceMoves::BishopMoves[piecePoisiion][direction][counter]->endPlace;
                         int endPiece = mainBoard[endPos];
@@ -748,7 +1072,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                         }
                         else if ((Option::PowerTwo[endPos] & whitePieces) != 0)
                         {
-                            movement -= taperedGroup1Table(state.BishopAttackValue, endPiece);
+                            blackAttackValue += taperedGroup1Table(state.BishopAttackValue, endPiece);
                             break;
                         }
                         else
@@ -763,13 +1087,29 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
         case 12:
             for (int piecePoisiion : thisBoard.pieces[piece])
             {
+                int file = piecePoisiion % 8;
+                unsigned long long fileMask = 0x0101010101010101ULL << file;
+                bool friendlyPawn = (thisBoard.blackPawns & fileMask) != 0;
+                if (!friendlyPawn)
+                {
+                    bool enemyPawn = (thisBoard.whitePawns & fileMask) != 0;
+                    if (!enemyPawn)
+                    {
+                        blackRookFileBonus += TaperGroup2Value(state.RookOpenFileMiddleGame, state.RookOpenFileEndGame, phase);
+                    }
+                    else
+                    {
+                        blackRookFileBonus += TaperGroup2Value(state.RookSemiOpenFileMiddleGame, state.RookSemiOpenFileEndGame, phase);
+                    }
+                }
+
                 moveCount = 0;
                 movement -= taperedGroup2Table(state.RookInValueBlack, piecePoisiion);
                 centerValue -= state.RookInCenterValueBlack[piecePoisiion];
 
                 for (int direction = 0; direction <= 6; direction += 2)
                 {
-                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePoisiion][direction].size(); counter++)
+                    for (size_t counter = 0; counter < PieceMoves::RookMoves[piecePoisiion][direction].size(); counter++)
                     {
                         int endPos = PieceMoves::RookMoves[piecePoisiion][direction][counter]->endPlace;
                         int endPiece = mainBoard[endPos];
@@ -780,7 +1120,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                         }
                         else if ((Option::PowerTwo[endPos] & whitePieces) != 0)
                         {
-                            movement -= taperedGroup2Table(state.RookAttackValue, endPiece);
+                            blackAttackValue += taperedGroup2Table(state.RookAttackValue, endPiece);
                             break;
                         }
                         else
@@ -799,12 +1139,9 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                 movement -= taperedGroup2Table(state.QueenInValueBlack, piecePoisiion);
                 centerValue -= state.QueenInCenterValueBlack[piecePoisiion];
 
-                int directions[] = {0, 2, 4, 6, 8, 10, 12, 14};
-
-                for (int dir = 0; dir < 8; dir++)
+                for (int direction = 0; direction <= 14; direction += 2)
                 {
-                    int direction = directions[dir];
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePoisiion][direction].size(); counter++)
+                    for (size_t counter = 0; counter < PieceMoves::QueenMoves[piecePoisiion][direction].size(); counter++)
                     {
                         int endPos = PieceMoves::QueenMoves[piecePoisiion][direction][counter]->endPlace;
                         int endPiece = mainBoard[endPos];
@@ -815,7 +1152,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                         }
                         else if ((Option::PowerTwo[endPos] & whitePieces) != 0)
                         {
-                            movement -= taperedGroup1Table(state.QueenAttackValue, endPiece);
+                            blackAttackValue += taperedGroup1Table(state.QueenAttackValue, endPiece);
                             break;
                         }
                         else
@@ -848,7 +1185,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
-                            movement -= taperedTable(state.KingAttackValue, mainBoard[endPlace]);
+                            blackAttackValue += taperedTable(state.KingAttackValue, mainBoard[endPlace]);
                         }
                     }
                 }
@@ -857,6 +1194,11 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
             break;
         }
     }
+
+    int scaledAttackNet = ((whiteAttackValue - blackAttackValue) * state.PieceAttackScalePercent) / 100;
+    int rookFileNet = whiteRookFileBonus - blackRookFileBonus;
+    movement += scaledAttackNet;
+    movement += rookFileNet;
 
     return {movement, centerValue};
 }
@@ -1013,15 +1355,23 @@ public:
         Detail::KingDangerResult blackKingDanger = Detail::EvaluateKingDanger(thisBoard, false);
         int kingDangerNet = blackKingDanger.danger - whiteKingDanger.danger;
 
-        int whiteKingPlacement = state.WhiteKingPlaceSafetyMiddleGame[pieces[6].front()];
-        int blackKingPlacement = state.BlackKingPlaceSafetyMiddleGame[pieces[14].front()];
-        whiteKingPlacement = whiteKingPlacement * phase / 24;
-        blackKingPlacement = blackKingPlacement * phase / 24;
+        int whiteKingSq = pieces[6].front();
+        int blackKingSq = pieces[14].front();
+        int whiteKingPlacement = (state.WhiteKingPlaceSafetyMiddleGame[whiteKingSq] * phase
+                                  + state.KingInValueWhiteEndGame[whiteKingSq] * (24 - phase)) / 24;
+        int blackKingPlacement = (state.BlackKingPlaceSafetyMiddleGame[blackKingSq] * phase
+                                  + state.KingInValueBlackEndGame[blackKingSq] * (24 - phase)) / 24;
         int kingPlacementNet = whiteKingPlacement - blackKingPlacement;
         int kingSafety = kingDangerNet + kingPlacementNet;
 
         // Pawn Structure
         int pawnStructure = Detail::GetPawnStructureValue(thisBoard, phase, state);
+        int passedPawnKingRace = Detail::EvaluatePassedPawnKingRace(thisBoard, whiteKingSq, blackKingSq);
+        pawnStructure += passedPawnKingRace;
+        int passedPawnMinorAccessibility = Detail::EvaluatePassedPawnMinorAccessibility(thisBoard);
+        pawnStructure += passedPawnMinorAccessibility;
+        int passedPawnCorridorSafety = Detail::EvaluatePassedPawnCorridorSafety(thisBoard);
+        pawnStructure += passedPawnCorridorSafety;
 
         // Rook Connection
         int rookValue = Detail::RookConnectionValue(pieces, piecesBinary);
@@ -1031,7 +1381,7 @@ public:
         int temp = (!thisBoard.sideToMove) ? taperedTempo : -taperedTempo;
 
         // Opposite Color Bishop
-        double oppositeColorBishop = 1;
+        double oppositeColorBishop = 1.0;
         if (pieces[3].size() == 1 && pieces[11].size() == 1 &&
             ((pieces[3].front() / 8 + pieces[3].front() % 8) % 2) != ((pieces[11].front() / 8 + pieces[11].front() % 8) % 2))
         {
@@ -1040,29 +1390,57 @@ public:
         }
 
         int unscaled = pieceEvaluation + bishopPairValue + movement + pawnStructure + kingSafety + rookValue + center + temp;
-        int evaluation = (int)(unscaled * oppositeColorBishop);
 
-        // Draw adjustments
-        if (evaluation > 0)
+        double endgameScaleFactor = oppositeColorBishop;
+        if (unscaled > 0)
         {
-            if (pieces[1].size() == 0 && pieces[3].size() == 0 && pieces[4].size() == 0 && pieces[5].size() == 0)
+            if (pieces[1].size() == 0 && pieces[4].size() == 0 && pieces[5].size() == 0 &&
+                (pieces[2].size() + pieces[3].size() == 1) &&
+                pieces[9].size() >= 1)
             {
-                evaluation = 30;
-            }
-            else if (pieces[1].size() == 0 && pieces[2].size() == 0 && pieces[3].size() < 2 && pieces[4].size() == 0 && pieces[5].size() == 0)
-            {
-                evaluation = 30;
+                endgameScaleFactor *= 0.25;
             }
         }
-        else if (evaluation < 0)
+        else if (unscaled < 0)
         {
-            if (pieces[9].size() == 0 && pieces[11].size() == 0 && pieces[12].size() == 0 && pieces[13].size() == 0)
+            if (pieces[9].size() == 0 && pieces[12].size() == 0 && pieces[13].size() == 0 &&
+                (pieces[10].size() + pieces[11].size() == 1) &&
+                pieces[1].size() >= 1)
             {
-                evaluation = -30;
+                endgameScaleFactor *= 0.25;
             }
-            else if (pieces[9].size() == 0 && pieces[10].size() == 0 && pieces[11].size() < 2 && pieces[12].size() == 0 && pieces[13].size() == 0)
+        }
+
+        int evaluation = (int)(unscaled * endgameScaleFactor);
+        bool drawAdjustment = false;
+        bool noPawns = (pieces[1].size() == 0 && pieces[9].size() == 0);
+        bool noMajorPieces = (pieces[4].size() == 0 && pieces[12].size() == 0 &&
+                              pieces[5].size() == 0 && pieces[13].size() == 0);
+
+        if (noPawns && noMajorPieces)
+        {
+            int whiteKnights = pieces[2].size();
+            int whiteBishops = pieces[3].size();
+            int blackKnights = pieces[10].size();
+            int blackBishops = pieces[11].size();
+
+            int whiteMinors = whiteKnights + whiteBishops;
+            int blackMinors = blackKnights + blackBishops;
+
+            if (whiteMinors == 0 && blackMinors == 0)
             {
-                evaluation = -30;
+                evaluation = 0;
+                drawAdjustment = true;
+            }
+            else if (blackMinors == 0 && ((whiteBishops == 0 && whiteKnights <= 2) || (whiteKnights == 0 && whiteBishops < 2)))
+            {
+                evaluation = 0;
+                drawAdjustment = true;
+            }
+            else if (whiteMinors == 0 && ((blackBishops == 0 && blackKnights <= 2) || (blackKnights == 0 && blackBishops < 2)))
+            {
+                evaluation = 0;
+                drawAdjustment = true;
             }
         }
 
