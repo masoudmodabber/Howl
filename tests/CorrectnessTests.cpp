@@ -3521,9 +3521,9 @@ int RunEvaluationCorrectness(const std::string& testCase)
 
         const Group2Case g2Cases[] = {
             {"rook PST 7th-rank", Option::RookInValueWhiteMiddleGame[48],
-                Option::RookInValueWhiteEndGame[48], 47, 47, 70, 98, 98},
+                Option::RookInValueWhiteEndGame[48], 40, 40, 25, 8, 8},
             {"rook mobility", Option::RookMoveCountValueMiddleGame[8],
-                Option::RookMoveCountValueEndGame[8], 23, 23, 55, 95, 95},
+                Option::RookMoveCountValueEndGame[8], 21, 21, 32, 47, 47},
             {"rook attacks pawn", Option::RookAttackValueMiddleGame[1],
                 Option::RookAttackValueEndGame[1], -1, -1, 12, 29, 29}
         };
