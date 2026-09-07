@@ -92,7 +92,7 @@ struct TunerEvaluationState
     int KingAttackValueMiddleGame[16] = {0};
     int KingAttackValueEndGame[16] = {0};
 
-    // Family: Inline (10 parameters)
+    // Family: Inline (11 parameters)
     int BishopPairValue = 0;
     int BishopOpenFilePawnScale = 0;
     int TempoMiddleGame = 0;
@@ -103,6 +103,13 @@ struct TunerEvaluationState
     int PawnDeficitZeroPawnMultiplierPermille = 0;
     int PawnDeficitOnePawnMultiplierPermille = 0;
     int EndgamePawnAdvancementRankMultiplier = 0;
+    int PieceAttackScalePercent = 0;
+
+    // Family: RookFile (4 parameters)
+    int RookOpenFileMiddleGame = 0;
+    int RookOpenFileEndGame = 0;
+    int RookSemiOpenFileMiddleGame = 0;
+    int RookSemiOpenFileEndGame = 0;
 
     // =========================================================================
     // 2. Tuner-Side Derived Data: Black Mirrored Tables
@@ -319,6 +326,17 @@ struct TunerEvaluationState
             case 7: return &PawnDeficitZeroPawnMultiplierPermille;
             case 8: return &PawnDeficitOnePawnMultiplierPermille;
             case 9: return &EndgamePawnAdvancementRankMultiplier;
+            case 10: return &PieceAttackScalePercent;
+            default: return nullptr;
+            }
+
+        case ParameterFamily::RookFile:
+            switch (semanticIndex)
+            {
+            case 0: return &RookOpenFileMiddleGame;
+            case 1: return &RookOpenFileEndGame;
+            case 2: return &RookSemiOpenFileMiddleGame;
+            case 3: return &RookSemiOpenFileEndGame;
             default: return nullptr;
             }
 

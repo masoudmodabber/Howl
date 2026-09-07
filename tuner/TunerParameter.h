@@ -19,7 +19,8 @@ enum class ParameterFamily
     KingSafety,
     Mobility,
     Attack,
-    Inline
+    Inline,
+    RookFile
 };
 
 struct TunerParameter
@@ -222,7 +223,7 @@ public:
             }
         }
 
-        // 10. Inline (10 parameters)
+        // 10. Inline (11 parameters)
         registry.Add("BishopPairValue", ParameterFamily::Inline, 0, 50);
         registry.Add("BishopOpenFilePawnScale", ParameterFamily::Inline, 1, 2);
         registry.Add("TempoMiddleGame", ParameterFamily::Inline, 2, 24);
@@ -233,6 +234,13 @@ public:
         registry.Add("PawnDeficitZeroPawnMultiplierPermille", ParameterFamily::Inline, 7, 700);    // 0.7 * 1000
         registry.Add("PawnDeficitOnePawnMultiplierPermille", ParameterFamily::Inline, 8, 900);     // 0.9 * 1000
         registry.Add("EndgamePawnAdvancementRankMultiplier", ParameterFamily::Inline, 9, 2);
+        registry.Add("PieceAttackScalePercent", ParameterFamily::Inline, 10, 135);
+
+        // 11. RookFile (4 parameters)
+        registry.Add("RookOpenFileMiddleGame", ParameterFamily::RookFile, 0, Option::RookOpenFileMiddleGame);
+        registry.Add("RookOpenFileEndGame", ParameterFamily::RookFile, 1, Option::RookOpenFileEndGame);
+        registry.Add("RookSemiOpenFileMiddleGame", ParameterFamily::RookFile, 2, Option::RookSemiOpenFileMiddleGame);
+        registry.Add("RookSemiOpenFileEndGame", ParameterFamily::RookFile, 3, Option::RookSemiOpenFileEndGame);
 
         return registry;
     }

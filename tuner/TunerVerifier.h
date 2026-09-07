@@ -288,6 +288,12 @@ public:
             }
         }
 
+        // 13. Rook file open/semi-open bonuses (4)
+        if (!check("RookOpenFileMiddleGame", 0, state.RookOpenFileMiddleGame, Option::RookOpenFileMiddleGame)) return res;
+        if (!check("RookOpenFileEndGame", 1, state.RookOpenFileEndGame, Option::RookOpenFileEndGame)) return res;
+        if (!check("RookSemiOpenFileMiddleGame", 2, state.RookSemiOpenFileMiddleGame, Option::RookSemiOpenFileMiddleGame)) return res;
+        if (!check("RookSemiOpenFileEndGame", 3, state.RookSemiOpenFileEndGame, Option::RookSemiOpenFileEndGame)) return res;
+
         return res;
     }
 };
