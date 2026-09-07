@@ -230,9 +230,9 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
             }
             Move* move = moveList.moves[i];
             boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
-            MissingInfoAboutPrevStateFromMove* missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
+            MissingInfoAboutPrevStateFromMove missingInfoAboutPrevStateFromMove(board4, *move);
 
-            GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone, missingInfoAboutPrevStateFromMove);
+            GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone, &missingInfoAboutPrevStateFromMove);
             bool legalMove = !BoardLogic::UnderAttack(
                 board4,
                 board4.pieces[turn * 8 + 6].front(),
@@ -244,9 +244,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                     qSearchTestStatistics.rootIllegalMovesBeforeFirstSearch++;
                 }
 #endif
-                GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
-                delete missingInfoAboutPrevStateFromMove;
-                missingInfoAboutPrevStateFromMove = nullptr;
+                GameLogic::UndoMove(board4, *move, missingInfoAboutPrevStateFromMove);
                 if (UCI::IsTest()) {
                     Board::AreBoardsEqual(board4, *boardCopy);
                     delete boardCopy;
@@ -289,9 +287,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                     SelectedMove = move;
                     SelectedPV = "";
                 }
-                GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
-                delete missingInfoAboutPrevStateFromMove;
-                missingInfoAboutPrevStateFromMove = nullptr;
+                GameLogic::UndoMove(board4, *move, missingInfoAboutPrevStateFromMove);
                 if (UCI::IsTest()) {
                     Board::AreBoardsEqual(board4, *boardCopy);
                     delete boardCopy;
@@ -330,9 +326,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                     SelectedMove = move;
                     SelectedPV = movePV;
                 }
-                GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
-                delete missingInfoAboutPrevStateFromMove;
-                missingInfoAboutPrevStateFromMove = nullptr;
+                GameLogic::UndoMove(board4, *move, missingInfoAboutPrevStateFromMove);
                 if (UCI::IsTest()) {
                     Board::AreBoardsEqual(board4, *boardCopy);
                     delete boardCopy;
@@ -419,9 +413,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                         alpha = value;
                     }
                 }
-                GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
-                delete missingInfoAboutPrevStateFromMove;
-                missingInfoAboutPrevStateFromMove = nullptr;
+                GameLogic::UndoMove(board4, *move, missingInfoAboutPrevStateFromMove);
                 if (UCI::IsTest()) {
                     Board::AreBoardsEqual(board4, *boardCopy);
                     delete boardCopy;
