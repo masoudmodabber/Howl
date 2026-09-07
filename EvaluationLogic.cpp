@@ -440,64 +440,130 @@ bool IsInsideBoard(int rank, int file)
     return rank >= 0 && rank < 8 && file >= 0 && file < 8;
 }
 
-bool PieceAttacksSquare(Board& board, int pieceType, bool white,
-                        int from, int target)
-{
-    const int fromRank = from / 8;
-    const int fromFile = from % 8;
-    const int targetRank = target / 8;
-    const int targetFile = target % 8;
-    const int rankDistance = targetRank - fromRank;
-    const int fileDistance = targetFile - fromFile;
+struct PrecomputedKingZone {
+    int count = 0;
+    int squares[9]{};
+    long long mask = 0;
+};
 
+struct KingZonesTable {
+    PrecomputedKingZone zones[64];
+    constexpr KingZonesTable() {
+        for (int ksq = 0; ksq < 64; ksq++) {
+            const int kingRank = ksq / 8;
+            const int kingFile = ksq % 8;
+            zones[ksq].squares[0] = ksq;
+            zones[ksq].count = 1;
+            zones[ksq].mask = (1ULL << ksq);
+            for (int rankOffset = -1; rankOffset <= 1; rankOffset++) {
+                for (int fileOffset = -1; fileOffset <= 1; fileOffset++) {
+                    if (rankOffset == 0 && fileOffset == 0) continue;
+                    const int rank = kingRank + rankOffset;
+                    const int file = kingFile + fileOffset;
+                    if (rank >= 0 && rank < 8 && file >= 0 && file < 8) {
+                        const int target = rank * 8 + file;
+                        zones[ksq].squares[zones[ksq].count++] = target;
+                        zones[ksq].mask |= (1ULL << target);
+                    }
+                }
+            }
+        }
+    }
+};
+
+static constexpr KingZonesTable KingZonesData{};
+
+struct PawnAttacksTable {
+    long long data[2][64]{};
+    constexpr PawnAttacksTable() {
+        for (int sq = 0; sq < 64; sq++) {
+            const int r = sq / 8, f = sq % 8;
+            // White (attacks rank + 1)
+            if (r < 7) {
+                if (f > 0) data[1][sq] |= (1ULL << ((r + 1) * 8 + (f - 1)));
+                if (f < 7) data[1][sq] |= (1ULL << ((r + 1) * 8 + (f + 1)));
+            }
+            // Black (attacks rank - 1)
+            if (r > 0) {
+                if (f > 0) data[0][sq] |= (1ULL << ((r - 1) * 8 + (f - 1)));
+                if (f < 7) data[0][sq] |= (1ULL << ((r - 1) * 8 + (f + 1)));
+            }
+        }
+    }
+};
+
+static constexpr PawnAttacksTable PawnAttacksData{};
+
+inline bool PieceAttacksSquareFast(long long occupiedSquares, int pieceType, bool white,
+                                   int from, int target)
+{
     if (pieceType == 1)
     {
-        return rankDistance == (white ? 1 : -1) && std::abs(fileDistance) == 1;
+        return (PawnAttacksData.data[white ? 1 : 0][from] & Option::PowerTwo[target]) != 0;
     }
     if (pieceType == 2)
     {
-        return (std::abs(rankDistance) == 2 && std::abs(fileDistance) == 1) ||
-               (std::abs(rankDistance) == 1 && std::abs(fileDistance) == 2);
+        return (AttackPlaces::KnightAttackPlaces[from] & Option::PowerTwo[target]) != 0;
     }
     if (pieceType == 6)
     {
-        return std::max(std::abs(rankDistance), std::abs(fileDistance)) == 1;
+        return (AttackPlaces::KingAttackPlaces[from] & Option::PowerTwo[target]) != 0;
     }
-
-    const bool diagonal = std::abs(rankDistance) == std::abs(fileDistance);
-    const bool straight = rankDistance == 0 || fileDistance == 0;
-    if ((pieceType == 3 && !diagonal) || (pieceType == 4 && !straight) ||
-        (pieceType == 5 && !diagonal && !straight) || from == target)
+    long long ray = 0;
+    if (pieceType == 3)
+    {
+        ray = AttackPlaces::BishopAttack[from][target];
+    }
+    else if (pieceType == 4)
+    {
+        ray = AttackPlaces::RookAttack[from][target];
+    }
+    else if (pieceType == 5)
+    {
+        ray = AttackPlaces::QueenAttack[from][target];
+    }
+    if (ray == 0)
     {
         return false;
     }
-
-    const int rankStep = (rankDistance > 0) - (rankDistance < 0);
-    const int fileStep = (fileDistance > 0) - (fileDistance < 0);
-    int rank = fromRank + rankStep;
-    int file = fromFile + fileStep;
-    while (rank != targetRank || file != targetFile)
-    {
-        if (board.mainBoard[rank * 8 + file] != 0)
-        {
-            return false;
-        }
-        rank += rankStep;
-        file += fileStep;
-    }
-    return true;
+    return ((ray ^ Option::PowerTwo[target]) & occupiedSquares) == 0;
 }
 
-int CountSideAttacks(Board& board, bool white, int target)
+bool PieceAttacksSquare(Board& board, int pieceType, bool white,
+                        int from, int target)
 {
-    int attackers = 0;
+    const long long occupiedSquares = board.whitePieces | board.blackPieces;
+    return PieceAttacksSquareFast(occupiedSquares, pieceType, white, from, target);
+}
+
+inline bool HasSideAttack(Board& board, bool white, int target, long long occupiedSquares)
+{
     const int firstPiece = white ? 1 : 9;
     for (int boardPiece = firstPiece; boardPiece < firstPiece + 6; boardPiece++)
     {
         const int pieceType = white ? boardPiece : boardPiece - 8;
         for (int from : board.pieces[boardPiece])
         {
-            if (PieceAttacksSquare(board, pieceType, white, from, target))
+            if (PieceAttacksSquareFast(occupiedSquares, pieceType, white, from, target))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+int CountSideAttacks(Board& board, bool white, int target)
+{
+    int attackers = 0;
+    const long long occupiedSquares = board.whitePieces | board.blackPieces;
+    const int firstPiece = white ? 1 : 9;
+    for (int boardPiece = firstPiece; boardPiece < firstPiece + 6; boardPiece++)
+    {
+        const int pieceType = white ? boardPiece : boardPiece - 8;
+        for (int from : board.pieces[boardPiece])
+        {
+            if (PieceAttacksSquareFast(occupiedSquares, pieceType, white, from, target))
             {
                 attackers++;
             }
@@ -508,27 +574,31 @@ int CountSideAttacks(Board& board, bool white, int target)
 
 std::vector<int> KingZone(int kingSquare)
 {
-    std::vector<int> zone;
-    const int kingRank = kingSquare / 8;
-    const int kingFile = kingSquare % 8;
-    zone.push_back(kingSquare);
-    for (int rankOffset = -1; rankOffset <= 1; rankOffset++)
+    const auto& z = KingZonesData.zones[kingSquare];
+    return std::vector<int>(z.squares, z.squares + z.count);
+}
+
+inline bool PieceParticipatesInZoneFast(long long occupiedSquares, int boardPiece, int square,
+                                       const PrecomputedKingZone& zone)
+{
+    const bool white = boardPiece < 8;
+    const int pieceType = white ? boardPiece : boardPiece - 8;
+    if (pieceType == 1)
     {
-        for (int fileOffset = -1; fileOffset <= 1; fileOffset++)
+        return (PawnAttacksData.data[white ? 1 : 0][square] & zone.mask) != 0;
+    }
+    if (pieceType == 2)
+    {
+        return (AttackPlaces::KnightAttackPlaces[square] & zone.mask) != 0;
+    }
+    for (int i = 0; i < zone.count; i++)
+    {
+        if (PieceAttacksSquareFast(occupiedSquares, pieceType, white, square, zone.squares[i]))
         {
-            if (rankOffset == 0 && fileOffset == 0)
-            {
-                continue;
-            }
-            const int rank = kingRank + rankOffset;
-            const int file = kingFile + fileOffset;
-            if (IsInsideBoard(rank, file))
-            {
-                zone.push_back(rank * 8 + file);
-            }
+            return true;
         }
     }
-    return zone;
+    return false;
 }
 
 bool PieceParticipatesInZone(Board& board, int boardPiece, int square,
@@ -536,9 +606,10 @@ bool PieceParticipatesInZone(Board& board, int boardPiece, int square,
 {
     const bool white = boardPiece < 8;
     const int pieceType = white ? boardPiece : boardPiece - 8;
+    const long long occupiedSquares = board.whitePieces | board.blackPieces;
     for (int target : zone)
     {
-        if (PieceAttacksSquare(board, pieceType, white, square, target))
+        if (PieceAttacksSquareFast(occupiedSquares, pieceType, white, square, target))
         {
             return true;
         }
@@ -596,7 +667,8 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
     static constexpr int defenderWeight[7] = {0, 2, 4, 4, 5, 7, 0};
     const int kingSquare = board.pieces[whiteKing ? 6 : 14].front();
     const bool attackingWhite = !whiteKing;
-    const std::vector<int> zone = KingZone(kingSquare);
+    const PrecomputedKingZone& zone = KingZonesData.zones[kingSquare];
+    const long long occupiedSquares = board.whitePieces | board.blackPieces;
     const int attackerFirst = attackingWhite ? 1 : 9;
     const int defenderFirst = whiteKing ? 1 : 9;
     int attackerParticipation = 0;
@@ -609,7 +681,7 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
         const int pieceType = attackingWhite ? boardPiece : boardPiece - 8;
         for (int square : board.pieces[boardPiece])
         {
-            if (PieceParticipatesInZone(board, boardPiece, square, zone))
+            if (PieceParticipatesInZoneFast(occupiedSquares, boardPiece, square, zone))
             {
                 attackerParticipation += attackerWeight[pieceType];
                 attackerCount++;
@@ -621,51 +693,34 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
         const int pieceType = whiteKing ? boardPiece : boardPiece - 8;
         for (int square : board.pieces[boardPiece])
         {
-            if (PieceParticipatesInZone(board, boardPiece, square, zone))
+            if (PieceParticipatesInZoneFast(occupiedSquares, boardPiece, square, zone))
             {
                 defenderParticipation += defenderWeight[pieceType];
                 defenderCount++;
             }
         }
     }
-    const int kingRank = kingSquare / 8;
     const int kingFile = kingSquare % 8;
     int safeEscapes = 0;
     int controlledEscapes = 0;
     int occupiedEscapes = 0;
-    int edgeDirections = 0;
-    for (int rankOffset = -1; rankOffset <= 1; rankOffset++)
+    const int edgeDirections = 9 - zone.count;
+    for (int i = 1; i < zone.count; i++)
     {
-        for (int fileOffset = -1; fileOffset <= 1; fileOffset++)
+        const int target = zone.squares[i];
+        const int occupant = board.mainBoard[target];
+        const bool occupiedByDefender = occupant != 0 && (occupant < 8) == whiteKing;
+        if (occupiedByDefender)
         {
-            if (rankOffset == 0 && fileOffset == 0)
-            {
-                continue;
-            }
-            const int rank = kingRank + rankOffset;
-            const int file = kingFile + fileOffset;
-            if (!IsInsideBoard(rank, file))
-            {
-                edgeDirections++;
-                continue;
-            }
-            const int target = rank * 8 + file;
-            const int occupant = board.mainBoard[target];
-            const bool occupiedByDefender = occupant != 0 && (occupant < 8) == whiteKing;
-            const bool enemyControlled = CountSideAttacks(board, attackingWhite, target) != 0;
-            if (occupiedByDefender)
-            {
-                occupiedEscapes++;
-            }
-            else if (enemyControlled)
-            {
-                controlledEscapes++;
-            }
-            else
-            {
-                safeEscapes++;
-            }
-
+            occupiedEscapes++;
+        }
+        else if (HasSideAttack(board, attackingWhite, target, occupiedSquares))
+        {
+            controlledEscapes++;
+        }
+        else
+        {
+            safeEscapes++;
         }
     }
     int filePressure = 0;
@@ -685,9 +740,10 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
             const int boardPiece = attackingWhite ? pieceType : pieceType + 8;
             for (int square : board.pieces[boardPiece])
             {
-                for (int target : zone)
+                for (int i = 0; i < zone.count; i++)
                 {
-                    if (target % 8 == file && PieceAttacksSquare(board, pieceType, attackingWhite, square, target))
+                    const int target = zone.squares[i];
+                    if (target % 8 == file && PieceAttacksSquareFast(occupiedSquares, pieceType, attackingWhite, square, target))
                     {
                         filePressure += openness == 2 ? 10 : 6;
                         break;
@@ -702,7 +758,7 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
         const int boardPiece = attackingWhite ? pieceType : pieceType + 8;
         for (int square : board.pieces[boardPiece])
         {
-            if (PieceAttacksSquare(board, pieceType, attackingWhite, square, kingSquare))
+            if (PieceAttacksSquareFast(occupiedSquares, pieceType, attackingWhite, square, kingSquare))
             {
                 diagonalPressure += 9;
             }
