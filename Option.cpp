@@ -23,6 +23,10 @@ int Option::QueenValue = 975;
 int Option::KingValue = 1200;
 int Option::EndPawnValue = -20;
 int Option::DoubledPawnValue = -20;
+int Option::RookOpenFileMiddleGame = 18;
+int Option::RookOpenFileEndGame = 12;
+int Option::RookSemiOpenFileMiddleGame = 10;
+int Option::RookSemiOpenFileEndGame = 6;
 int Option::pieceMovement[2][7][120] = {};
 
 int Option::WhitePassedPawnValueMiddleGam[] = {0, 0, 0, 0, 0, 0, 0, 0,
@@ -392,7 +396,7 @@ int Option::KingMoveValueBlackMiddleGame[64] = {};
 int Option::PawnMoveCountValueMiddleGame[3] = {0, 0, 0};
 int Option::PawnMoveCountValue[3][3] = {};
 
-int Option::KnightMoveCountValueMiddleGame[9] = {-38, -25, -12, 0, 12, 25, 31, 38, 38};
+int Option::KnightMoveCountValueMiddleGame[9] = {-20, -12, -5, 0, 12, 25, 31, 38, 38};
 int Option::KnightMoveCountValue[3][9] = {};
 int Option::BishopMoveCountValueMiddleGame[14] = {-30, -20, -12, -6, -2, 0, 3, 6, 10, 15, 20, 25, 29, 32};
 int Option::BishopMoveCountValue[3][14] = {};
@@ -751,7 +755,7 @@ int Option::QueenMoveValueBlackEndGame[64] = {0};
 int Option::KingMoveValueBlackEndGame[64] = {0};
 
 int Option::PawnMoveCountValueEndGame[3] = {0};
-int Option::KnightMoveCountValueEndGame[9] = {-33, -23, -13, -3, 7, 17, 22, 27, 27};
+int Option::KnightMoveCountValueEndGame[9] = {-18, -11, -5, -3, 7, 17, 22, 27, 27};
 int Option::BishopMoveCountValueEndGame[14] = {-35, -24, -15, -8, -3, 0, 4, 8, 13, 19, 25, 30, 34, 37};
 int Option::RookMoveCountValueEndGame[15] = {-36, -19, -3, 13, 29, 46, 62, 79, 95, 106, 111, 114, 116, 117, 118};
 int Option::QueenMoveCountValueEndGame[28] = {-18, -13, -7, -2, 3, 8, 13, 19, 23, 27, 32, 34, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35};

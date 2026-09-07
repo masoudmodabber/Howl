@@ -36,6 +36,12 @@ public:
     static int EndPawnValue;
     static int DoubledPawnValue;
 
+    // Rook File Value
+    static int RookOpenFileMiddleGame;
+    static int RookOpenFileEndGame;
+    static int RookSemiOpenFileMiddleGame;
+    static int RookSemiOpenFileEndGame;
+
     // Changeable
     static int pieceMovement[2][7][120];
     static int WhitePassedPawnValueMiddleGam[64];

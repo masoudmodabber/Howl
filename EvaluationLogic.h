@@ -20,6 +20,10 @@ struct EvaluationBreakdown
     int bishopPairNet = 0;
 
     int mobilityNet = 0;
+    int pieceAttacksNet = 0;
+    int whiteRookFileBonus = 0;
+    int blackRookFileBonus = 0;
+    int rookFileBonusNet = 0;
     int centerNet = 0;
 
     int kingAttackNet = 0;
