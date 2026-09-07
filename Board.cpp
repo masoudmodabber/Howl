@@ -1,4 +1,4 @@
-﻿#ifdef _WIN32
+#ifdef _WIN32
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
 #endif
@@ -35,7 +35,7 @@ Board* Board::MakeCopy()
     return copiedBoard;
 }
 
-bool Board::AreBoardsEqual(Board& board1, Board& board2)
+bool Board::AreBoardsEqual(Board& board1, Board& board2, bool requireExactPieceOrder)
 {
     if (board1.whitePieces != board2.whitePieces)
         throw std::runtime_error("White pieces are not equal");
@@ -82,9 +82,27 @@ bool Board::AreBoardsEqual(Board& board1, Board& board2)
     }
 
     for (int i = 0; i < 15; ++i) {
-        if (board1.pieces[i].size() != board2.pieces[i].size() ||
-            !std::is_permutation(board1.pieces[i].begin(), board1.pieces[i].end(), board2.pieces[i].begin())) {
-            throw std::runtime_error("Pieces are not equal: " + std::to_string(i));
+        if (requireExactPieceOrder) {
+            if (board1.pieces[i] != board2.pieces[i]) {
+                std::ostringstream oss;
+                oss << "Pieces are not equal for piece type " << i << ": board1=[";
+                for (int j = 0; j < board1.pieces[i].count; ++j) {
+                    if (j > 0) oss << ",";
+                    oss << board1.pieces[i].data[j];
+                }
+                oss << "], board2=[";
+                for (int j = 0; j < board2.pieces[i].count; ++j) {
+                    if (j > 0) oss << ",";
+                    oss << board2.pieces[i].data[j];
+                }
+                oss << "]";
+                throw std::runtime_error(oss.str());
+            }
+        } else {
+            if (board1.pieces[i].size() != board2.pieces[i].size() ||
+                !std::is_permutation(board1.pieces[i].begin(), board1.pieces[i].end(), board2.pieces[i].begin())) {
+                throw std::runtime_error("Pieces are not equal: " + std::to_string(i));
+            }
         }
     }
 

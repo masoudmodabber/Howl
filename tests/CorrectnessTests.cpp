@@ -184,6 +184,18 @@ void RequireSemanticEquality(Board& actual, Board& expected)
     }
 }
 
+void RequireExactBoardEquality(Board& actual, Board& expected)
+{
+    Board::AreBoardsEqual(actual, expected, true);
+    if (actual.moveNumber != expected.moveNumber)
+    {
+        std::ostringstream message;
+        message << "Move numbers are not equal: actual=" << actual.moveNumber
+                << ", expected=" << expected.moveNumber;
+        throw std::runtime_error(message.str());
+    }
+}
+
 std::string CompareHashRelevantState(Board& actual, Board& expected)
 {
     std::unique_ptr<Board> actualCopy(actual.MakeCopy());
@@ -534,8 +546,8 @@ FixedDepthSearchResult FixedDepthRoot(Board& board, int depth)
     {
         Move& move = *generatedMoves.moveList.moves[counter];
         std::string moveText = MoveToString(move);
-        MissingInfoAboutPrevStateFromMove missingInfo(board);
-        GameLogic::DoMove(board, move, previousMove, depth, 0);
+        MissingInfoAboutPrevStateFromMove missingInfo(board, move);
+        GameLogic::DoMove(board, move, previousMove, depth, 0, &missingInfo);
 
         if (IsLegalAfterMove(board, movingSide))
         {
@@ -603,8 +615,8 @@ bool ValidateReturnedMove(Board& board, const FixedDepthSearchResult& result)
             continue;
         }
 
-        MissingInfoAboutPrevStateFromMove missingInfo(board);
-        GameLogic::DoMove(board, move, previousMove, 1, 0);
+        MissingInfoAboutPrevStateFromMove missingInfo(board, move);
+        GameLogic::DoMove(board, move, previousMove, 1, 0, &missingInfo);
         bool legal = IsLegalAfterMove(board, movingSide);
         GameLogic::UndoMove(board, move, missingInfo);
         RequireSemanticEquality(board, *original);
@@ -2479,8 +2491,8 @@ std::uint64_t Perft(Board& board, int depth, Move& previousMove)
     for (int counter = 0; counter < generatedMoves.moveList.count; counter++)
     {
         Move& move = *generatedMoves.moveList.moves[counter];
-        MissingInfoAboutPrevStateFromMove missingInfo(board);
-        GameLogic::DoMove(board, move, previousMove, depth, 0);
+        MissingInfoAboutPrevStateFromMove missingInfo(board, move);
+        GameLogic::DoMove(board, move, previousMove, depth, 0, &missingInfo);
         bool legal = IsLegalAfterMove(board, movingSide);
 
         if (legal)
@@ -2507,8 +2519,8 @@ void PrintRootDivide(const PerftPosition& position, int depth)
     {
         Move& move = *generatedMoves.moveList.moves[counter];
         std::string moveText = MoveToString(move);
-        MissingInfoAboutPrevStateFromMove missingInfo(*board);
-        GameLogic::DoMove(*board, move, previousMove, depth, 0);
+        MissingInfoAboutPrevStateFromMove missingInfo(*board, move);
+        GameLogic::DoMove(*board, move, previousMove, depth, 0, &missingInfo);
         bool legal = IsLegalAfterMove(*board, movingSide);
 
         if (legal)
@@ -2586,8 +2598,8 @@ int RunRestoration(const PerftPosition& position)
         Move& move = *generatedMoves.moveList.moves[counter];
         std::string moveText = MoveToString(move);
         std::unique_ptr<Board> original(board->MakeCopy());
-        MissingInfoAboutPrevStateFromMove missingInfo(*board);
-        GameLogic::DoMove(*board, move, previousMove, 1, 0);
+        MissingInfoAboutPrevStateFromMove missingInfo(*board, move);
+        GameLogic::DoMove(*board, move, previousMove, 1, 0, &missingInfo);
         bool legal = IsLegalAfterMove(*board, movingSide);
         GameLogic::UndoMove(*board, move, missingInfo);
 
@@ -2599,7 +2611,7 @@ int RunRestoration(const PerftPosition& position)
         legalMoveCount++;
         try
         {
-            RequireSemanticEquality(*board, *original);
+            RequireExactBoardEquality(*board, *original);
         }
         catch (const std::exception& error)
         {
@@ -4023,8 +4035,334 @@ int RunMultiPVCorrectnessTest()
     return 0;
 }
 
+static bool OldFallbackHasLegalMove(Board &board, const Move& prevMove, int depthGone)
+{
+    bool hasLegalMove = false;
+    MoveList legalMoveList = MoveLogic::MoveGenerator(board, 1, depthGone, false);
+    int turn = board.sideToMove ? 1 : 0;
+    for (int i = 0; i < legalMoveList.count && !hasLegalMove; ++i) {
+        Move* move = legalMoveList.moves[i];
+        MissingInfoAboutPrevStateFromMove undo(board, *move);
+        GameLogic::DoMove(board, *move, const_cast<Move&>(prevMove), depthGone, depthGone, &undo);
+        hasLegalMove = !BoardLogic::UnderAttack(
+            board, board.pieces[turn * 8 + 6].front(), board.sideToMove);
+        GameLogic::UndoMove(board, *move, undo);
+    }
+    for (int i = 0; i < legalMoveList.count; ++i) delete legalMoveList.moves[i];
+    return hasLegalMove;
+}
+
+static bool VerifyExactBoardRoundTrip(Board& board, Move& move, const std::string& desc, std::string& failureMsg)
+{
+    std::unique_ptr<Board> original(board.MakeCopy());
+    Move prevMove{};
+    MissingInfoAboutPrevStateFromMove undo(board, move);
+    GameLogic::DoMove(board, move, prevMove, 1, 0, &undo);
+    GameLogic::UndoMove(board, move, undo);
+
+    // 1. Bitboards
+    if (board.whitePieces != original->whitePieces) { failureMsg = desc + ": whitePieces mismatch"; return false; }
+    if (board.blackPieces != original->blackPieces) { failureMsg = desc + ": blackPieces mismatch"; return false; }
+    if (board.whitePawns != original->whitePawns) { failureMsg = desc + ": whitePawns mismatch"; return false; }
+    if (board.blackPawns != original->blackPawns) { failureMsg = desc + ": blackPawns mismatch"; return false; }
+
+    // 2. Hash, turn, counters
+    if (board.ZobristHashCode != original->ZobristHashCode) { failureMsg = desc + ": ZobristHashCode mismatch"; return false; }
+    if (board.sideToMove != original->sideToMove) { failureMsg = desc + ": sideToMove mismatch"; return false; }
+    if (board.moveNumber != original->moveNumber) { failureMsg = desc + ": moveNumber mismatch"; return false; }
+    if (board.fiftyMoveRule != original->fiftyMoveRule) { failureMsg = desc + ": fiftyMoveRule mismatch"; return false; }
+
+    // 3. Flags
+    if (board.whiteSmallCastle != original->whiteSmallCastle) { failureMsg = desc + ": whiteSmallCastle mismatch"; return false; }
+    if (board.whiteBigCastle != original->whiteBigCastle) { failureMsg = desc + ": whiteBigCastle mismatch"; return false; }
+    if (board.blackSmallCastle != original->blackSmallCastle) { failureMsg = desc + ": blackSmallCastle mismatch"; return false; }
+    if (board.blackBigCastle != original->blackBigCastle) { failureMsg = desc + ": blackBigCastle mismatch"; return false; }
+    if (board.unpassentPlace != original->unpassentPlace) { failureMsg = desc + ": unpassentPlace mismatch"; return false; }
+
+    // 4. Main board
+    for (int sq = 0; sq < 64; ++sq) {
+        if (board.mainBoard[sq] != original->mainBoard[sq]) {
+            failureMsg = desc + ": mainBoard[" + std::to_string(sq) + "] mismatch";
+            return false;
+        }
+    }
+
+    // 5. Piece lists (EXACT count AND exact order of every element)
+    for (int p = 0; p < 15; ++p) {
+        if (board.pieces[p].count != original->pieces[p].count) {
+            failureMsg = desc + ": pieces[" + std::to_string(p) + "].count mismatch";
+            return false;
+        }
+        for (int i = 0; i < board.pieces[p].count; ++i) {
+            if (board.pieces[p].data[i] != original->pieces[p].data[i]) {
+                std::ostringstream oss;
+                oss << desc << ": pieces[" << p << "] index " << i
+                    << " mismatch: actual=" << board.pieces[p].data[i]
+                    << " expected=" << original->pieces[p].data[i];
+                failureMsg = oss.str();
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+int RunComprehensiveBoardRestorationTest()
+{
+    // Part 1: Focused round trip tests covering all required categories
+    // 1. Simple moves & moves with multiple same type pieces
+    {
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
+        MoveList ml = MoveLogic::MoveGenerator(*b, 1, 0, false);
+        for (int i = 0; i < ml.count; ++i)
+        {
+            Move& m = *ml.moves[i];
+            std::string uci = MoveToString(m);
+            std::string err;
+            if (!VerifyExactBoardRoundTrip(*b, m, "Start quiet move " + uci, err))
+            {
+                std::cerr << err << '\n';
+                PVSSearch::deleteMoveList(ml);
+                return 1;
+            }
+        }
+        PVSSearch::deleteMoveList(ml);
+    }
+
+    // 2. King moves (quiet and captures)
+    {
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard("8/8/8/4k3/8/8/4p3/4K3 w - - 0 1"));
+        MoveList ml = MoveLogic::MoveGenerator(*b, 1, 0, false);
+        for (int i = 0; i < ml.count; ++i)
+        {
+            Move& m = *ml.moves[i];
+            std::string uci = MoveToString(m);
+            std::string err;
+            if (!VerifyExactBoardRoundTrip(*b, m, "King move " + uci, err))
+            {
+                std::cerr << err << '\n';
+                PVSSearch::deleteMoveList(ml);
+                return 1;
+            }
+        }
+        PVSSearch::deleteMoveList(ml);
+    }
+
+    // 3. Captures with multiple same type pieces
+    {
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard("r1b1k2r/pppppppp/2n2n2/4N3/8/2N5/PPPPPPPP/R1BQKB1R b KQkq - 0 1"));
+        MoveList ml = MoveLogic::MoveGenerator(*b, 1, 0, false);
+        for (int i = 0; i < ml.count; ++i)
+        {
+            Move& m = *ml.moves[i];
+            if (m.endPiece > 0)
+            {
+                std::string uci = MoveToString(m);
+                std::string err;
+                if (!VerifyExactBoardRoundTrip(*b, m, "Multi-piece capture " + uci, err))
+                {
+                    std::cerr << err << '\n';
+                    PVSSearch::deleteMoveList(ml);
+                    return 1;
+                }
+            }
+        }
+        PVSSearch::deleteMoveList(ml);
+    }
+
+    // 4. En passant (White and Black)
+    {
+        // White e.p.
+        std::unique_ptr<Board> bW(BoardMaker::MakeInitialBoard("rnbqkbnr/pppp1ppp/8/4pP2/8/8/PPPPP1PP/RNBQKBNR w KQkq e6 0 1"));
+        MoveList mlW = MoveLogic::MoveGenerator(*bW, 1, 0, false);
+        for (int i = 0; i < mlW.count; ++i)
+        {
+            Move& m = *mlW.moves[i];
+            if ((m.PublicFlag & Option::PowerTwo[6]) != 0)
+            {
+                std::string err;
+                if (!VerifyExactBoardRoundTrip(*bW, m, "White en passant", err))
+                {
+                    std::cerr << err << '\n';
+                    PVSSearch::deleteMoveList(mlW);
+                    return 1;
+                }
+            }
+        }
+        PVSSearch::deleteMoveList(mlW);
+
+        // Black e.p.
+        std::unique_ptr<Board> bB(BoardMaker::MakeInitialBoard("rnbqkbnr/ppppp1pp/8/8/4Pp2/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"));
+        MoveList mlB = MoveLogic::MoveGenerator(*bB, 1, 0, false);
+        for (int i = 0; i < mlB.count; ++i)
+        {
+            Move& m = *mlB.moves[i];
+            if ((m.PublicFlag & Option::PowerTwo[6]) != 0)
+            {
+                std::string err;
+                if (!VerifyExactBoardRoundTrip(*bB, m, "Black en passant", err))
+                {
+                    std::cerr << err << '\n';
+                    PVSSearch::deleteMoveList(mlB);
+                    return 1;
+                }
+            }
+        }
+        PVSSearch::deleteMoveList(mlB);
+    }
+
+    // 5. Quiet promotions & promotion captures (White and Black, all promotion types)
+    {
+        // White quiet promotions & promotion captures
+        std::unique_ptr<Board> bW(BoardMaker::MakeInitialBoard("3r3k/4P3/8/8/8/8/8/4K3 w - - 0 1"));
+        MoveList mlW = MoveLogic::MoveGenerator(*bW, 1, 0, false);
+        for (int i = 0; i < mlW.count; ++i)
+        {
+            Move& m = *mlW.moves[i];
+            if (m.promotionPiece > 0)
+            {
+                std::string uci = MoveToString(m);
+                std::string err;
+                if (!VerifyExactBoardRoundTrip(*bW, m, "White promo " + uci, err))
+                {
+                    std::cerr << err << '\n';
+                    PVSSearch::deleteMoveList(mlW);
+                    return 1;
+                }
+            }
+        }
+        PVSSearch::deleteMoveList(mlW);
+
+        // Black quiet promotions & promotion captures
+        std::unique_ptr<Board> bB(BoardMaker::MakeInitialBoard("4k3/8/8/8/8/8/4p3/3R3K b - - 0 1"));
+        MoveList mlB = MoveLogic::MoveGenerator(*bB, 1, 0, false);
+        for (int i = 0; i < mlB.count; ++i)
+        {
+            Move& m = *mlB.moves[i];
+            if (m.promotionPiece > 0)
+            {
+                std::string uci = MoveToString(m);
+                std::string err;
+                if (!VerifyExactBoardRoundTrip(*bB, m, "Black promo " + uci, err))
+                {
+                    std::cerr << err << '\n';
+                    PVSSearch::deleteMoveList(mlB);
+                    return 1;
+                }
+            }
+        }
+        PVSSearch::deleteMoveList(mlB);
+    }
+
+    // 6. Castling (all 4 directions)
+    {
+        // White castling
+        std::unique_ptr<Board> bW(BoardMaker::MakeInitialBoard("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"));
+        MoveList mlW = MoveLogic::MoveGenerator(*bW, 1, 0, false);
+        for (int i = 0; i < mlW.count; ++i)
+        {
+            Move& m = *mlW.moves[i];
+            if ((m.CastleFlag & 12) != 0)
+            {
+                std::string uci = MoveToString(m);
+                std::string err;
+                if (!VerifyExactBoardRoundTrip(*bW, m, "White castle " + uci, err))
+                {
+                    std::cerr << err << '\n';
+                    PVSSearch::deleteMoveList(mlW);
+                    return 1;
+                }
+            }
+        }
+        PVSSearch::deleteMoveList(mlW);
+
+        // Black castling
+        std::unique_ptr<Board> bB(BoardMaker::MakeInitialBoard("r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1"));
+        MoveList mlB = MoveLogic::MoveGenerator(*bB, 1, 0, false);
+        for (int i = 0; i < mlB.count; ++i)
+        {
+            Move& m = *mlB.moves[i];
+            if ((m.CastleFlag & 3) != 0)
+            {
+                std::string uci = MoveToString(m);
+                std::string err;
+                if (!VerifyExactBoardRoundTrip(*bB, m, "Black castle " + uci, err))
+                {
+                    std::cerr << err << '\n';
+                    PVSSearch::deleteMoveList(mlB);
+                    return 1;
+                }
+            }
+        }
+        PVSSearch::deleteMoveList(mlB);
+    }
+
+    // Part 2: Generated set of legal positions and legal moves
+    const std::vector<std::string> testFens = {
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+        "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
+        "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+        "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
+        "r1bqk2r/pppp1ppp/2n5/1B2p3/4n3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "r1b1k2r/pppp1Npp/8/4p3/2Bn4/6q1/PPPP2Pn/RNBQ2KR b kq - 1 10",
+        "8/8/4k3/8/8/8/4P3/4K3 w - - 0 1",
+        "8/8/8/8/4p3/8/4k3/4K3 b - - 0 1",
+        "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+        "r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1",
+        "3r3k/4P3/8/8/8/8/8/4K3 w - - 0 1",
+        "4k3/8/8/8/8/8/4p3/3R3K b - - 0 1",
+        "rnbqkbnr/pppp1ppp/8/4pP2/8/8/PPPPP1PP/RNBQKBNR w KQkq e6 0 1",
+        "rnbqkbnr/ppppp1pp/8/8/4Pp2/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+        "r2q1rk1/1b1n1ppp/pp1bpn2/2pp4/2PP4/1PN1PN2/PBQ1BPPP/R4RK1 w - - 0 11",
+        "8/5k2/8/8/8/8/5K2/8 w - - 0 1",
+        "2r3k1/1p3ppp/pq3n2/3p4/3N4/1P1QP3/P4PPP/5RK1 w - - 0 19",
+        "r1b2rk1/pp1n1ppp/2p1p3/q2p2B1/2PP4/P1P1PN2/4BPPP/R2Q1RK1 w - - 1 12"
+    };
+
+    int totalMovesTested = 0;
+    for (size_t f = 0; f < testFens.size(); ++f)
+    {
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard(testFens[f]));
+        MoveList ml = MoveLogic::MoveGenerator(*b, 1, 0, false);
+        int movingSide = b->sideToMove ? 1 : 0;
+        for (int i = 0; i < ml.count; ++i)
+        {
+            Move& m = *ml.moves[i];
+            MissingInfoAboutPrevStateFromMove undo(*b, m);
+            Move prevMove{};
+            GameLogic::DoMove(*b, m, prevMove, 1, 0, &undo);
+            bool legal = IsLegalAfterMove(*b, movingSide);
+            GameLogic::UndoMove(*b, m, undo);
+
+            if (!legal) continue;
+
+            totalMovesTested++;
+            std::string uci = MoveToString(m);
+            std::string err;
+            if (!VerifyExactBoardRoundTrip(*b, m, "Generated move " + uci + " in FEN #" + std::to_string(f), err))
+            {
+                std::cerr << "Round trip failure: " << err << " (FEN: " << testFens[f] << ")\n";
+                PVSSearch::deleteMoveList(ml);
+                return 1;
+            }
+        }
+        PVSSearch::deleteMoveList(ml);
+    }
+
+    std::cout << "Comprehensive board restoration verified: " << totalMovesTested
+              << " legal moves across focused cases and generated positions round-tripped with 100% exact equality\n";
+    return 0;
+}
+
 int RunQSearchMoveGenCorrectnessTest()
 {
+    if (RunComprehensiveBoardRestorationTest() != 0)
+    {
+        return 1;
+    }
+
     // 1. Verify normal MoveGenerator output is completely unchanged across positions
     for (const auto& pos : Positions)
     {
@@ -4073,9 +4411,9 @@ int RunQSearchMoveGenCorrectnessTest()
             Move* m = fullList.moves[i];
             bool isCap = (m->endPiece > 0);
             bool isPromo = (m->promotionPiece > 0);
-            MissingInfoAboutPrevStateFromMove missing(*b);
+            MissingInfoAboutPrevStateFromMove missing(*b, *m);
             Move prev{};
-            GameLogic::DoMove(*b, *m, prev, 0, 0);
+            GameLogic::DoMove(*b, *m, prev, 0, 0, &missing);
             bool legal = !BoardLogic::UnderAttack(*b, b->pieces[movingTurn * 8 + 6].front(), b->sideToMove);
             bool givesCheck = legal && BoardLogic::UnderAttack(*b, b->pieces[enemyKingIndex].front(), !b->sideToMove);
             GameLogic::UndoMove(*b, *m, missing);
@@ -4090,9 +4428,9 @@ int RunQSearchMoveGenCorrectnessTest()
             Move* m = qList.moves[i];
             bool isCap = (m->endPiece > 0);
             bool isPromo = (m->promotionPiece > 0);
-            MissingInfoAboutPrevStateFromMove missing(*b);
+            MissingInfoAboutPrevStateFromMove missing(*b, *m);
             Move prev{};
-            GameLogic::DoMove(*b, *m, prev, 0, 0);
+            GameLogic::DoMove(*b, *m, prev, 0, 0, &missing);
             bool legal = !BoardLogic::UnderAttack(*b, b->pieces[movingTurn * 8 + 6].front(), b->sideToMove);
             bool givesCheck = legal && BoardLogic::UnderAttack(*b, b->pieces[enemyKingIndex].front(), !b->sideToMove);
             GameLogic::UndoMove(*b, *m, missing);
@@ -4383,7 +4721,379 @@ int RunQSearchMoveGenCorrectnessTest()
         }
     }
 
-    std::cout << "QSearch move generator mode correctly preserves normal search, captures, promotions, direct/discovered checks, and in-check full generation\n";
+    // 7. Focused fallback stalemate detection tests:
+    // (a) True stalemate: not in check, zero legal moves -> HasAnyLegalMove must return false, QSearch score 0
+    {
+        const char* fen = "k7/8/1Q6/8/8/8/8/7K b - - 0 1";
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard(fen));
+        Move prevMove{};
+        bool hasLegal = MoveLogic::HasAnyLegalMove(*b, prevMove, 0);
+        if (hasLegal)
+        {
+            std::cerr << "HasAnyLegalMove reported true for true stalemate position: " << fen << "\n";
+            return 1;
+        }
+        const DirectQSearchResult res = RunDirectQSearch(fen, -200000, 200000, 0, 1);
+        if (res.score != 0)
+        {
+            std::cerr << "QSearch failed to return 0 for true stalemate position, got: " << res.score << "\n";
+            return 1;
+        }
+    }
+
+    // (b) Not in check with one legal move: HasAnyLegalMove must return true, QSearch returns stand-pat
+    {
+        // Black King on a8, White King c6, White pawn b6: Black can only move Ka8-b8. Not in check.
+        const char* fen = "k7/8/1KP5/8/8/8/8/8 b - - 0 1"; // Wait: Ka8, pawn c6, King b6 -> Black can move Ka8-b8
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard(fen));
+        Move prevMove{};
+        bool hasLegal = MoveLogic::HasAnyLegalMove(*b, prevMove, 0);
+        if (!hasLegal)
+        {
+            std::cerr << "HasAnyLegalMove reported false for position with 1 legal move: " << fen << "\n";
+            return 1;
+        }
+        const DirectQSearchResult res = RunDirectQSearch(fen, -200000, 200000, 0, 1);
+        int eval = EvaluationLogic::Evaluate(*b);
+        if (res.score != eval)
+        {
+            std::cerr << "QSearch failed stand-pat for position with 1 legal move, expected " << eval << " got " << res.score << "\n";
+            return 1;
+        }
+    }
+
+    // (c) Not in check with several legal moves: HasAnyLegalMove must return true, QSearch returns stand-pat
+    {
+        const char* fen = "7k/8/8/8/8/8/P7/7K w - - 0 1";
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard(fen));
+        Move prevMove{};
+        bool hasLegal = MoveLogic::HasAnyLegalMove(*b, prevMove, 0);
+        if (!hasLegal)
+        {
+            std::cerr << "HasAnyLegalMove reported false for position with several legal moves: " << fen << "\n";
+            return 1;
+        }
+        const DirectQSearchResult res = RunDirectQSearch(fen, -200000, 200000, 0, 1);
+        int eval = EvaluationLogic::Evaluate(*b);
+        if (res.score != eval)
+        {
+            std::cerr << "QSearch failed stand-pat for position with several legal moves, expected " << eval << " got " << res.score << "\n";
+            return 1;
+        }
+    }
+
+    // (d) In-check path remains unchanged: in-check positions must not use fallback stalemate detection
+    {
+        // Checkmate position
+        const char* mateFen = "k3r3/8/8/6b1/8/1b5n/N5b1/4K3 w - - 0 1";
+        const DirectQSearchResult mateRes = RunDirectQSearch(mateFen, -200000, 200000, 2, 1);
+        if (mateRes.score != -159999)
+        {
+            std::cerr << "In-check checkmate path broken, expected -159999, got " << mateRes.score << "\n";
+            return 1;
+        }
+
+        // In check with legal evasions
+        const char* evasionFen = "7r/8/8/8/8/5k2/8/7K w - - 0 1";
+        const DirectQSearchResult evasionRes = RunDirectQSearch(evasionFen, -200000, 200000, 2, 1);
+        if (!PVStartsWith(evasionRes, "h1g1"))
+        {
+            std::cerr << "In-check evasion path broken, expected h1g1\n";
+            return 1;
+        }
+    }
+
+    // (e) Legal move appearing late in generation order:
+    // Knights, Bishops, Rooks, Queens, and Pawns have no legal moves (pinned or blocked),
+    // and ONLY the King at the very end of pieceMoveStack has a legal move.
+    {
+        // Pinned knight to Ke1 by Black Qa5, King on e1 can move to f1/f2/d1
+        const char* lateFen = "7k/8/8/q7/8/1p6/1P1N4/4K3 w - - 0 1";
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard(lateFen));
+        Move prevMove{};
+        bool hasLegal = MoveLogic::HasAnyLegalMove(*b, prevMove, 0);
+        bool oldHasLegal = OldFallbackHasLegalMove(*b, prevMove, 0);
+        if (!hasLegal || !oldHasLegal)
+        {
+            std::cerr << "Equivalence failure on pinned knight late king move: new=" << hasLegal << " old=" << oldHasLegal << "\n";
+            return 1;
+        }
+        const DirectQSearchResult res = RunDirectQSearch(lateFen, -200000, 200000, 0, 1);
+        int eval = EvaluationLogic::Evaluate(*b);
+        if (res.score != eval)
+        {
+            std::cerr << "QSearch failed stand-pat on late king legal move position, expected " << eval << " got " << res.score << " pv=" << res.pv << "\n";
+            return 1;
+        }
+    }
+
+    // (f) En passant as the only available legal move:
+    {
+        // FEN: 5k1K/r6p/5p1P/5Pp1/8/8/8/8 w - g6 0 1
+        // Kh8 has no legal moves (g8 attacked by kf8, g7 attacked by Ra7/kf8, h7 defended by Ra7).
+        // h6 is blocked by h7.
+        // f5 is blocked by f6.
+        // Black just played g7-g5, so unpassentPlace is g6!
+        // f5xg6 e.p. is THE ONLY legal move on the entire board!
+        const char* epFen = "5k1K/r6p/5p1P/5Pp1/8/8/8/8 w - g6 0 1";
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard(epFen));
+        Move prevMove{};
+        bool oldLegal = OldFallbackHasLegalMove(*b, prevMove, 0);
+        bool newLegal = MoveLogic::HasAnyLegalMove(*b, prevMove, 0);
+        if (!oldLegal || !newLegal)
+        {
+            std::cerr << "En passant as only legal move failed: old=" << oldLegal << " new=" << newLegal << "\n";
+            return 1;
+        }
+
+        // Without en passant available, the position is stalemate:
+        const char* noEpFen = "5k1K/r6p/5p1P/5Pp1/8/8/8/8 w - - 0 1";
+        std::unique_ptr<Board> bNoEp(BoardMaker::MakeInitialBoard(noEpFen));
+        bool oldNoEp = OldFallbackHasLegalMove(*bNoEp, prevMove, 0);
+        bool newNoEp = MoveLogic::HasAnyLegalMove(*bNoEp, prevMove, 0);
+        if (oldNoEp || newNoEp)
+        {
+            std::cerr << "En passant cleared stalemate failed: old=" << oldNoEp << " new=" << newNoEp << "\n";
+            return 1;
+        }
+    }
+
+    // (g) Castling availability:
+    {
+        // 1. White legal castling:
+        const char* castleWhite = "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1";
+        std::unique_ptr<Board> bW(BoardMaker::MakeInitialBoard(castleWhite));
+        Move prevMove{};
+        bool oldLegalW = OldFallbackHasLegalMove(*bW, prevMove, 0);
+        bool newLegalW = MoveLogic::HasAnyLegalMove(*bW, prevMove, 0);
+        if (!oldLegalW || !newLegalW)
+        {
+            std::cerr << "White castling legal check failed: old=" << oldLegalW << " new=" << newLegalW << "\n";
+            return 1;
+        }
+
+        // 2. Black legal castling:
+        const char* castleBlack = "r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1";
+        std::unique_ptr<Board> bB(BoardMaker::MakeInitialBoard(castleBlack));
+        bool oldLegalB = OldFallbackHasLegalMove(*bB, prevMove, 0);
+        bool newLegalB = MoveLogic::HasAnyLegalMove(*bB, prevMove, 0);
+        if (!oldLegalB || !newLegalB)
+        {
+            std::cerr << "Black castling legal check failed: old=" << oldLegalB << " new=" << newLegalB << "\n";
+            return 1;
+        }
+    }
+
+    // (h) Promotion moves:
+    {
+        // Quiet promotion as only legal move:
+        const char* promoFen = "8/1P6/8/8/8/5k2/8/4K2b w - - 0 1";
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard(promoFen));
+        Move prevMove{};
+        bool oldLegal = OldFallbackHasLegalMove(*b, prevMove, 0);
+        bool newLegal = MoveLogic::HasAnyLegalMove(*b, prevMove, 0);
+        if (!oldLegal || !newLegal)
+        {
+            std::cerr << "Quiet promotion move check failed: old=" << oldLegal << " new=" << newLegal << "\n";
+            return 1;
+        }
+
+        // Promotion capture:
+        const char* promoCapFen = "1n6/1P6/8/8/8/5k2/8/4K2b w - - 0 1";
+        std::unique_ptr<Board> bCap(BoardMaker::MakeInitialBoard(promoCapFen));
+        bool oldCap = OldFallbackHasLegalMove(*bCap, prevMove, 0);
+        bool newCap = MoveLogic::HasAnyLegalMove(*bCap, prevMove, 0);
+        if (!oldCap || !newCap)
+        {
+            std::cerr << "Promotion capture move check failed: old=" << oldCap << " new=" << newCap << "\n";
+            return 1;
+        }
+    }
+
+    // (i) Pinned pieces:
+    {
+        // 1. Pinned piece where position is stalemate:
+        // White King on h1, White Knight on g1, White pawn on h2.
+        // Black Rook on a1 pins Ng1 along rank 1 to Kh1.
+        // Black pawn on h3 blocks h2 and attacks g2.
+        // Kh1 has no moves (g1 occupied, h2 occupied, g2 attacked).
+        // Ng1 cannot move off rank 1 (absolute pin).
+        // Ph2 cannot move (blocked by h3).
+        // White is not in check. True stalemate!
+        const char* pinStalemateFen = "k7/8/8/8/8/7p/7P/r5NK w - - 0 1";
+        std::unique_ptr<Board> bPin(BoardMaker::MakeInitialBoard(pinStalemateFen));
+        Move prevMove{};
+        bool oldPin = OldFallbackHasLegalMove(*bPin, prevMove, 0);
+        bool newPin = MoveLogic::HasAnyLegalMove(*bPin, prevMove, 0);
+        if (oldPin || newPin)
+        {
+            std::cerr << "Pinned piece stalemate failed: old=" << oldPin << " new=" << newPin << "\n";
+            return 1;
+        }
+
+        // 2. Pinned piece where King can escape:
+        // Same as above but without pawn on h3, so Kh1 can move to g2.
+        const char* pinFreeFen = "k7/8/8/8/8/8/7P/r5NK w - - 0 1";
+        std::unique_ptr<Board> bPinFree(BoardMaker::MakeInitialBoard(pinFreeFen));
+        bool oldPinFree = OldFallbackHasLegalMove(*bPinFree, prevMove, 0);
+        bool newPinFree = MoveLogic::HasAnyLegalMove(*bPinFree, prevMove, 0);
+        if (!oldPinFree || !newPinFree)
+        {
+            std::cerr << "Pinned piece with king escape failed: old=" << oldPinFree << " new=" << newPinFree << "\n";
+            return 1;
+        }
+    }
+
+    // (j) King captures:
+    {
+        // King capture is the ONLY legal move:
+        // White King on h1.
+        // Black Bishop on g2 is unprotected and does not attack h1.
+        // Black pawn on h2 attacks g1 (occupied by Ph2, blocks Kh1-h2, attacks g1).
+        // Black pawn on g3 defends h2 and attacks f2.
+        // Kh1 cannot move to g1 (attacked by h2), cannot capture h2 (defended by g3).
+        // Kh1 can only capture unprotected bishop on g2 (h1xg2).
+        const char* kingCapFen = "k7/8/8/8/8/6p1/6bp/7K w - - 0 1";
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard(kingCapFen));
+        Move prevMove{};
+        bool oldLegal = OldFallbackHasLegalMove(*b, prevMove, 0);
+        bool newLegal = MoveLogic::HasAnyLegalMove(*b, prevMove, 0);
+        if (!oldLegal || !newLegal)
+        {
+            std::cerr << "King capture as only legal move failed: old=" << oldLegal << " new=" << newLegal << "\n";
+            return 1;
+        }
+    }
+
+    // (k) Double check / check path remains excluded from fallback:
+    {
+        // Double check position: White King on e1 in check by both Re2 and Rh1
+        const char* doubleCheckFen = "4k3/8/8/8/8/8/4r3/3RKB1r w - - 0 1";
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard(doubleCheckFen));
+        int turn = b->sideToMove ? 1 : 0;
+        bool inCheck = BoardLogic::UnderAttack(*b, b->pieces[turn * 8 + 6].front(), !b->sideToMove);
+        if (!inCheck)
+        {
+            std::cerr << "Double check position should be in check\n";
+            return 1;
+        }
+        // In check positions should never rely on fallback stalemate detection:
+        // QSearch must use evasion generation or checkmate evaluation.
+        const DirectQSearchResult res = RunDirectQSearch(doubleCheckFen, -200000, 200000, 1, 1);
+        if (res.score <= -100000)
+        {
+            std::cerr << "Double check position has legal evasion (Kf2), score must not be mate: " << res.score << "\n";
+            return 1;
+        }
+    }
+
+    // (l) Generated equivalence test across a substantial set of legal positions:
+    {
+        const std::vector<std::string> testPositions = {
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+            "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+            "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
+            "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+            "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
+            "r1bq1rk1/1pp2ppp/p1np1n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 0 8",
+            "r1b2rk1/pp1p1ppp/2n1pn2/8/2BNP3/2N1B3/PPP2PPP/R2Q1RK1 w - - 0 9",
+            "8/2p5/1p1p4/1P1P4/1kP5/8/1K6/8 w - - 0 1",
+            "2r3k1/1p1R1p2/p3pBp1/7p/1b6/1P3P1P/P1P2P2/6K1 w - - 0 27",
+            "r1b1k2r/pppp1ppp/8/8/1bP5/P1N5/1P1BPPPP/R3KB1R b KQkq - 0 1",
+            "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4",
+            "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2",
+            "rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+            "rnbqkbnr/pp1ppppp/2p5/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+            "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+            "rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR b KQkq c3 0 2",
+            "rnbq1rk1/ppp1ppbp/3p1np1/8/2PPP3/2N2N2/PP2BPPP/R1BQK2R b KQ - 1 6",
+            "rnbqk2r/pppp1ppp/4pn2/8/1bPP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 2 4",
+            "k7/8/1Q6/8/8/8/8/7K b - - 0 1",
+            "7k/5K2/6Q1/8/8/8/8/8 b - - 0 1",
+            "k7/8/8/8/8/8/1r6/K1N5 w - - 0 1",
+            "k7/8/1KP5/8/8/8/8/8 b - - 0 1",
+            "5k1K/r6p/5p1P/5Pp1/8/8/8/8 w - g6 0 1",
+            "5k1K/r6p/5p1P/5Pp1/8/8/8/8 w - - 0 1",
+            "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+            "r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1",
+            "7k/8/8/q7/8/1p6/1P1N4/4K3 w - - 0 1",
+            "k7/8/8/8/8/6p1/6bp/7K w - - 0 1",
+            "8/8/4k3/8/8/8/4P3/4K3 w - - 0 1",
+            "8/8/4k3/8/8/8/4P3/4K3 b - - 0 1",
+            "8/8/8/8/8/4k3/4p3/4K3 w - - 0 1",
+            "8/8/8/8/8/4K3/4P3/4k3 b - - 0 1",
+            "8/8/8/8/8/5k2/8/4K3 b - - 0 1",
+            "8/8/8/8/8/5k2/8/4K3 w - - 0 1",
+            "8/8/8/8/8/8/1p6/k1K5 w - - 0 1",
+            "8/8/8/8/8/8/1p6/k1K5 b - - 0 1",
+            "8/2k5/8/8/8/8/8/4K2R w K - 0 1",
+            "8/2k5/8/8/8/8/8/R3K3 w Q - 0 1",
+            "4k2r/8/8/8/8/8/8/4K3 b k - 0 1",
+            "r3k3/8/8/8/8/8/8/4K3 b q - 0 1",
+            "8/8/8/8/8/2k5/1r6/2K5 w - - 0 1",
+            "8/8/8/8/8/2K5/1R6/2k5 b - - 0 1",
+            "8/5k2/8/8/8/8/5K2/4R3 w - - 0 1",
+            "8/5k2/8/8/8/8/5K2/4r3 b - - 0 1",
+            "8/5k2/8/8/8/8/5K2/4B3 w - - 0 1",
+            "8/5k2/8/8/8/8/5K2/4b3 b - - 0 1",
+            "8/5k2/8/8/8/8/5K2/4N3 w - - 0 1",
+            "8/5k2/8/8/8/8/5K2/4n3 b - - 0 1",
+            "rnbqkb1r/pp2pppp/5n2/2pp4/3P4/2N2N2/PPP1PPPP/R1BQKB1R w KQkq c6 0 4",
+            "r1bqk2r/pppp1ppp/2n5/4p3/1bB1n3/2NP1N2/PPP2PPP/R1BQK2R w KQkq - 0 6",
+            "2r1r1k1/pp3pbp/2np2p1/q7/2PP4/1P1B1Q1P/PB3PP1/R3R1K1 w - - 1 17",
+            "3r2k1/1p3p1p/p1b1p1p1/8/2P5/1P2qP2/P1Q3PP/3R1B1K b - - 1 24"
+        };
+
+        for (size_t idx = 0; idx < testPositions.size(); ++idx)
+        {
+            const std::string& fen = testPositions[idx];
+            std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard(fen));
+            Move prevMove{};
+
+            // Save initial piece lists to verify HasAnyLegalMove causes zero side-effects
+            int initialCounts[15];
+            int initialData[15][16];
+            for (int p = 0; p < 15; ++p)
+            {
+                initialCounts[p] = b->pieces[p].count;
+                for (int c = 0; c < initialCounts[p]; ++c)
+                    initialData[p][c] = b->pieces[p].data[c];
+            }
+
+            Board* copyForOld = b->MakeCopy();
+            bool oldRes = OldFallbackHasLegalMove(*copyForOld, prevMove, 0);
+            delete copyForOld;
+
+            bool newRes = MoveLogic::HasAnyLegalMove(*b, prevMove, 0);
+
+            if (oldRes != newRes)
+            {
+                std::cerr << "Equivalence failure on position " << idx << " (" << fen << "): old=" << oldRes << " new=" << newRes << "\n";
+                return 1;
+            }
+
+            // Verify piece lists were exactly restored:
+            for (int p = 0; p < 15; ++p)
+            {
+                if (b->pieces[p].count != initialCounts[p])
+                {
+                    std::cerr << "Piece list count mutation detected on position " << idx << " piece " << p << "\n";
+                    return 1;
+                }
+                for (int c = 0; c < initialCounts[p]; ++c)
+                {
+                    if (b->pieces[p].data[c] != initialData[p][c])
+                    {
+                        std::cerr << "Piece list data permutation detected on position " << idx << " piece " << p << " index " << c << "\n";
+                        return 1;
+                    }
+                }
+            }
+        }
+    }
+
+    std::cout << "QSearch move generator mode correctly preserves normal search, captures, promotions, direct/discovered checks, in-check full generation, and fallback stalemate detection\n";
     return 0;
 }
 

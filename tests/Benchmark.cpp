@@ -905,8 +905,8 @@ int RunE4ReplyDiagnosis()
         Move m = *ml.moves[i];
         std::string uci = ChessStringManipulation::PVToString(m, 0, false, b);
         if (uci == "g8f6" || uci == "b8c6" || uci == "e7e5" || uci == "c7c5" || uci == "d7d5" || uci == "b8a6" || uci == "e7e6") {
-            MissingInfoAboutPrevStateFromMove undo(b);
-            GameLogic::DoMove(b, m, m, -1, -1);
+            MissingInfoAboutPrevStateFromMove undo(b, m);
+            GameLogic::DoMove(b, m, m, -1, -1, &undo);
             int se = EvaluationLogic::Evaluate(b);
             Search::moveCount = 0;
             Move sm2{}, sm3{}, sm4{};

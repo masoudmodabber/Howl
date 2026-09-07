@@ -24,7 +24,7 @@ public:
     MyList pieces[15];
 
     Board *MakeCopy();
-    static bool AreBoardsEqual(Board &board1, Board &board2);
+    static bool AreBoardsEqual(Board &board1, Board &board2, bool requireExactPieceOrder = false);
 };
 
 #endif

@@ -186,8 +186,8 @@ namespace
                             int depthGone, int discoveryScore)
     {
         const int movingSide = board.sideToMove ? 1 : 0;
-        MissingInfoAboutPrevStateFromMove candidateUndo(board);
-        GameLogic::DoMove(board, candidate, previousMove, depthGone, depthGone);
+        MissingInfoAboutPrevStateFromMove candidateUndo(board, candidate);
+        GameLogic::DoMove(board, candidate, previousMove, depthGone, depthGone, &candidateUndo);
 
         if (BoardLogic::UnderAttack(
                 board, board.pieces[movingSide * 8 + 6].front(), board.sideToMove))
@@ -202,8 +202,8 @@ namespace
         for (int i = 0; i < forcingReplies.count; ++i)
         {
             Move &reply = *forcingReplies.moves[i];
-            MissingInfoAboutPrevStateFromMove replyUndo(board);
-            GameLogic::DoMove(board, reply, candidate, depthGone + 1, depthGone + 1);
+            MissingInfoAboutPrevStateFromMove replyUndo(board, reply);
+            GameLogic::DoMove(board, reply, candidate, depthGone + 1, depthGone + 1, &replyUndo);
             const bool legalReply = !BoardLogic::UnderAttack(
                 board, board.pieces[replyingSide * 8 + 6].front(), board.sideToMove);
             const bool givesCheck = BoardLogic::UnderAttack(
@@ -971,8 +971,8 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             for (int i = 0; i < horizonMoves.count; ++i)
             {
                 Move *m = horizonMoves.moves[i];
-                MissingInfoAboutPrevStateFromMove undo(board4);
-                GameLogic::DoMove(board4, *m, prevMove, depthGone, depthGone);
+                MissingInfoAboutPrevStateFromMove undo(board4, *m);
+                GameLogic::DoMove(board4, *m, prevMove, depthGone, depthGone, &undo);
                 if (!BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove))
                 {
                     availMoves++;
@@ -1352,8 +1352,8 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             for (int i = 0; i < moveList.count; ++i)
             {
                 Move *move = moveList.moves[i];
-                MissingInfoAboutPrevStateFromMove undo(board4);
-                GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone);
+                MissingInfoAboutPrevStateFromMove undo(board4, *move);
+                GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone, &undo);
                 const bool candidateGivesCheck = BoardLogic::UnderAttack(
                     board4, board4.pieces[board4.sideToMove * 8 + 6].front(),
                     !board4.sideToMove);
@@ -1382,8 +1382,8 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             for (int i = 0; i < rankedMovesToInspect && forcingMovesTried < 2; ++i)
             {
                 Move &probMove = *moveList.moves[i];
-                MissingInfoAboutPrevStateFromMove probUndo(board4);
-                GameLogic::DoMove(board4, probMove, prevMove, depthGone, depthGone);
+                MissingInfoAboutPrevStateFromMove probUndo(board4, probMove);
+                GameLogic::DoMove(board4, probMove, prevMove, depthGone, depthGone, &probUndo);
                 const bool givesCheck = BoardLogic::UnderAttack(
                     board4, board4.pieces[board4.sideToMove * 8 + 6].front(),
                     !board4.sideToMove);
@@ -1455,8 +1455,8 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             {
                 bool firstMoveWasRepetition = false;
                 boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
-                MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
-                GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone);
+                MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
+                GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone, missingInfoAboutPrevStateFromMove);
                 if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                 {
                     firstMoveWasRepetition = true;
@@ -1598,8 +1598,8 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                             g_futilityPruningSkippedQuietMoves++;
 
                             // Measure futility pruning safety in instrumentation mode:
-                            MissingInfoAboutPrevStateFromMove *diagMissing = new MissingInfoAboutPrevStateFromMove(board4);
-                            GameLogic::DoMove(board4, *move, prevMove, depth, depthGone);
+                            MissingInfoAboutPrevStateFromMove *diagMissing = new MissingInfoAboutPrevStateFromMove(board4, *move);
+                            GameLogic::DoMove(board4, *move, prevMove, depth, depthGone, diagMissing);
                             int diagValue = 0;
                             if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                             {
@@ -1691,8 +1691,8 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     depth <= 1 && move->value <= -150;
 
                 boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
-                MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
-                GameLogic::DoMove(board4, *move, prevMove, depth, depthGone);
+                MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
+                GameLogic::DoMove(board4, *move, prevMove, depth, depthGone, missingInfoAboutPrevStateFromMove);
                 int value;
                 bool valueSelective = false;
                 if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
@@ -2087,8 +2087,8 @@ void PVSSearch::IGG(bool isPVNode, int alpha, int beta, int depth, Move &prevMov
                     if (firstMoveIr)
                     {
                         boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
-                        MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
-                        GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone);
+                        MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
+                        GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone, missingInfoAboutPrevStateFromMove);
                         if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                         {
                             bestMoveValue = 0;
@@ -2138,8 +2138,8 @@ void PVSSearch::IGG(bool isPVNode, int alpha, int beta, int depth, Move &prevMov
                     {
                         bool tempRepeat = false;
                         boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
-                        MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
-                        GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone);
+                        MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
+                        GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone, missingInfoAboutPrevStateFromMove);
                         if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                         {
                             tempRepeat = true;

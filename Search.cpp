@@ -151,8 +151,8 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     for (int i = 0; i < moveList.count; ++i)
     {
         Move *m = moveList.moves[i];
-        MissingInfoAboutPrevStateFromMove undo(board4);
-        GameLogic::DoMove(board4, *m, move4, -2, -2);
+        MissingInfoAboutPrevStateFromMove undo(board4, *m);
+        GameLogic::DoMove(board4, *m, move4, -2, -2, &undo);
         bool legal = !BoardLogic::UnderAttack(board4, board4.pieces[rootTurn * 8 + 6].front(), board4.sideToMove);
         GameLogic::UndoMove(board4, *m, undo);
         if (legal)
@@ -375,8 +375,8 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     int value = -200000;
 
                     Board *boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
-                    MissingInfoAboutPrevStateFromMove *missingInfo = new MissingInfoAboutPrevStateFromMove(board4);
-                    GameLogic::DoMove(board4, *move, move4, -1, -1);
+                    MissingInfoAboutPrevStateFromMove *missingInfo = new MissingInfoAboutPrevStateFromMove(board4, *move);
+                    GameLogic::DoMove(board4, *move, move4, -1, -1, missingInfo);
 
                     if (counter < K)
                     {
@@ -603,8 +603,8 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 if (counter < MultiPV)
                 {
                     Board *boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
-                    MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
-                    GameLogic::DoMove(board4, *move, move4, -1, -1);
+                    MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
+                    GameLogic::DoMove(board4, *move, move4, -1, -1, missingInfoAboutPrevStateFromMove);
                     if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                     {
                         value = 0;
@@ -691,8 +691,8 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             else
             {
                 Board *boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
-                MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
-                GameLogic::DoMove(board4, *move, move4, -1, -1);
+                MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
+                GameLogic::DoMove(board4, *move, move4, -1, -1, missingInfoAboutPrevStateFromMove);
                 if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                 {
                     value = 0;
@@ -1086,8 +1086,8 @@ bool Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
         }
         Move *move = moveList.moves[i];
         auto boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
-        MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4);
-        GameLogic::DoMove(board4, *move, move4, -2, -2);
+        MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
+        GameLogic::DoMove(board4, *move, move4, -2, -2, missingInfoAboutPrevStateFromMove);
         if (!BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), board4.sideToMove))
         {
             if (!firstAssign)
