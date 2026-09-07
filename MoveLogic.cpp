@@ -294,6 +294,13 @@ void MoveLogic::Initialize()
 
 MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone, bool onlyCapturesAndChecks)
 {
+    AttackerState whiteAttacker = SetWhiteAttacker(thisBoard);
+    AttackerState blackAttacker = SetBlackAttacker(thisBoard);
+    return MoveGenerator(thisBoard, depth, depthGone, onlyCapturesAndChecks, true, whiteAttacker, blackAttacker);
+}
+
+MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone, bool onlyCapturesAndChecks, bool scoreAndSort, const AttackerState& whiteAttacker, const AttackerState& blackAttacker)
+{
     MoveList moveList;
     Move* complicatedMoves[256];
     int complicatedCount = 0;
@@ -301,8 +308,6 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone, bo
     {
         int x = 1;
     }
-    AttackerState whiteAttacker = SetWhiteAttacker(thisBoard);
-    AttackerState blackAttacker = SetBlackAttacker(thisBoard);
     long long whitePieces = thisBoard.whitePieces;
     long long blackPieces = thisBoard.blackPieces;
     int *mainBoard = thisBoard.mainBoard;
@@ -2170,7 +2175,10 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone, bo
             moveList.moves[i]->givesCheck = MoveWouldGiveCheck(thisBoard, *moveList.moves[i]);
     }
 
-    ScoreAndSortMoves(thisBoard, moveList, depth, depthGone, whiteAttacker, blackAttacker);
+    if (scoreAndSort)
+    {
+        ScoreAndSortMoves(thisBoard, moveList, depth, depthGone, whiteAttacker, blackAttacker);
+    }
     return moveList;
 }
 
@@ -2214,10 +2222,9 @@ void MoveLogic::ScoreAndSortMoves(Board& thisBoard, MoveList& moveList, int dept
 MoveList MoveLogic::QSearchStage1Generator(Board &thisBoard, int depth, int depthGone, DeferredMove* deferredMoves, int& deferredCount, const Move& prevMove, bool includeQuietChecks, bool deepResolution)
 {
     deferredCount = 0;
-    MoveList fullList = MoveGenerator(thisBoard, depth, depthGone, true);
-
     AttackerState whiteAttacker = SetWhiteAttacker(thisBoard);
     AttackerState blackAttacker = SetBlackAttacker(thisBoard);
+    MoveList fullList = MoveGenerator(thisBoard, depth, depthGone, true, false, whiteAttacker, blackAttacker);
     const int* mainBoard = thisBoard.mainBoard;
     static const int pieceValue100[15] = {0, 100, 350, 350, 550, 975, 2500, 0, 0, 100, 350, 350, 550, 975, 2500};
 

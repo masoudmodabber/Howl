@@ -29,6 +29,7 @@ class MoveLogic
 public:
     static void Initialize();
     static MoveList MoveGenerator(Board &thisBoard, int depth, int depthGone, bool onlyCapturesAndChecks = false);
+    static MoveList MoveGenerator(Board &thisBoard, int depth, int depthGone, bool onlyCapturesAndChecks, bool scoreAndSort, const AttackerState& whiteAttacker, const AttackerState& blackAttacker);
     static MoveList QSearchStage1Generator(Board &thisBoard, int depth, int depthGone, DeferredMove* deferredMoves, int& deferredCount, const Move& prevMove = Move{}, bool includeQuietChecks = true, bool deepResolution = false);
     static MoveList MaterializeStage2(Board &thisBoard, int depth, int depthGone, const DeferredMove* deferredMoves, int deferredCount);
     static void ScoreAndSortMoves(Board& thisBoard, MoveList& moveList, int depth, int depthGone, const AttackerState& whiteAttacker, const AttackerState& blackAttacker);
