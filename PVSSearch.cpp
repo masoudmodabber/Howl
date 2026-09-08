@@ -1368,10 +1368,6 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             }
             discoveryComplete.insert(positionKey);
         }
-        if (useCandidateProbes)
-            PrioritizeCandidateEvidence(positionKey, moveList, depth, isPVNode, hasTTMove);
-        if (useCandidateProbes && discoveryComplete.find(positionKey) != discoveryComplete.end())
-            PrioritizeTacticalSafety(positionKey, board4, moveList, prevMove, depthGone, isPVNode);
 
         if (!isPVNode && !nodeInCheck && !MAtESearch && depth >= 5 &&
             beta < 159500 && alpha > -159500)
