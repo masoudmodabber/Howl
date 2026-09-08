@@ -659,6 +659,41 @@ int CountSideAttacks(Board& board, bool white, int target)
     return attackers;
 }
 
+int CountNonKingSideAttacks(Board& board, bool white, int target)
+{
+    int attackers = 0;
+    const long long occupiedSquares = board.whitePieces | board.blackPieces;
+    const int firstPiece = white ? 1 : 9;
+    for (int boardPiece = firstPiece; boardPiece < firstPiece + 5; boardPiece++)
+    {
+        const int pieceType = white ? boardPiece : boardPiece - 8;
+        for (int from : board.pieces[boardPiece])
+            attackers += PieceAttacksSquareFast(occupiedSquares, pieceType, white, from, target) ? 1 : 0;
+    }
+    return attackers;
+}
+
+int UndefendedKingZoneDanger(Board& board, bool whiteKing, int kingSquare)
+{
+    constexpr int UndefendedSquareDanger = 2;
+    constexpr int AdditionalAttackerDanger = 1;
+    const bool attackingWhite = !whiteKing;
+    const PrecomputedKingZone& zone = KingZonesData.zones[kingSquare];
+    int danger = 0;
+    for (int i = 1; i < zone.count; ++i)
+    {
+        const int target = zone.squares[i];
+        const int enemyAttacks = CountSideAttacks(board, attackingWhite, target);
+        const int friendlyDefenses = CountNonKingSideAttacks(board, whiteKing, target);
+        if (enemyAttacks > 0 && friendlyDefenses == 0)
+        {
+            danger += UndefendedSquareDanger;
+            danger += (enemyAttacks - 1) * AdditionalAttackerDanger;
+        }
+    }
+    return danger;
+}
+
 std::vector<int> KingZone(int kingSquare)
 {
     const auto& z = KingZonesData.zones[kingSquare];
@@ -857,8 +892,9 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
                               std::max(0, attackerCount - defenderCount) * 4;
     const int shelterDanger = ShelterDanger(board, whiteKing, kingSquare);
     const int lineDanger = filePressure + diagonalPressure;
+    const int undefendedKingZoneDanger = UndefendedKingZoneDanger(board, whiteKing, kingSquare);
     int rawDanger = attackerParticipation * 2 + escapeDanger +
-                    lineDanger + shelterDanger + balanceDanger;
+                    lineDanger + shelterDanger + balanceDanger + undefendedKingZoneDanger;
 
     const int queenCount = board.pieces[attackingWhite ? 5 : 13].size();
     const int rookCount = board.pieces[attackingWhite ? 4 : 12].size();
@@ -940,6 +976,12 @@ int EvaluationLogic::RookConnectionValueForTesting(Board& board)
 int EvaluationLogic::RookBehindPassedPawnValueForTesting(Board& board, int phase)
 {
     return RookBehindPassedPawnValue(board, phase);
+}
+
+int EvaluationLogic::UndefendedKingZoneDangerForTesting(Board& board, bool whiteKing)
+{
+    const int kingSquare = board.pieces[whiteKing ? 6 : 14].front();
+    return UndefendedKingZoneDanger(board, whiteKing, kingSquare);
 }
 
 int EvaluationLogic::TaperEvaluationValueForTesting(int middleGameValue,

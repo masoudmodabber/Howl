@@ -98,6 +98,7 @@ public:
     static int KnightOutpostValueForTesting(Board& board, int phase);
     static int IsolatedPawnValueForTesting(Board& board, int phase);
     static int RookBehindPassedPawnValueForTesting(Board& board, int phase);
+    static int UndefendedKingZoneDangerForTesting(Board& board, bool whiteKing);
     static void SetEvalCacheAllocationFailureThresholdForTesting(
         std::size_t capacityBytes);
 #endif
