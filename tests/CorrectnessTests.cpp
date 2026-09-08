@@ -3597,6 +3597,33 @@ int RunEvaluationCorrectness(const std::string& testCase)
             return 1;
         }
 
+        std::unique_ptr<Board> oneRingAttack(BoardMaker::MakeInitialBoard(
+            "k3r3/8/8/8/8/8/8/4K3 w - - 0 1"));
+        std::unique_ptr<Board> twoRingAttackers(BoardMaker::MakeInitialBoard(
+            "k3r3/8/8/8/5n2/8/8/4K3 w - - 0 1"));
+        std::unique_ptr<Board> pawnDefendedRing(BoardMaker::MakeInitialBoard(
+            "k3r3/8/8/8/8/8/8/3PK3 w - - 0 1"));
+        std::unique_ptr<Board> pieceDefendedRing(BoardMaker::MakeInitialBoard(
+            "k3r3/8/8/8/8/8/8/2N1K3 w - - 0 1"));
+        std::unique_ptr<Board> mirroredRingAttack(BoardMaker::MakeInitialBoard(
+            "4k3/8/8/8/8/8/8/K3R3 b - - 0 1"));
+
+        const int oneAttackDanger = EvaluationLogic::UndefendedKingZoneDangerForTesting(*oneRingAttack, true);
+        const int twoAttackDanger = EvaluationLogic::UndefendedKingZoneDangerForTesting(*twoRingAttackers, true);
+        const int pawnDefendedDanger = EvaluationLogic::UndefendedKingZoneDangerForTesting(*pawnDefendedRing, true);
+        const int pieceDefendedDanger = EvaluationLogic::UndefendedKingZoneDangerForTesting(*pieceDefendedRing, true);
+        const int mirroredAttackDanger = EvaluationLogic::UndefendedKingZoneDangerForTesting(*mirroredRingAttack, false);
+        if (oneAttackDanger != 2 || twoAttackDanger != 3 || pawnDefendedDanger != 0 ||
+            pieceDefendedDanger != 0 || oneAttackDanger <= pawnDefendedDanger ||
+            mirroredAttackDanger != oneAttackDanger)
+        {
+            std::cerr << "Undefended king-zone evaluation attack evaluation failure: one=" << oneAttackDanger
+                      << ", two=" << twoAttackDanger << ", pawn_defended=" << pawnDefendedDanger
+                      << ", piece_defended=" << pieceDefendedDanger
+                      << ", mirrored=" << mirroredAttackDanger << '\n';
+            return 1;
+        }
+
         std::cout << "Game phase and focused evaluator feature tests passed\n";
         return 0;
     }
