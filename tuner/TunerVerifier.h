@@ -293,6 +293,10 @@ public:
         if (!check("RookOpenFileEndGame", 1, state.RookOpenFileEndGame, Option::RookOpenFileEndGame)) return res;
         if (!check("RookSemiOpenFileMiddleGame", 2, state.RookSemiOpenFileMiddleGame, Option::RookSemiOpenFileMiddleGame)) return res;
         if (!check("RookSemiOpenFileEndGame", 3, state.RookSemiOpenFileEndGame, Option::RookSemiOpenFileEndGame)) return res;
+        if (!check("KnightOutpostMiddleGame", 0, state.KnightOutpostMiddleGame, Option::KnightOutpostMiddleGame)) return res;
+        if (!check("KnightOutpostEndGame", 1, state.KnightOutpostEndGame, Option::KnightOutpostEndGame)) return res;
+        if (!check("KnightSupportedOutpostMiddleGame", 2, state.KnightSupportedOutpostMiddleGame, Option::KnightSupportedOutpostMiddleGame)) return res;
+        if (!check("KnightSupportedOutpostEndGame", 3, state.KnightSupportedOutpostEndGame, Option::KnightSupportedOutpostEndGame)) return res;
 
         return res;
     }

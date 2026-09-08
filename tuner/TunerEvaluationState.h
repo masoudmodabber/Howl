@@ -105,6 +105,12 @@ struct TunerEvaluationState
     int EndgamePawnAdvancementRankMultiplier = 0;
     int PieceAttackScalePercent = 0;
 
+    // Family: KnightOutpost (4 parameters)
+    int KnightOutpostMiddleGame = 0;
+    int KnightOutpostEndGame = 0;
+    int KnightSupportedOutpostMiddleGame = 0;
+    int KnightSupportedOutpostEndGame = 0;
+
     // Family: RookFile (4 parameters)
     int RookOpenFileMiddleGame = 0;
     int RookOpenFileEndGame = 0;
@@ -337,6 +343,16 @@ struct TunerEvaluationState
             case 1: return &RookOpenFileEndGame;
             case 2: return &RookSemiOpenFileMiddleGame;
             case 3: return &RookSemiOpenFileEndGame;
+            default: return nullptr;
+            }
+
+        case ParameterFamily::KnightOutpost:
+            switch (semanticIndex)
+            {
+            case 0: return &KnightOutpostMiddleGame;
+            case 1: return &KnightOutpostEndGame;
+            case 2: return &KnightSupportedOutpostMiddleGame;
+            case 3: return &KnightSupportedOutpostEndGame;
             default: return nullptr;
             }
 

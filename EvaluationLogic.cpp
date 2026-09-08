@@ -54,6 +54,40 @@ int TaperGroup3Value(int middleGameValue, int endGameValue, int phase)
     return (middleGameValue * (10000 - w) + endGameValue * w) / 10000;
 }
 
+int KnightOutpostValue(const Board& board, int square, bool white, int phase)
+{
+    const int rank = square / 8;
+    const bool advanced = white ? (rank >= 3 && rank <= 5) : (rank >= 2 && rank <= 4);
+    if (!advanced)
+        return 0;
+
+    const int file = square % 8;
+    const long long ownFile = static_cast<long long>(0x0101010101010101ULL << file);
+    const long long challengeMask =
+        (white ? PassedPawnSetup::WhitePassedMask[square]
+               : PassedPawnSetup::BlackPassedMask[square]) & ~ownFile;
+    const long long enemyPawns = white ? board.blackPawns : board.whitePawns;
+    if ((challengeMask & enemyPawns) != 0)
+        return 0;
+
+    int value = TaperEvaluationValue(
+        Option::KnightOutpostMiddleGame,
+        Option::KnightOutpostEndGame,
+        phase);
+    const long long supportMask = white
+        ? AttackPlaces::BlackPawnAttackPlaces[square]
+        : AttackPlaces::WhitePawnAttackPlaces[square];
+    const long long friendlyPawns = white ? board.whitePawns : board.blackPawns;
+    if ((supportMask & friendlyPawns) != 0)
+    {
+        value += TaperEvaluationValue(
+            Option::KnightSupportedOutpostMiddleGame,
+            Option::KnightSupportedOutpostEndGame,
+            phase);
+    }
+    return value;
+}
+
 inline int ChebyshevDistance(int sq1, int sq2)
 {
     return std::max(std::abs((sq1 % 8) - (sq2 % 8)), std::abs((sq1 / 8) - (sq2 / 8)));
@@ -873,6 +907,16 @@ int EvaluationLogic::TaperGroup3ValueForTesting(int middleGameValue,
 {
     return TaperGroup3Value(middleGameValue, endGameValue, phase);
 }
+
+int EvaluationLogic::KnightOutpostValueForTesting(Board& board, int phase)
+{
+    int value = 0;
+    for (int square : board.pieces[2])
+        value += KnightOutpostValue(board, square, true, phase);
+    for (int square : board.pieces[10])
+        value -= KnightOutpostValue(board, square, false, phase);
+    return value;
+}
 #endif
 
 int EvaluationLogic::CalculatePhase(const Board &thisBoard)
@@ -1318,6 +1362,7 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int phase)
                 {
                     moveCount = 0;
                     movement += taperedTable(Option::KnightInValueWhite, piecePoisiion);
+                    movement += KnightOutpostValue(thisBoard, piecePoisiion, true, phase);
                     centerValue += Option::KnightInCenterValueWhite[piecePoisiion];
                     for (int i = 0; i < 8; ++i)
                     {
@@ -1543,6 +1588,7 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int phase)
                 {
                     moveCount = 0;
                     movement -= taperedTable(Option::KnightInValueBlack, piecePoisiion);
+                    movement -= KnightOutpostValue(thisBoard, piecePoisiion, false, phase);
                     centerValue -= Option::KnightInCenterValueBlack[piecePoisiion];
                     for (int i = 0; i < 8; ++i)
                     {
