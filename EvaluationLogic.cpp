@@ -88,6 +88,25 @@ int KnightOutpostValue(const Board& board, int square, bool white, int phase)
     return value;
 }
 
+bool IsIsolatedPawn(long long friendlyPawns, int square)
+{
+    const int file = square % 8;
+    long long adjacentFiles = 0;
+    if (file > 0)
+        adjacentFiles |= static_cast<long long>(0x0101010101010101ULL << (file - 1));
+    if (file < 7)
+        adjacentFiles |= static_cast<long long>(0x0101010101010101ULL << (file + 1));
+    return (friendlyPawns & adjacentFiles) == 0;
+}
+
+int IsolatedPawnPenalty(int phase)
+{
+    return TaperEvaluationValue(
+        Option::IsolatedPawnMiddleGame,
+        Option::IsolatedPawnEndGame,
+        phase);
+}
+
 inline int ChebyshevDistance(int sq1, int sq2)
 {
     return std::max(std::abs((sq1 % 8) - (sq2 % 8)), std::abs((sq1 / 8) - (sq2 / 8)));
@@ -917,6 +936,17 @@ int EvaluationLogic::KnightOutpostValueForTesting(Board& board, int phase)
         value -= KnightOutpostValue(board, square, false, phase);
     return value;
 }
+
+int EvaluationLogic::IsolatedPawnValueForTesting(Board& board, int phase)
+{
+    int value = 0;
+    const int penalty = IsolatedPawnPenalty(phase);
+    for (int square : board.pieces[1])
+        value += IsIsolatedPawn(board.whitePawns, square) ? penalty : 0;
+    for (int square : board.pieces[9])
+        value -= IsIsolatedPawn(board.blackPawns, square) ? penalty : 0;
+    return value;
+}
 #endif
 
 int EvaluationLogic::CalculatePhase(const Board &thisBoard)
@@ -1216,13 +1246,20 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int phase)
                 singlePastWhite += TaperGroup3Value(mgVal, egVal, phase);
             }
         }
+        int isolatedPawnValueWhite = 0;
+        const int isolatedPenalty = IsolatedPawnPenalty(phase);
+        for (int pawnPlace : thisBoard.pieces[1])
+        {
+            if (IsIsolatedPawn(whitePawns, pawnPlace))
+                isolatedPawnValueWhite += isolatedPenalty;
+        }
         int goForwardPawnWhite = 0;
         for (int pawnPlace : thisBoard.pieces[1])
         {
             const int endGameValue = pawnPlace / 8 * 2;
             goForwardPawnWhite += TaperGroup3Value(0, endGameValue, phase);
         }
-        whitePawnSum = doubledPawnValueWhite + singlePastWhite + goForwardPawnWhite;
+        whitePawnSum = doubledPawnValueWhite + singlePastWhite + isolatedPawnValueWhite + goForwardPawnWhite;
         PawnEvalCache.Add(whitePawns, whitePawnSum, 0, phase);
     }
     int blackPawnSum;
@@ -1256,13 +1293,20 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int phase)
                 singlePastBlack += TaperGroup3Value(mgVal, egVal, phase);
             }
         }
+        int isolatedPawnValueBlack = 0;
+        const int isolatedPenalty = IsolatedPawnPenalty(phase);
+        for (int pawnPlace : thisBoard.pieces[9])
+        {
+            if (IsIsolatedPawn(blackPawns, pawnPlace))
+                isolatedPawnValueBlack += isolatedPenalty;
+        }
         int goForwardPawnBlack = 0;
         for (int pawnPlace : thisBoard.pieces[9])
         {
             const int endGameValue = (7 - (pawnPlace / 8)) * 2;
             goForwardPawnBlack += TaperGroup3Value(0, endGameValue, phase);
         }
-        blackPawnSum = doubledPawnValueBlack + singlePastBlack + goForwardPawnBlack;
+        blackPawnSum = doubledPawnValueBlack + singlePastBlack + isolatedPawnValueBlack + goForwardPawnBlack;
         PawnEvalCache.Add(blackPawns, blackPawnSum, 1, phase);
     }
     whitePawnSum -= blackPawnSum;

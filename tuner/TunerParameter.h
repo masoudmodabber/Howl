@@ -21,7 +21,8 @@ enum class ParameterFamily
     Attack,
     Inline,
     RookFile,
-    KnightOutpost
+    KnightOutpost,
+    IsolatedPawn
 };
 
 struct TunerParameter
@@ -248,6 +249,10 @@ public:
         registry.Add("KnightOutpostEndGame", ParameterFamily::KnightOutpost, 1, Option::KnightOutpostEndGame);
         registry.Add("KnightSupportedOutpostMiddleGame", ParameterFamily::KnightOutpost, 2, Option::KnightSupportedOutpostMiddleGame);
         registry.Add("KnightSupportedOutpostEndGame", ParameterFamily::KnightOutpost, 3, Option::KnightSupportedOutpostEndGame);
+
+        // 13. IsolatedPawn (2 parameters)
+        registry.Add("IsolatedPawnMiddleGame", ParameterFamily::IsolatedPawn, 0, Option::IsolatedPawnMiddleGame);
+        registry.Add("IsolatedPawnEndGame", ParameterFamily::IsolatedPawn, 1, Option::IsolatedPawnEndGame);
 
         return registry;
     }

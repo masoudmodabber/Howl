@@ -24,6 +24,17 @@ inline int TaperEvaluationValue(int middleGameValue, int endGameValue, int phase
     return (middleGameValue * phase + endGameValue * (24 - phase)) / 24;
 }
 
+inline bool IsIsolatedPawn(long long friendlyPawns, int square)
+{
+    const int file = square % 8;
+    long long adjacentFiles = 0;
+    if (file > 0)
+        adjacentFiles |= static_cast<long long>(0x0101010101010101ULL << (file - 1));
+    if (file < 7)
+        adjacentFiles |= static_cast<long long>(0x0101010101010101ULL << (file + 1));
+    return (friendlyPawns & adjacentFiles) == 0;
+}
+
 inline int KnightOutpostValue(const Board& board, int square, bool white, int phase,
                               const TunerEvaluationState& state)
 {
@@ -1321,13 +1332,21 @@ inline int GetPawnStructureValue(Board& thisBoard, int phase, const TunerEvaluat
             singlePastWhite += TaperGroup3Value(mgVal, egVal, phase);
         }
     }
+    int isolatedPawnValueWhite = 0;
+    const int isolatedPenalty = TaperEvaluationValue(
+        state.IsolatedPawnMiddleGame, state.IsolatedPawnEndGame, phase);
+    for (int pawnPlace : thisBoard.pieces[1])
+    {
+        if (IsIsolatedPawn(whitePawns, pawnPlace))
+            isolatedPawnValueWhite += isolatedPenalty;
+    }
     int goForwardPawnWhite = 0;
     for (int pawnPlace : thisBoard.pieces[1])
     {
         const int endGameValue = (pawnPlace / 8) * state.EndgamePawnAdvancementRankMultiplier;
         goForwardPawnWhite += TaperGroup3Value(0, endGameValue, phase);
     }
-    int whitePawnSum = doubledPawnValueWhite + singlePastWhite + goForwardPawnWhite;
+    int whitePawnSum = doubledPawnValueWhite + singlePastWhite + isolatedPawnValueWhite + goForwardPawnWhite;
 
     for (int item : thisBoard.pieces[9])
     {
@@ -1351,13 +1370,19 @@ inline int GetPawnStructureValue(Board& thisBoard, int phase, const TunerEvaluat
             singlePastBlack += TaperGroup3Value(mgVal, egVal, phase);
         }
     }
+    int isolatedPawnValueBlack = 0;
+    for (int pawnPlace : thisBoard.pieces[9])
+    {
+        if (IsIsolatedPawn(blackPawns, pawnPlace))
+            isolatedPawnValueBlack += isolatedPenalty;
+    }
     int goForwardPawnBlack = 0;
     for (int pawnPlace : thisBoard.pieces[9])
     {
         const int endGameValue = (7 - (pawnPlace / 8)) * state.EndgamePawnAdvancementRankMultiplier;
         goForwardPawnBlack += TaperGroup3Value(0, endGameValue, phase);
     }
-    int blackPawnSum = doubledPawnValueBlack + singlePastBlack + goForwardPawnBlack;
+    int blackPawnSum = doubledPawnValueBlack + singlePastBlack + isolatedPawnValueBlack + goForwardPawnBlack;
 
     return whitePawnSum - blackPawnSum;
 }

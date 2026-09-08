@@ -297,6 +297,8 @@ public:
         if (!check("KnightOutpostEndGame", 1, state.KnightOutpostEndGame, Option::KnightOutpostEndGame)) return res;
         if (!check("KnightSupportedOutpostMiddleGame", 2, state.KnightSupportedOutpostMiddleGame, Option::KnightSupportedOutpostMiddleGame)) return res;
         if (!check("KnightSupportedOutpostEndGame", 3, state.KnightSupportedOutpostEndGame, Option::KnightSupportedOutpostEndGame)) return res;
+        if (!check("IsolatedPawnMiddleGame", 0, state.IsolatedPawnMiddleGame, Option::IsolatedPawnMiddleGame)) return res;
+        if (!check("IsolatedPawnEndGame", 1, state.IsolatedPawnEndGame, Option::IsolatedPawnEndGame)) return res;
 
         return res;
     }
