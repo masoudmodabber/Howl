@@ -191,7 +191,6 @@ std::string JoinPV(const std::string& rootMove, const std::string& childPV)
 
 RootSearchResult FixedDepthProductionRoot(Board& board, int depth)
 {
-    PVSSearch::ResetCandidateMemory();
     PVSSearch::ResetHistory();
     PVSSearch::ResetKillers();
     RepetitionHistory::ResetWithRoot(board.ZobristHashCode);

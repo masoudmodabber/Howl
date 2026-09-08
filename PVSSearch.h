@@ -34,7 +34,6 @@ public:
     static KillerMove killers[MaxKillerPly][2];
 
     static void ResetKillers();
-    static void ResetCandidateMemory();
     static void ResetHistory();
     static void RecordKiller(int ply, const Move& move);
 
