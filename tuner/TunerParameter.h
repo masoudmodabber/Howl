@@ -20,7 +20,8 @@ enum class ParameterFamily
     Mobility,
     Attack,
     Inline,
-    RookFile
+    RookFile,
+    KnightOutpost
 };
 
 struct TunerParameter
@@ -241,6 +242,12 @@ public:
         registry.Add("RookOpenFileEndGame", ParameterFamily::RookFile, 1, Option::RookOpenFileEndGame);
         registry.Add("RookSemiOpenFileMiddleGame", ParameterFamily::RookFile, 2, Option::RookSemiOpenFileMiddleGame);
         registry.Add("RookSemiOpenFileEndGame", ParameterFamily::RookFile, 3, Option::RookSemiOpenFileEndGame);
+
+        // 12. KnightOutpost (4 parameters)
+        registry.Add("KnightOutpostMiddleGame", ParameterFamily::KnightOutpost, 0, Option::KnightOutpostMiddleGame);
+        registry.Add("KnightOutpostEndGame", ParameterFamily::KnightOutpost, 1, Option::KnightOutpostEndGame);
+        registry.Add("KnightSupportedOutpostMiddleGame", ParameterFamily::KnightOutpost, 2, Option::KnightSupportedOutpostMiddleGame);
+        registry.Add("KnightSupportedOutpostEndGame", ParameterFamily::KnightOutpost, 3, Option::KnightSupportedOutpostEndGame);
 
         return registry;
     }

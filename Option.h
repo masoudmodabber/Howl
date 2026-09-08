@@ -42,6 +42,12 @@ public:
     static int RookSemiOpenFileMiddleGame;
     static int RookSemiOpenFileEndGame;
 
+    // Knight Outpost Value
+    static int KnightOutpostMiddleGame;
+    static int KnightOutpostEndGame;
+    static int KnightSupportedOutpostMiddleGame;
+    static int KnightSupportedOutpostEndGame;
+
     // Changeable
     static int pieceMovement[2][7][120];
     static int WhitePassedPawnValueMiddleGam[64];

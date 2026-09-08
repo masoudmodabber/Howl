@@ -3513,7 +3513,32 @@ int RunEvaluationCorrectness(const std::string& testCase)
             return 1;
         }
 
-        std::cout << "Game phase calculation tests passed\n";
+        const int outpostPhase = 24;
+        std::unique_ptr<Board> whiteImmune(BoardMaker::MakeInitialBoard(
+            "4k3/8/8/3N4/8/8/8/4K3 w - - 0 1"));
+        std::unique_ptr<Board> whiteChallenged(BoardMaker::MakeInitialBoard(
+            "4k3/8/2p5/3N4/8/8/8/4K3 w - - 0 1"));
+        std::unique_ptr<Board> whiteSupported(BoardMaker::MakeInitialBoard(
+            "4k3/8/8/3N4/2P5/8/8/4K3 w - - 0 1"));
+        std::unique_ptr<Board> blackSupported(BoardMaker::MakeInitialBoard(
+            "4k3/8/8/2p5/3n4/8/8/4K3 w - - 0 1"));
+
+        const int whiteBase = EvaluationLogic::KnightOutpostValueForTesting(*whiteImmune, outpostPhase);
+        const int whiteBlocked = EvaluationLogic::KnightOutpostValueForTesting(*whiteChallenged, outpostPhase);
+        const int whiteWithSupport = EvaluationLogic::KnightOutpostValueForTesting(*whiteSupported, outpostPhase);
+        const int blackWithSupport = EvaluationLogic::KnightOutpostValueForTesting(*blackSupported, outpostPhase);
+        if (whiteBase != Option::KnightOutpostMiddleGame || whiteBlocked != 0 ||
+            whiteWithSupport != Option::KnightOutpostMiddleGame + Option::KnightSupportedOutpostMiddleGame ||
+            blackWithSupport != -whiteWithSupport)
+        {
+            std::cerr << "Knight outpost evaluation failure: base=" << whiteBase
+                      << ", challenged=" << whiteBlocked
+                      << ", supported=" << whiteWithSupport
+                      << ", black_supported=" << blackWithSupport << '\n';
+            return 1;
+        }
+
+        std::cout << "Game phase and knight outpost tests passed\n";
         return 0;
     }
     if (testCase == "phase_taper_interpolation")

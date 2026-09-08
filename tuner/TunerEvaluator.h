@@ -24,6 +24,37 @@ inline int TaperEvaluationValue(int middleGameValue, int endGameValue, int phase
     return (middleGameValue * phase + endGameValue * (24 - phase)) / 24;
 }
 
+inline int KnightOutpostValue(const Board& board, int square, bool white, int phase,
+                              const TunerEvaluationState& state)
+{
+    const int rank = square / 8;
+    const bool advanced = white ? (rank >= 3 && rank <= 5) : (rank >= 2 && rank <= 4);
+    if (!advanced)
+        return 0;
+
+    const int file = square % 8;
+    const long long ownFile = static_cast<long long>(0x0101010101010101ULL << file);
+    const long long challengeMask =
+        (white ? PassedPawnSetup::WhitePassedMask[square]
+               : PassedPawnSetup::BlackPassedMask[square]) & ~ownFile;
+    if ((challengeMask & (white ? board.blackPawns : board.whitePawns)) != 0)
+        return 0;
+
+    int value = TaperEvaluationValue(
+        state.KnightOutpostMiddleGame, state.KnightOutpostEndGame, phase);
+    const long long supportMask = white
+        ? AttackPlaces::BlackPawnAttackPlaces[square]
+        : AttackPlaces::WhitePawnAttackPlaces[square];
+    if ((supportMask & (white ? board.whitePawns : board.blackPawns)) != 0)
+    {
+        value += TaperEvaluationValue(
+            state.KnightSupportedOutpostMiddleGame,
+            state.KnightSupportedOutpostEndGame,
+            phase);
+    }
+    return value;
+}
+
 inline int TaperGroup1Value(int middleGameValue, int endGameValue, int phase)
 {
     static const int weights[25] = {
@@ -869,6 +900,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
             {
                 moveCount = 0;
                 movement += taperedTable(state.KnightInValueWhite, piecePoisiion);
+                movement += KnightOutpostValue(thisBoard, piecePoisiion, true, phase, state);
                 centerValue += state.KnightInCenterValueWhite[piecePoisiion];
                 for (int i = 0; i < 8; ++i)
                 {
@@ -1087,6 +1119,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
             {
                 moveCount = 0;
                 movement -= taperedTable(state.KnightInValueBlack, piecePoisiion);
+                movement -= KnightOutpostValue(thisBoard, piecePoisiion, false, phase, state);
                 centerValue -= state.KnightInCenterValueBlack[piecePoisiion];
                 for (int i = 0; i < 8; ++i)
                 {

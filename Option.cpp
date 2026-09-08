@@ -27,6 +27,10 @@ int Option::RookOpenFileMiddleGame = 18;
 int Option::RookOpenFileEndGame = 12;
 int Option::RookSemiOpenFileMiddleGame = 10;
 int Option::RookSemiOpenFileEndGame = 6;
+int Option::KnightOutpostMiddleGame = 12;
+int Option::KnightOutpostEndGame = 3;
+int Option::KnightSupportedOutpostMiddleGame = 8;
+int Option::KnightSupportedOutpostEndGame = 2;
 int Option::pieceMovement[2][7][120] = {};
 
 int Option::WhitePassedPawnValueMiddleGam[] = {0, 0, 0, 0, 0, 0, 0, 0,
