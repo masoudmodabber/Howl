@@ -17,8 +17,6 @@
 #include "MateScore.h"
 #include <iostream>
 #include <algorithm>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 int PVSSearch::moveOrderingDepth[20] = {
@@ -135,32 +133,11 @@ namespace
         return std::clamp(CombinedHistoryScore(side, previousMove, move) / 4096, -2, 2);
     }
 
-    struct CandidateEvidence
-    {
-        int discoveryScore = -200000;
-        bool hasDiscoveryScore = false;
-        int tacticalSafetyScore = -200000;
-        bool hasTacticalSafetyScore = false;
-    };
-
-    std::unordered_map<uint64_t, std::unordered_map<uint16_t, CandidateEvidence>> candidateMemory;
-    std::unordered_set<uint64_t> discoveryComplete;
     constexpr int CheckOrderingBonus = 40;
 
     int BasePvsOrderingScore(const Move *move)
     {
         return move->value + (move->givesCheck ? CheckOrderingBonus : 0);
-    }
-
-    int PredictedDiscoveryReduction(int moveIndex, int depth, bool isPVNode)
-    {
-        const int normalDepthMoveCount = isPVNode ? 3 : 2;
-        if (depth < 2 || moveIndex < normalDepthMoveCount)
-            return 0;
-
-        const int lateness = moveIndex - normalDepthMoveCount + 1;
-        const int reduction = 1 + lateness / 2 + std::max(0, depth - 3) / 2;
-        return std::clamp(reduction, 0, depth - 1);
     }
 
     bool IsMateScore(int score)
@@ -177,198 +154,6 @@ namespace
         return SearchBound::Exact;
     }
 
-    int ProvisionalCandidateCount(bool isPVNode)
-    {
-        return isPVNode ? 5 : 4;
-    }
-
-    int TacticalSafetyScore(Board &board, Move &candidate, Move &previousMove,
-                            int depthGone, int discoveryScore)
-    {
-        const int movingSide = board.sideToMove ? 1 : 0;
-        MissingInfoAboutPrevStateFromMove candidateUndo(board, candidate);
-        GameLogic::DoMove(board, candidate, previousMove, depthGone, depthGone, &candidateUndo);
-
-        if (BoardLogic::UnderAttack(
-                board, board.pieces[movingSide * 8 + 6].front(), board.sideToMove))
-        {
-            GameLogic::UndoMove(board, candidate, candidateUndo);
-            return -200000;
-        }
-
-        int safetyScore = discoveryScore;
-        const int replyingSide = board.sideToMove ? 1 : 0;
-        MoveList forcingReplies = MoveLogic::MoveGenerator(board, 0, depthGone + 1, true);
-        for (int i = 0; i < forcingReplies.count; ++i)
-        {
-            Move &reply = *forcingReplies.moves[i];
-            MissingInfoAboutPrevStateFromMove replyUndo(board, reply);
-            GameLogic::DoMove(board, reply, candidate, depthGone + 1, depthGone + 1, &replyUndo);
-            const bool legalReply = !BoardLogic::UnderAttack(
-                board, board.pieces[replyingSide * 8 + 6].front(), board.sideToMove);
-            const bool givesCheck = BoardLogic::UnderAttack(
-                board, board.pieces[(1 - replyingSide) * 8 + 6].front(), !board.sideToMove);
-            const bool forcingReply = reply.endPiece > 0 || reply.promotionPiece > 0 || givesCheck;
-            if (legalReply && forcingReply)
-            {
-                Move move1{}, move2{}, move3{};
-                const int probeDepthGone = depthGone + 2;
-                std::unique_ptr<MovePrintValue> replyResult(QSearcher::QSearch(
-                    false, safetyScore - 1, safetyScore, reply, probeDepthGone,
-                    givesCheck ? 1 : 0, !givesCheck, givesCheck ? 1 : 0,
-                    move1, move2, move3, board, false, probeDepthGone, false));
-                if (replyResult->value < safetyScore)
-                {
-                    replyResult.reset(QSearcher::QSearch(
-                        true, -200000, safetyScore, reply, probeDepthGone,
-                        givesCheck ? 1 : 0, !givesCheck, givesCheck ? 1 : 0,
-                        move1, move2, move3, board, false, probeDepthGone, false));
-                }
-                safetyScore = std::min(safetyScore, replyResult->value);
-            }
-            GameLogic::UndoMove(board, reply, replyUndo);
-        }
-
-        for (int i = 0; i < forcingReplies.count; ++i)
-            delete forcingReplies.moves[i];
-        GameLogic::UndoMove(board, candidate, candidateUndo);
-        return safetyScore;
-    }
-
-    void PrioritizeTacticalSafety(uint64_t positionKey, Board &board, MoveList &moveList,
-                                  Move &previousMove, int depthGone, bool isPVNode)
-    {
-        const int provisionalCount = std::min(moveList.count, ProvisionalCandidateCount(isPVNode));
-        auto &evidence = candidateMemory[positionKey];
-        std::unordered_map<uint16_t, int> safetyScores;
-        for (int i = 0; i < provisionalCount; ++i)
-        {
-            Move &candidate = *moveList.moves[i];
-            const uint16_t packedMove = TTMoveHelper::PackMove(candidate);
-            CandidateEvidence &candidateEvidence = evidence[packedMove];
-            const int discoveryScore = candidateEvidence.hasDiscoveryScore
-                ? candidateEvidence.discoveryScore
-                : -200000;
-            if (!candidateEvidence.hasTacticalSafetyScore)
-            {
-                candidateEvidence.tacticalSafetyScore = TacticalSafetyScore(
-                    board, candidate, previousMove, depthGone, discoveryScore);
-                candidateEvidence.hasTacticalSafetyScore = true;
-            }
-            safetyScores[packedMove] = candidateEvidence.tacticalSafetyScore;
-        }
-
-        std::stable_sort(moveList.moves, moveList.moves + provisionalCount,
-                         [&safetyScores](const Move *a, const Move *b)
-                         {
-                             return safetyScores[TTMoveHelper::PackMove(*a)] >
-                                    safetyScores[TTMoveHelper::PackMove(*b)];
-                         });
-    }
-
-    void PrioritizeCandidateEvidence(uint64_t key, MoveList &moveList, int depth,
-                                     bool isPVNode, bool preserveFirstMove)
-    {
-        struct BucketedMove
-        {
-            Move *move;
-            int preDiscoveryIndex;
-            bool crossedBucket = false;
-        };
-
-        const auto &evidence = candidateMemory[key];
-        const int maximumReduction = std::max(0, depth - 1);
-        std::vector<std::vector<BucketedMove>> buckets(maximumReduction + 1);
-        const int firstSortableIndex = preserveFirstMove && moveList.count > 0 ? 1 : 0;
-
-        for (int i = firstSortableIndex; i < moveList.count; ++i)
-        {
-            const int reduction = PredictedDiscoveryReduction(i, depth, isPVNode);
-            buckets[reduction].push_back({moveList.moves[i], i, false});
-        }
-
-        const auto discoveryScore = [&evidence](const Move *move)
-        {
-            const auto it = evidence.find(TTMoveHelper::PackMove(*move));
-            return it != evidence.end() && it->second.hasDiscoveryScore
-                ? it->second.discoveryScore
-                : -200000;
-        };
-        const auto orderBucket = [&discoveryScore](std::vector<BucketedMove> &bucket)
-        {
-            std::stable_sort(bucket.begin(), bucket.end(),
-                             [](const BucketedMove &a, const BucketedMove &b)
-                             { return a.preDiscoveryIndex < b.preDiscoveryIndex; });
-            std::stable_sort(bucket.begin(), bucket.end(),
-                             [&discoveryScore](const BucketedMove &a, const BucketedMove &b)
-                             { return discoveryScore(a.move) > discoveryScore(b.move); });
-        };
-
-        for (auto &bucket : buckets)
-            orderBucket(bucket);
-
-        for (int reduction = 0; reduction < maximumReduction; ++reduction)
-        {
-            auto &shallowerBucket = buckets[reduction];
-            auto &deeperBucket = buckets[reduction + 1];
-            while (true)
-            {
-                auto weakestShallower = shallowerBucket.end();
-                for (auto it = shallowerBucket.begin(); it != shallowerBucket.end(); ++it)
-                {
-                    if (!it->crossedBucket &&
-                        (weakestShallower == shallowerBucket.end() ||
-                         discoveryScore(it->move) < discoveryScore(weakestShallower->move)))
-                        weakestShallower = it;
-                }
-
-                auto strongestDeeper = deeperBucket.end();
-                for (auto it = deeperBucket.begin(); it != deeperBucket.end(); ++it)
-                {
-                    if (!it->crossedBucket &&
-                        (strongestDeeper == deeperBucket.end() ||
-                         discoveryScore(it->move) > discoveryScore(strongestDeeper->move)))
-                        strongestDeeper = it;
-                }
-
-                if (weakestShallower == shallowerBucket.end() ||
-                    strongestDeeper == deeperBucket.end() ||
-                    discoveryScore(strongestDeeper->move) <= discoveryScore(weakestShallower->move))
-                    break;
-
-                std::swap(*weakestShallower, *strongestDeeper);
-                weakestShallower->crossedBucket = true;
-                strongestDeeper->crossedBucket = true;
-            }
-            orderBucket(shallowerBucket);
-            orderBucket(deeperBucket);
-        }
-
-        int outputIndex = firstSortableIndex;
-        for (auto &bucket : buckets)
-        {
-            for (const BucketedMove &entry : bucket)
-                moveList.moves[outputIndex++] = entry.move;
-        }
-    }
-
-    void MarkCandidateSeen(uint64_t key, const Move &move)
-    {
-        candidateMemory[key].try_emplace(TTMoveHelper::PackMove(move));
-    }
-
-    void RecordDiscoveryScore(uint64_t key, const Move &move, int score)
-    {
-        CandidateEvidence &evidence = candidateMemory[key][TTMoveHelper::PackMove(move)];
-        evidence.discoveryScore = score;
-        evidence.hasDiscoveryScore = true;
-    }
-}
-
-void PVSSearch::ResetCandidateMemory()
-{
-    candidateMemory.clear();
-    discoveryComplete.clear();
 }
 
 void PVSSearch::ResetHistory()
@@ -1345,30 +1130,6 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
     int quietMovesSearched = 0;
     {
         bool firstMove = true;
-        const uint64_t positionKey = board4.ZobristHashCode;
-        const bool useCandidateProbes = isPVNode && depthGone == 1;
-        if (useCandidateProbes && discoveryComplete.find(positionKey) == discoveryComplete.end())
-        {
-            for (int i = 0; i < moveList.count; ++i)
-            {
-                Move *move = moveList.moves[i];
-                MissingInfoAboutPrevStateFromMove undo(board4, *move);
-                GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone, &undo);
-                const bool candidateGivesCheck = BoardLogic::UnderAttack(
-                    board4, board4.pieces[board4.sideToMove * 8 + 6].front(),
-                    !board4.sideToMove);
-                MovePrintValue *discovery = PVS(true, -200000, 200000, 0, *move, move2, move3,
-                                                prevMove, board4, MAtESearch, true, depthGone + 1,
-                                                candidateGivesCheck, false);
-                int discoveryScore = -discovery->value;
-                GameLogic::UndoMove(board4, *move, undo);
-                if (discoveryScore != -160000)
-                    RecordDiscoveryScore(positionKey, *move, discoveryScore);
-                delete discovery;
-            }
-            discoveryComplete.insert(positionKey);
-        }
-
         if (!isPVNode && !nodeInCheck && !MAtESearch && depth >= 5 &&
             beta < 159500 && alpha > -159500)
         {
@@ -1444,8 +1205,6 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             }
             Move *move = moveList.moves[i];
             const int alphaBeforeMove = alpha;
-            if (useCandidateProbes)
-                MarkCandidateSeen(positionKey, *move);
             int LMRDepth = 0;
             if (firstMove)
             {

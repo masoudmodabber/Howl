@@ -120,7 +120,6 @@ void Search::PrintBestMove()
 
 void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Board &board4)
 {
-    PVSSearch::ResetCandidateMemory();
     PVSSearch::ResetHistory();
     bestMove = "";
     ponderMove = "";
