@@ -476,6 +476,40 @@ int RookConnectionValue(MyList (&pieces)[15], long long occupiedSquares)
     return value;
 }
 
+int RookBehindPassedPawnValue(Board& board, int phase)
+{
+    const long long occupiedSquares = board.whitePieces | board.blackPieces;
+    const int bonus = TaperEvaluationValue(
+        Option::RookBehindPassedPawnMiddleGame,
+        Option::RookBehindPassedPawnEndGame,
+        phase);
+    int value = 0;
+
+    for (int pawn : board.pieces[1])
+    {
+        if ((PassedPawnSetup::WhitePassedMask[pawn] & board.blackPawns) != 0)
+            continue;
+        for (int rook : board.pieces[4])
+            if (rook % 8 == pawn % 8 && rook < pawn && RooksAreConnected(rook, pawn, occupiedSquares))
+                value += bonus;
+        for (int rook : board.pieces[12])
+            if (rook % 8 == pawn % 8 && rook < pawn && RooksAreConnected(rook, pawn, occupiedSquares))
+                value -= bonus;
+    }
+    for (int pawn : board.pieces[9])
+    {
+        if ((PassedPawnSetup::BlackPassedMask[pawn] & board.whitePawns) != 0)
+            continue;
+        for (int rook : board.pieces[12])
+            if (rook % 8 == pawn % 8 && rook > pawn && RooksAreConnected(rook, pawn, occupiedSquares))
+                value -= bonus;
+        for (int rook : board.pieces[4])
+            if (rook % 8 == pawn % 8 && rook > pawn && RooksAreConnected(rook, pawn, occupiedSquares))
+                value += bonus;
+    }
+    return value;
+}
+
 struct KingDangerResult
 {
     int danger = 0;
@@ -903,6 +937,11 @@ int EvaluationLogic::RookConnectionValueForTesting(Board& board)
     return RookConnectionValue(board.pieces, board.whitePieces | board.blackPieces);
 }
 
+int EvaluationLogic::RookBehindPassedPawnValueForTesting(Board& board, int phase)
+{
+    return RookBehindPassedPawnValue(board, phase);
+}
+
 int EvaluationLogic::TaperEvaluationValueForTesting(int middleGameValue,
                                                      int endGameValue, int phase)
 {
@@ -1047,6 +1086,7 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     pawnStructure += passedPawnMinorAccessibility;
     int passedPawnCorridorSafety = EvaluatePassedPawnCorridorSafety(thisBoard);
     pawnStructure += passedPawnCorridorSafety;
+    pawnStructure += RookBehindPassedPawnValue(thisBoard, phase);
 
     // Rook Connection
     int rookValue = RookConnectionValue(pieces, piecesBinary);
