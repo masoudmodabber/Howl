@@ -153,6 +153,35 @@ inline int RookConnectionValue(MyList (&pieces)[15], long long occupiedSquares)
     return value;
 }
 
+inline int RookBehindPassedPawnValue(Board& board, int phase, const TunerEvaluationState& state)
+{
+    const long long occupiedSquares = board.whitePieces | board.blackPieces;
+    const int bonus = TaperEvaluationValue(
+        state.RookBehindPassedPawnMiddleGame,
+        state.RookBehindPassedPawnEndGame,
+        phase);
+    int value = 0;
+    for (int pawn : board.pieces[1])
+    {
+        if ((PassedPawnSetup::WhitePassedMask[pawn] & board.blackPawns) != 0)
+            continue;
+        for (int rook : board.pieces[4])
+            if (rook % 8 == pawn % 8 && rook < pawn && RooksAreConnected(rook, pawn, occupiedSquares)) value += bonus;
+        for (int rook : board.pieces[12])
+            if (rook % 8 == pawn % 8 && rook < pawn && RooksAreConnected(rook, pawn, occupiedSquares)) value -= bonus;
+    }
+    for (int pawn : board.pieces[9])
+    {
+        if ((PassedPawnSetup::BlackPassedMask[pawn] & board.whitePawns) != 0)
+            continue;
+        for (int rook : board.pieces[12])
+            if (rook % 8 == pawn % 8 && rook > pawn && RooksAreConnected(rook, pawn, occupiedSquares)) value -= bonus;
+        for (int rook : board.pieces[4])
+            if (rook % 8 == pawn % 8 && rook > pawn && RooksAreConnected(rook, pawn, occupiedSquares)) value += bonus;
+    }
+    return value;
+}
+
 struct KingDangerResult
 {
     int danger = 0;
@@ -1484,6 +1513,7 @@ public:
         pawnStructure += passedPawnKingRace;
         int passedPawnMinorAccessibility = Detail::EvaluatePassedPawnMinorAccessibility(thisBoard);
         pawnStructure += passedPawnMinorAccessibility;
+        pawnStructure += Detail::RookBehindPassedPawnValue(thisBoard, phase, state);
         int passedPawnCorridorSafety = Detail::EvaluatePassedPawnCorridorSafety(thisBoard);
         pawnStructure += passedPawnCorridorSafety;
 

@@ -29,6 +29,10 @@ struct TunerEvaluationState
     int IsolatedPawnMiddleGame = 0;
     int IsolatedPawnEndGame = 0;
 
+    // Family: RookBehindPassedPawn (2 parameters)
+    int RookBehindPassedPawnMiddleGame = 0;
+    int RookBehindPassedPawnEndGame = 0;
+
     // Family: PassedPawn (128: 64 MG + 64 EG)
     int WhitePassedPawnValueMiddleGam[64] = {0};
     int WhitePassedPawnValueEndGame[64] = {0};
@@ -365,6 +369,14 @@ struct TunerEvaluationState
             {
             case 0: return &IsolatedPawnMiddleGame;
             case 1: return &IsolatedPawnEndGame;
+            default: return nullptr;
+            }
+
+        case ParameterFamily::RookBehindPassedPawn:
+            switch (semanticIndex)
+            {
+            case 0: return &RookBehindPassedPawnMiddleGame;
+            case 1: return &RookBehindPassedPawnEndGame;
             default: return nullptr;
             }
 

@@ -50,6 +50,10 @@ public:
     static int KnightSupportedOutpostMiddleGame;
     static int KnightSupportedOutpostEndGame;
 
+    // Rook Behind Passed Pawn Value
+    static int RookBehindPassedPawnMiddleGame;
+    static int RookBehindPassedPawnEndGame;
+
     // Changeable
     static int pieceMovement[2][7][120];
     static int WhitePassedPawnValueMiddleGam[64];

@@ -276,6 +276,7 @@ public:
         case ParameterFamily::RookFile: return 2;
         case ParameterFamily::KnightOutpost: return 2;
         case ParameterFamily::IsolatedPawn: return 2;
+        case ParameterFamily::RookBehindPassedPawn: return 2;
         default: return 0;
         }
     }
@@ -337,6 +338,7 @@ public:
         case ParameterFamily::RookFile: return "RookFile";
         case ParameterFamily::KnightOutpost: return "KnightOutpost";
         case ParameterFamily::IsolatedPawn: return "IsolatedPawn";
+        case ParameterFamily::RookBehindPassedPawn: return "RookBehindPassedPawn";
         default: return "Unknown";
         }
     }

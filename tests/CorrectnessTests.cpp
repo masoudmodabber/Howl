@@ -3566,7 +3566,38 @@ int RunEvaluationCorrectness(const std::string& testCase)
             return 1;
         }
 
-        std::cout << "Game phase, knight outpost, and isolated pawn tests passed\n";
+        const int rookPasserPhase = 0;
+        std::unique_ptr<Board> friendlyRookBehind(BoardMaker::MakeInitialBoard(
+            "4k3/8/8/3P4/8/8/8/3RK3 w - - 0 1"));
+        std::unique_ptr<Board> friendlyRookInFront(BoardMaker::MakeInitialBoard(
+            "4k3/8/3R4/3P4/8/8/8/4K3 w - - 0 1"));
+        std::unique_ptr<Board> enemyRookBehind(BoardMaker::MakeInitialBoard(
+            "4k3/8/8/3P4/8/8/8/K2r4 w - - 0 1"));
+        std::unique_ptr<Board> blockedRookBehind(BoardMaker::MakeInitialBoard(
+            "4k3/8/8/3P4/8/3N4/8/3RK3 w - - 0 1"));
+        std::unique_ptr<Board> rookBehindNonPasser(BoardMaker::MakeInitialBoard(
+            "4k3/8/2p5/3P4/8/8/8/3RK3 w - - 0 1"));
+        std::unique_ptr<Board> blackFriendlyRookBehind(BoardMaker::MakeInitialBoard(
+            "3rk3/8/8/8/3p4/8/8/4K3 w - - 0 1"));
+
+        const int friendlyBehind = EvaluationLogic::RookBehindPassedPawnValueForTesting(*friendlyRookBehind, rookPasserPhase);
+        const int friendlyInFront = EvaluationLogic::RookBehindPassedPawnValueForTesting(*friendlyRookInFront, rookPasserPhase);
+        const int enemyBehind = EvaluationLogic::RookBehindPassedPawnValueForTesting(*enemyRookBehind, rookPasserPhase);
+        const int blockedBehind = EvaluationLogic::RookBehindPassedPawnValueForTesting(*blockedRookBehind, rookPasserPhase);
+        const int behindNonPasser = EvaluationLogic::RookBehindPassedPawnValueForTesting(*rookBehindNonPasser, rookPasserPhase);
+        const int blackFriendlyBehind = EvaluationLogic::RookBehindPassedPawnValueForTesting(*blackFriendlyRookBehind, rookPasserPhase);
+        if (friendlyBehind != Option::RookBehindPassedPawnEndGame || friendlyInFront != 0 ||
+            enemyBehind != -Option::RookBehindPassedPawnEndGame || blockedBehind != 0 ||
+            behindNonPasser != 0 || blackFriendlyBehind != -friendlyBehind)
+        {
+            std::cerr << "Rook-behind-passed-pawn evaluation failure: friendly=" << friendlyBehind
+                      << ", front=" << friendlyInFront << ", enemy=" << enemyBehind
+                      << ", blocked=" << blockedBehind << ", non_passer=" << behindNonPasser
+                      << ", black_friendly=" << blackFriendlyBehind << '\n';
+            return 1;
+        }
+
+        std::cout << "Game phase and focused evaluator feature tests passed\n";
         return 0;
     }
     if (testCase == "phase_taper_interpolation")
