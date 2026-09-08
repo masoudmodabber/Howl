@@ -96,6 +96,7 @@ public:
     static int TaperGroup3ValueForTesting(int middleGameValue,
                                           int endGameValue, int phase);
     static int KnightOutpostValueForTesting(Board& board, int phase);
+    static int IsolatedPawnValueForTesting(Board& board, int phase);
     static void SetEvalCacheAllocationFailureThresholdForTesting(
         std::size_t capacityBytes);
 #endif

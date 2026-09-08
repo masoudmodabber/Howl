@@ -35,6 +35,8 @@ public:
     // Pawn Structure Value
     static int EndPawnValue;
     static int DoubledPawnValue;
+    static int IsolatedPawnMiddleGame;
+    static int IsolatedPawnEndGame;
 
     // Rook File Value
     static int RookOpenFileMiddleGame;

@@ -3538,7 +3538,35 @@ int RunEvaluationCorrectness(const std::string& testCase)
             return 1;
         }
 
-        std::cout << "Game phase and knight outpost tests passed\n";
+        std::unique_ptr<Board> whiteIsolated(BoardMaker::MakeInitialBoard(
+            "4k3/8/8/8/3P4/8/8/4K3 w - - 0 1"));
+        std::unique_ptr<Board> whiteLeftNeighbor(BoardMaker::MakeInitialBoard(
+            "4k3/8/8/8/3P4/8/2P5/4K3 w - - 0 1"));
+        std::unique_ptr<Board> whiteRightNeighbor(BoardMaker::MakeInitialBoard(
+            "4k3/8/8/8/3P4/8/4P3/4K3 w - - 0 1"));
+        std::unique_ptr<Board> whiteDoubledIsolated(BoardMaker::MakeInitialBoard(
+            "4k3/8/8/8/3P4/3P4/8/4K3 w - - 0 1"));
+        std::unique_ptr<Board> blackIsolated(BoardMaker::MakeInitialBoard(
+            "4k3/8/8/3p4/8/8/8/4K3 w - - 0 1"));
+
+        const int isolatedWhite = EvaluationLogic::IsolatedPawnValueForTesting(*whiteIsolated, outpostPhase);
+        const int leftNeighbor = EvaluationLogic::IsolatedPawnValueForTesting(*whiteLeftNeighbor, outpostPhase);
+        const int rightNeighbor = EvaluationLogic::IsolatedPawnValueForTesting(*whiteRightNeighbor, outpostPhase);
+        const int doubledIsolated = EvaluationLogic::IsolatedPawnValueForTesting(*whiteDoubledIsolated, outpostPhase);
+        const int isolatedBlack = EvaluationLogic::IsolatedPawnValueForTesting(*blackIsolated, outpostPhase);
+        if (isolatedWhite != Option::IsolatedPawnMiddleGame || leftNeighbor != 0 ||
+            rightNeighbor != 0 || doubledIsolated != 2 * Option::IsolatedPawnMiddleGame ||
+            isolatedBlack != -isolatedWhite)
+        {
+            std::cerr << "Isolated pawn evaluation failure: white=" << isolatedWhite
+                      << ", left_neighbor=" << leftNeighbor
+                      << ", right_neighbor=" << rightNeighbor
+                      << ", doubled=" << doubledIsolated
+                      << ", black=" << isolatedBlack << '\n';
+            return 1;
+        }
+
+        std::cout << "Game phase, knight outpost, and isolated pawn tests passed\n";
         return 0;
     }
     if (testCase == "phase_taper_interpolation")
@@ -3750,7 +3778,7 @@ int RunEvaluationCorrectness(const std::string& testCase)
             return 1;
         }
 
-        // 2. EG Endpoint (phase = 0): White pawn on d5 (Option::WhitePassedPawnValueEndGame[35] = 60, goForward = 4*2 = 8)
+        // 2. EG Endpoint: passed 60 + advancement 8 + isolated-pawn penalty -8.
         std::unique_ptr<Board> egBoard(BoardMaker::MakeInitialBoard("8/8/8/3P4/8/8/4k3/4K3 w - - 0 1"));
         int egPhase = EvaluationLogic::CalculatePhase(*egBoard);
         if (egPhase != 0)
@@ -3759,14 +3787,14 @@ int RunEvaluationCorrectness(const std::string& testCase)
             return 1;
         }
         int egPawnVal = EvaluationLogic::GetPawnStructureValue(*egBoard, egPhase);
-        if (egPawnVal != (60 + 8))
+        if (egPawnVal != (60 + 8 - 8))
         {
-            std::cerr << "Expected EG passed pawn value 68 (60+8), got " << egPawnVal << '\n';
+            std::cerr << "Expected EG pawn value 60 (60+8-8), got " << egPawnVal << '\n';
             return 1;
         }
 
         // 3. Intermediate interpolation (phase = 12): White Q(4)+R(2)=6, Black Q(4)+R(2)=6 -> Total = 12
-        // Passed pawn bonus = 40; tapered endgame advancement = 4.
+        // Passed pawn bonus = 40; tapered advancement = 4; tapered isolation penalty = -9.
         std::unique_ptr<Board> midBoard(BoardMaker::MakeInitialBoard("3rqk2/8/8/3P4/8/8/3RQK2/8 w - - 0 1"));
         int midPhase = EvaluationLogic::CalculatePhase(*midBoard);
         if (midPhase != 12)
@@ -3775,9 +3803,9 @@ int RunEvaluationCorrectness(const std::string& testCase)
             return 1;
         }
         int midPassed = EvaluationLogic::GetPawnStructureValue(*midBoard, midPhase);
-        if (midPassed != 44)
+        if (midPassed != 35)
         {
-            std::cerr << "Expected mid phase pawn value 44, got " << midPassed << '\n';
+            std::cerr << "Expected mid phase pawn value 35, got " << midPassed << '\n';
             return 1;
         }
 

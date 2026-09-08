@@ -25,6 +25,10 @@ struct TunerEvaluationState
     // Family: PawnStructure (1)
     int DoubledPawnValue = 0;
 
+    // Family: IsolatedPawn (2 parameters)
+    int IsolatedPawnMiddleGame = 0;
+    int IsolatedPawnEndGame = 0;
+
     // Family: PassedPawn (128: 64 MG + 64 EG)
     int WhitePassedPawnValueMiddleGam[64] = {0};
     int WhitePassedPawnValueEndGame[64] = {0};
@@ -353,6 +357,14 @@ struct TunerEvaluationState
             case 1: return &KnightOutpostEndGame;
             case 2: return &KnightSupportedOutpostMiddleGame;
             case 3: return &KnightSupportedOutpostEndGame;
+            default: return nullptr;
+            }
+
+        case ParameterFamily::IsolatedPawn:
+            switch (semanticIndex)
+            {
+            case 0: return &IsolatedPawnMiddleGame;
+            case 1: return &IsolatedPawnEndGame;
             default: return nullptr;
             }
 
