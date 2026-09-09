@@ -3462,43 +3462,41 @@ int RunEvaluationCorrectness(const std::string& testCase)
             return EvaluationLogic::PassedPawnMinorAccessibilityValueForTesting(*board);
         };
 
-        const int reachesEarly = accessibility(
-            "7k/8/8/3P1n2/8/8/8/K7 b - - 0 1");
-        const int borderlineDefenderMoves = accessibility(
+        const int timelySafe = accessibility(
             "7k/3P1n2/8/8/8/8/8/K7 b - - 0 1");
-        const int borderlinePasserMoves = accessibility(
-            "7k/3P1n2/8/8/8/8/8/K7 w - - 0 1");
-        const int bishopControlled = accessibility(
+        const int severalOneSafe = accessibility(
+            "7k/8/8/3PBn2/5n2/8/8/K7 b - - 0 1");
+        const int allBishopControlled = accessibility(
             "7k/3PBn2/8/8/8/8/8/K7 b - - 0 1");
-        const int kingControlled = accessibility(
-            "7k/3PKn2/8/8/8/8/8/8 b - - 0 1");
+        const int allKingControlled = accessibility(
+            "7k/2KP1n2/8/8/8/8/8/8 b - - 0 1");
+        const int tooLate = accessibility(
+            "7k/3P4/5n2/8/8/8/8/K7 b - - 0 1");
         const int friendlyKnightPasserMoves = accessibility(
             "7k/8/8/3P4/8/5N2/8/K7 w - - 0 1");
         const int friendlyKnightOtherMoves = accessibility(
             "7k/8/8/3P4/8/5N2/8/K7 b - - 0 1");
         const int mirrored = accessibility(
-            "7k/8/8/8/2N1p3/8/8/K7 w - - 0 1");
+            "k7/8/8/8/8/8/3p1N2/7K w - - 0 1");
 
-        if (!(reachesEarly < borderlinePasserMoves &&
-              borderlineDefenderMoves < borderlinePasserMoves &&
-              bishopControlled > borderlineDefenderMoves &&
-              kingControlled > borderlineDefenderMoves &&
-              bishopControlled != 0 && kingControlled != 0 &&
+        if (!(timelySafe < 0 && severalOneSafe < 0 &&
+              allBishopControlled == 0 && allKingControlled == 0 &&
+              tooLate == 0 &&
               friendlyKnightPasserMoves == 7 &&
               friendlyKnightOtherMoves == friendlyKnightPasserMoves &&
-              mirrored == -reachesEarly))
+              mirrored == -timelySafe))
         {
-            std::cerr << "Passed-pawn minor accessibility failure: early=" << reachesEarly
-                      << ", defender_moves=" << borderlineDefenderMoves
-                      << ", passer_moves=" << borderlinePasserMoves
-                      << ", bishop_controlled=" << bishopControlled
-                      << ", king_controlled=" << kingControlled
+            std::cerr << "Passed-pawn minor accessibility failure: safe=" << timelySafe
+                      << ", several_one_safe=" << severalOneSafe
+                      << ", all_bishop_controlled=" << allBishopControlled
+                      << ", all_king_controlled=" << allKingControlled
+                      << ", too_late=" << tooLate
                       << ", friendly_passer_moves=" << friendlyKnightPasserMoves
                       << ", friendly_other_moves=" << friendlyKnightOtherMoves
                       << ", mirrored=" << mirrored << '\n';
             return 1;
         }
-        std::cout << "Scoped passed-pawn minor accessibility and symmetry verified\n";
+        std::cout << "Maintainable passed-pawn knight interception and symmetry verified\n";
         return 0;
     }
     if (testCase == "passed_pawn_table_symmetry")

@@ -249,6 +249,8 @@ int EvaluatePassedPawnMinorAccessibility(Board &board)
         }
 
         int bestValue = 0;
+        bool hasTimelyUsefulDestination = false;
+        bool hasMaintainableDestination = false;
         const int direction = passerIsWhite ? 8 : -8;
         int pawnMoves = 1;
         for (int square = pawnPlace + direction;
@@ -272,6 +274,10 @@ int EvaluatePassedPawnMinorAccessibility(Board &board)
 
             if (value > 0)
             {
+                hasTimelyUsefulDestination = true;
+                if (!controlledByPasserKingOrBishop(square, passerIsWhite))
+                    hasMaintainableDestination = true;
+
                 int memo[64];
                 std::fill(std::begin(memo), std::end(memo), -1);
                 std::function<int(int)> minimumControlledLandings = [&](int from) -> int
@@ -301,6 +307,8 @@ int EvaluatePassedPawnMinorAccessibility(Board &board)
             }
             bestValue = std::max(bestValue, value);
         }
+        if (hasTimelyUsefulDestination && !hasMaintainableDestination)
+            return 0;
         return bestValue;
     };
 
