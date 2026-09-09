@@ -50,7 +50,9 @@ struct CoordinateDescentResult
     double finalValLoss = 0.0;
     int parametersExamined = 0;
     int parametersChanged = 0;
+    int sweeps = 0;
     int optimizerSteps = 0;
+    std::string terminationReason;
     std::string outputFile = "tuner/tuned_parameters.tsv";
     double totalRuntimeSeconds = 0.0;
     int maxWorkerThreads = 8;
@@ -415,57 +417,72 @@ public:
         for (std::size_t p = 0; p < registry.Size(); ++p)
         {
             const auto& param = registry[p];
-            if (!IsFamilyTunable(param.family, tunableFamilies)) continue;
+            if (IsFamilyTunable(param.family, tunableFamilies) &&
+                GetFamilyDelta(param.family) > 0)
+                result.parametersExamined++;
+        }
 
-            const int delta = GetFamilyDelta(param.family);
-            if (delta <= 0) continue;
-            result.parametersExamined++;
-
-            int* targetPtr = state.GetParameterPointer(param.family, param.semanticIndex);
-            if (!targetPtr) continue;
-
-            const int currentValue = *targetPtr;
-            const int candidates[5] = {
-                currentValue - 2 * delta, currentValue - delta, currentValue,
-                currentValue + delta, currentValue + 2 * delta
-            };
-            double candidateLosses[5];
-            for (int c = 0; c < 5; ++c)
+        bool sweepChanged = false;
+        do
+        {
+            sweepChanged = false;
+            result.sweeps++;
+            for (std::size_t p = 0; p < registry.Size(); ++p)
             {
-                *targetPtr = candidates[c];
-                state.Derive();
-                candidateLosses[c] = pool.Evaluate(state);
-                result.optimizerSteps++;
-            }
+                const auto& param = registry[p];
+                if (!IsFamilyTunable(param.family, tunableFamilies)) continue;
 
-            int bestIndex = 2;
-            double bestLoss = candidateLosses[2];
-            for (int c = 0; c < 5; ++c)
-            {
-                if (c == 2) continue;
-                if (candidateLosses[c] < bestLoss)
+                const int delta = GetFamilyDelta(param.family);
+                if (delta <= 0) continue;
+
+                int* targetPtr = state.GetParameterPointer(param.family, param.semanticIndex);
+                if (!targetPtr) continue;
+
+                const int currentValue = *targetPtr;
+                const int candidates[5] = {
+                    currentValue - 2 * delta, currentValue - delta, currentValue,
+                    currentValue + delta, currentValue + 2 * delta
+                };
+                double candidateLosses[5];
+                for (int c = 0; c < 5; ++c)
                 {
-                    bestLoss = candidateLosses[c];
-                    bestIndex = c;
+                    *targetPtr = candidates[c];
+                    state.Derive();
+                    candidateLosses[c] = pool.Evaluate(state);
+                    result.optimizerSteps++;
                 }
-                else if (candidateLosses[c] == bestLoss)
+
+                int bestIndex = 2;
+                double bestLoss = candidateLosses[2];
+                for (int c = 0; c < 5; ++c)
                 {
-                    const int candidateDistance = std::abs(candidates[c] - currentValue);
-                    const int bestDistance = std::abs(candidates[bestIndex] - currentValue);
-                    if (candidateDistance < bestDistance ||
-                        (candidateDistance == bestDistance &&
-                         (std::abs(candidates[c]) < std::abs(candidates[bestIndex]) ||
-                          (std::abs(candidates[c]) == std::abs(candidates[bestIndex]) &&
-                           candidates[c] < candidates[bestIndex]))))
+                    if (c == 2) continue;
+                    if (candidateLosses[c] < bestLoss)
                     {
+                        bestLoss = candidateLosses[c];
                         bestIndex = c;
                     }
+                    else if (candidateLosses[c] == bestLoss)
+                    {
+                        const int candidateDistance = std::abs(candidates[c] - currentValue);
+                        const int bestDistance = std::abs(candidates[bestIndex] - currentValue);
+                        if (candidateDistance < bestDistance ||
+                            (candidateDistance == bestDistance &&
+                             (std::abs(candidates[c]) < std::abs(candidates[bestIndex]) ||
+                              (std::abs(candidates[c]) == std::abs(candidates[bestIndex]) &&
+                               candidates[c] < candidates[bestIndex]))))
+                        {
+                            bestIndex = c;
+                        }
+                    }
                 }
-            }
 
-            *targetPtr = candidates[bestIndex];
-            state.Derive();
-        }
+                *targetPtr = candidates[bestIndex];
+                state.Derive();
+                sweepChanged = sweepChanged || (*targetPtr != currentValue);
+            }
+        } while (sweepChanged);
+        result.terminationReason = "converged: complete sweep with no parameter changes";
 
         result.totalRuntimeSeconds = std::chrono::duration<double>(
             std::chrono::high_resolution_clock::now() - startTime).count();

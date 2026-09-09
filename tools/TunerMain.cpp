@@ -66,7 +66,9 @@ int main(int argc, char* argv[])
               << "Baseline validation loss: " << result.baselineValLoss << '\n'
               << "Tuned training loss:      " << result.finalTrainLoss << '\n'
               << "Tuned validation loss:    " << result.finalValLoss << '\n'
+              << "Sweeps:                   " << result.sweeps << '\n'
               << "Optimizer steps:          " << result.optimizerSteps << '\n'
+              << "Termination reason:       " << result.terminationReason << '\n'
               << "Changed parameters:       " << result.parametersChanged << '\n';
 
     for (const auto& change : result.changedParameters)
