@@ -77,6 +77,10 @@ void Search::CheckLimits()
 
 namespace
 {
+    constexpr int FullSearchAlpha = -200000;
+    constexpr int FullSearchBeta = 200000;
+    constexpr int InitialAspirationDelta = 50;
+
     bool IsMateScore(int score)
     {
         return MateScore::IsMate(score);
@@ -90,7 +94,50 @@ namespace
             return SearchBound::Lower;
         return SearchBound::Exact;
     }
+
+    bool AdvanceAspirationWindow(int score, bool exactMate, bool& retryUsed,
+                                 int& alpha, int& beta)
+    {
+        if (exactMate || retryUsed || (score > alpha && score < beta))
+            return false;
+
+        const bool failLow = score <= alpha;
+        const bool failHigh = score >= beta;
+        if (!failLow && !failHigh)
+            return false;
+
+        if (failHigh)
+            alpha = beta;
+        else
+            beta = alpha;
+        if (failHigh)
+            beta = FullSearchBeta;
+        else
+            alpha = FullSearchAlpha;
+        retryUsed = true;
+        return true;
+    }
 }
+
+#if HOWL_CORRECTNESS_TESTING
+std::vector<std::pair<int, int>> Search::AspirationWindowsForTesting(
+    int previousScore, const std::vector<int>& searchScores)
+{
+    int alpha = std::max(FullSearchAlpha,
+                         previousScore - InitialAspirationDelta);
+    int beta = std::min(FullSearchBeta,
+                        previousScore + InitialAspirationDelta);
+    bool retryUsed = false;
+    std::vector<std::pair<int, int>> windows;
+    for (int score : searchScores)
+    {
+        windows.emplace_back(alpha, beta);
+        if (!AdvanceAspirationWindow(score, false, retryUsed, alpha, beta))
+            break;
+    }
+    return windows;
+}
+#endif
 
 void Search::PrintBestMove()
 {
@@ -320,17 +367,16 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             completedPonderMove = ponderMove;
         };
 
-        int alphaDelta = 50;
-        int betaDelta = 50;
-        constexpr int maxAspirationDelta = 400000;
         int aspAlpha = -200000;
         int aspBeta = +200000;
         if (Option::MultiPV <= 1 && prevCompletedScore > -159800 && prevCompletedScore < 159800)
         {
-            aspAlpha = std::max(-200000, prevCompletedScore - alphaDelta);
-            aspBeta = std::min(200000, prevCompletedScore + betaDelta);
+            aspAlpha = std::max(-200000,
+                                prevCompletedScore - InitialAspirationDelta);
+            aspBeta = std::min(200000,
+                               prevCompletedScore + InitialAspirationDelta);
         }
-
+        bool aspirationRetryUsed = false;
         bool iterationCompleted = false;
 
         while (active.load(std::memory_order_relaxed))
@@ -881,45 +927,12 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
 
             if (Option::MultiPV <= 1 && !iterationMateExact)
             {
-                if (iterScore <= aspAlpha)
+                if (AdvanceAspirationWindow(iterScore, false,
+                                            aspirationRetryUsed,
+                                            aspAlpha, aspBeta))
                 {
-                    if (aspAlpha > -200000)
-                    {
-                        deleteMovesPrintValue(movesPrintValue);
-                        if (IsMateScore(iterScore))
-                        {
-                            aspAlpha = -200000;
-                        }
-                        else
-                        {
-                            alphaDelta = alphaDelta <= maxAspirationDelta / 2
-                                ? alphaDelta * 2
-                                : maxAspirationDelta;
-                            aspAlpha = std::max(-200000, prevCompletedScore - alphaDelta);
-                            if (aspAlpha <= -159800) aspAlpha = -200000;
-                        }
-                        continue;
-                    }
-                }
-                else if (iterScore >= aspBeta)
-                {
-                    if (aspBeta < 200000)
-                    {
-                        deleteMovesPrintValue(movesPrintValue);
-                        if (IsMateScore(iterScore))
-                        {
-                            aspBeta = 200000;
-                        }
-                        else
-                        {
-                            betaDelta = betaDelta <= maxAspirationDelta / 2
-                                ? betaDelta * 2
-                                : maxAspirationDelta;
-                            aspBeta = std::min(200000, prevCompletedScore + betaDelta);
-                            if (aspBeta >= 159800) aspBeta = 200000;
-                        }
-                        continue;
-                    }
+                    deleteMovesPrintValue(movesPrintValue);
+                    continue;
                 }
             }
 

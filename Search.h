@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <utility>
 #include <ctime>
 #include <chrono>
 #include <atomic>
@@ -45,6 +46,10 @@ public:
     static std::string Parse(std::string p, int place);
     static int PrintKBest(std::vector<MovePrintValue*>& movesPrintValue, int KBest, bool finiteSearch);
     static void PrintBestMove();
+#if HOWL_CORRECTNESS_TESTING
+    static std::vector<std::pair<int, int>> AspirationWindowsForTesting(
+        int previousScore, const std::vector<int>& searchScores);
+#endif
     
 private:
     static void deleteMoveList(std::vector<Move*>* moveList);
