@@ -575,6 +575,7 @@ inline KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
     const int escalatedDanger = rawDanger + rawDanger * rawDanger / 180;
     KingDangerResult result{std::min(escalatedDanger, 450), attackerParticipation,
             defenderParticipation, escapeDanger, filePressure,
+            diagonalPressure, shelterDanger, attackingMaterialScale};
     return result;
 }
 
