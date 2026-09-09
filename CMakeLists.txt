@@ -5,6 +5,14 @@ file(GLOB SOURCES "*.cpp")
 list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/tools_scratch_test_node_counts.cpp")
 add_executable(howl ${SOURCES})
 
+set(TUNER_ENGINE_SOURCES ${SOURCES})
+list(REMOVE_ITEM TUNER_ENGINE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
+add_executable(howl_tuner
+    tools/TunerMain.cpp
+    ${TUNER_ENGINE_SOURCES}
+)
+target_include_directories(howl_tuner PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+
 include(CTest)
 
 if(BUILD_TESTING)
@@ -37,6 +45,19 @@ if(BUILD_TESTING)
         HOWL_MEMORY_STRESS_RELEASE=$<IF:$<CONFIG:Release>,1,0>
         HOWL_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     )
+
+    add_executable(howl_tuner_tests
+        tests/TunerTests.cpp
+        ${TEST_ENGINE_SOURCES}
+    )
+    target_include_directories(howl_tuner_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    foreach(TUNER_CASE piece_value_only other_family_freezes_piece_value refine1_unchanged)
+        add_test(
+            NAME tuner_${TUNER_CASE}
+            COMMAND howl_tuner_tests ${TUNER_CASE}
+        )
+    endforeach()
 
     add_executable(howl_eval_breakdown
         tools/EvalBreakdown.cpp

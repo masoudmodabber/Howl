@@ -50,6 +50,7 @@ struct CoordinateDescentResult
     double finalValLoss = 0.0;
     int parametersExamined = 0;
     int parametersChanged = 0;
+    int optimizerSteps = 0;
     std::string outputFile = "tuner/tuned_parameters.tsv";
     double totalRuntimeSeconds = 0.0;
     int maxWorkerThreads = 8;
@@ -186,6 +187,25 @@ private:
 class TunerCoordinateDescent
 {
 public:
+    static bool IsFamilyTunable(ParameterFamily family,
+                                const std::vector<ParameterFamily>& tunableFamilies)
+    {
+        return std::find(tunableFamilies.begin(), tunableFamilies.end(), family) !=
+               tunableFamilies.end();
+    }
+
+    static const std::vector<ParameterFamily>& Refine1Families()
+    {
+        static const std::vector<ParameterFamily> families = {
+            ParameterFamily::PawnStructure,
+            ParameterFamily::PassedPawn,
+            ParameterFamily::PieceSquare,
+            ParameterFamily::CenterPresence,
+            ParameterFamily::KingSafety
+        };
+        return families;
+    }
+
     static bool LoadDataset(const std::string& filepath, std::vector<TunerPosition>& positions)
     {
         std::ifstream file(filepath);
@@ -343,6 +363,155 @@ public:
         }
     }
 
+    static bool FamilyFromString(const std::string& name, ParameterFamily& family)
+    {
+        const ParameterFamily families[] = {
+            ParameterFamily::PieceValue, ParameterFamily::PawnStructure,
+            ParameterFamily::PassedPawn, ParameterFamily::PieceSquare,
+            ParameterFamily::CenterPresence, ParameterFamily::CenterMove,
+            ParameterFamily::KingSafety, ParameterFamily::Mobility,
+            ParameterFamily::Attack, ParameterFamily::Inline,
+            ParameterFamily::RookFile, ParameterFamily::KnightOutpost,
+            ParameterFamily::IsolatedPawn, ParameterFamily::RookBehindPassedPawn
+        };
+        for (ParameterFamily candidate : families)
+        {
+            if (name == FamilyToString(candidate))
+            {
+                family = candidate;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static CoordinateDescentResult Tune(const std::vector<TunerPosition>& trainPositions,
+                                        const std::vector<TunerPosition>& valPositions,
+                                        TunerEvaluationState& state,
+                                        const TunerRegistry& registry,
+                                        const std::vector<ParameterFamily>& tunableFamilies,
+                                        double scale = 554.17,
+                                        int numThreads = 8)
+    {
+        CoordinateDescentResult result;
+        result.maxWorkerThreads = numThreads;
+        if (trainPositions.empty() || valPositions.empty() || tunableFamilies.empty())
+        {
+            return result;
+        }
+
+        std::vector<int> initialValues(registry.Size(), 0);
+        for (std::size_t i = 0; i < registry.Size(); ++i)
+        {
+            const int* ptr = state.GetParameterPointer(registry[i].family, registry[i].semanticIndex);
+            initialValues[i] = ptr ? *ptr : registry[i].currentValue;
+        }
+
+        result.baselineTrainLoss = ComputeLoss(trainPositions, state, scale, numThreads);
+        result.baselineValLoss = ComputeLoss(valPositions, state, scale, numThreads);
+        TunerThreadPoolEvaluator pool(trainPositions, scale, numThreads);
+        auto startTime = std::chrono::high_resolution_clock::now();
+
+        for (std::size_t p = 0; p < registry.Size(); ++p)
+        {
+            const auto& param = registry[p];
+            if (!IsFamilyTunable(param.family, tunableFamilies)) continue;
+
+            const int delta = GetFamilyDelta(param.family);
+            if (delta <= 0) continue;
+            result.parametersExamined++;
+
+            int* targetPtr = state.GetParameterPointer(param.family, param.semanticIndex);
+            if (!targetPtr) continue;
+
+            const int currentValue = *targetPtr;
+            const int candidates[5] = {
+                currentValue - 2 * delta, currentValue - delta, currentValue,
+                currentValue + delta, currentValue + 2 * delta
+            };
+            double candidateLosses[5];
+            for (int c = 0; c < 5; ++c)
+            {
+                *targetPtr = candidates[c];
+                state.Derive();
+                candidateLosses[c] = pool.Evaluate(state);
+                result.optimizerSteps++;
+            }
+
+            int bestIndex = 2;
+            double bestLoss = candidateLosses[2];
+            for (int c = 0; c < 5; ++c)
+            {
+                if (c == 2) continue;
+                if (candidateLosses[c] < bestLoss)
+                {
+                    bestLoss = candidateLosses[c];
+                    bestIndex = c;
+                }
+                else if (candidateLosses[c] == bestLoss)
+                {
+                    const int candidateDistance = std::abs(candidates[c] - currentValue);
+                    const int bestDistance = std::abs(candidates[bestIndex] - currentValue);
+                    if (candidateDistance < bestDistance ||
+                        (candidateDistance == bestDistance &&
+                         (std::abs(candidates[c]) < std::abs(candidates[bestIndex]) ||
+                          (std::abs(candidates[c]) == std::abs(candidates[bestIndex]) &&
+                           candidates[c] < candidates[bestIndex]))))
+                    {
+                        bestIndex = c;
+                    }
+                }
+            }
+
+            *targetPtr = candidates[bestIndex];
+            state.Derive();
+        }
+
+        result.totalRuntimeSeconds = std::chrono::duration<double>(
+            std::chrono::high_resolution_clock::now() - startTime).count();
+        result.finalTrainLoss = ComputeLoss(trainPositions, state, scale, numThreads);
+        result.finalValLoss = ComputeLoss(valPositions, state, scale, numThreads);
+
+        for (std::size_t i = 0; i < registry.Size(); ++i)
+        {
+            const int* ptr = state.GetParameterPointer(registry[i].family, registry[i].semanticIndex);
+            const int finalValue = ptr ? *ptr : initialValues[i];
+            if (finalValue != initialValues[i])
+            {
+                result.changedParameters.push_back({registry[i].name, registry[i].family,
+                    registry[i].semanticIndex, initialValues[i], finalValue,
+                    finalValue - initialValues[i]});
+                result.countChangedByFamily[FamilyToString(registry[i].family)]++;
+            }
+        }
+        result.parametersChanged = static_cast<int>(result.changedParameters.size());
+        return result;
+    }
+
+    static CoordinateDescentResult RunFamilies(
+        const std::string& trainPath,
+        const std::string& valPath,
+        const std::vector<ParameterFamily>& tunableFamilies,
+        double scale = 554.17,
+        int numThreads = 8)
+    {
+        CoordinateDescentResult result;
+        std::vector<TunerPosition> trainPositions;
+        std::vector<TunerPosition> valPositions;
+        if (!LoadDataset(trainPath, trainPositions) || trainPositions.empty() ||
+            !LoadDataset(valPath, valPositions) || valPositions.empty())
+        {
+            std::cerr << "Failed to load tuner datasets.\n";
+            return result;
+        }
+
+        Option::Initialize();
+        TunerRegistry registry = TunerRegistry::CreateRegistry();
+        TunerEvaluationState state;
+        state.LoadFromRegistry(registry);
+        return Tune(trainPositions, valPositions, state, registry, tunableFamilies, scale, numThreads);
+    }
+
     static CoordinateDescentResult RunRefine1(const std::string& trainPath = "tuner-train.tsv",
                                              const std::string& valPath = "tuner-validation.tsv",
                                              const std::string& pass3InputPath = "tuner/tuned_parameters_pass3.tsv",
@@ -452,7 +621,8 @@ public:
         {
             const auto& param = registry[p];
 
-            int delta = GetFamilyDeltaRefine1(param.family);
+            int delta = IsFamilyTunable(param.family, Refine1Families())
+                ? GetFamilyDeltaRefine1(param.family) : 0;
             if (delta <= 0)
             {
                 // Frozen families: PieceValue, CenterMove, Mobility, Attack, Inline
