@@ -5,6 +5,7 @@
 #include "PassedPawnSetup.h"
 #include "PieceMoves.h"
 #include "tuner/TunerCoordinateDescent.h"
+#include "tuner/TunerEvaluationVerifier.h"
 
 #include <iostream>
 #include <memory>
@@ -100,6 +101,20 @@ int TestRefine1SelectionUnchanged()
     }
     return selected == 1345 ? 0 : 1;
 }
+
+int TestParityRegression()
+{
+    constexpr const char* fen =
+        "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8";
+    Tuner::TunerRegistry registry = Tuner::TunerRegistry::CreateRegistry();
+    Tuner::TunerEvaluationState state;
+    state.LoadFromRegistry(registry);
+    std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+    if (!board) return 1;
+    const int productionScore = EvaluationLogic::Evaluate(*board);
+    const int tunerScore = Tuner::TunerEvaluator::Evaluate(*board, state);
+    return productionScore == -224 && tunerScore == productionScore ? 0 : 1;
+}
 }
 
 int main(int argc, char* argv[])
@@ -111,6 +126,7 @@ int main(int argc, char* argv[])
     if (test == "piece_value_only") result = TestPieceValueSelection();
     else if (test == "other_family_freezes_piece_value") result = TestOtherFamilyFreezesPieceValue();
     else if (test == "refine1_unchanged") result = TestRefine1SelectionUnchanged();
+    else if (test == "parity_regression") result = TestParityRegression();
     CleanupEngine();
     if (result != 0) std::cerr << "Tuner test failed: " << test << '\n';
     return result;

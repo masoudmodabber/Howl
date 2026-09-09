@@ -10,6 +10,7 @@
 #include "tuner/TunerEvaluationState.h"
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <vector>
 #include <utility>
 
@@ -689,30 +690,106 @@ inline int EvaluatePassedPawnMinorAccessibility(Board &board)
 
     static const int rankScalePercent[8] = {0, 0, 0, 25, 50, 75, 100, 100};
 
-    auto knightCorridorValue = [&](int knightSq, int pawnPlace, bool isWhite) -> int
+    auto controlledByPasserKingOrBishop = [&](int square, bool passerIsWhite) -> bool
     {
-        int minDist = 99;
-        if (isWhite)
+        const int sideOffset = passerIsWhite ? 0 : 8;
+        const int kingSquare = board.pieces[sideOffset + 6].front();
+        if ((AttackPlaces::KingAttackPlaces[kingSquare] & Option::PowerTwo[square]) != 0)
+            return true;
+
+        const long long occupiedWithTarget =
+            (board.whitePieces | board.blackPieces) | Option::PowerTwo[square];
+        for (int bishopSquare : board.pieces[sideOffset + 3])
         {
-            for (int sq = pawnPlace + 8; sq < 64; sq += 8)
-            {
-                int d = KnightDistance[knightSq][sq];
-                if (d < minDist) minDist = d;
-            }
+            if ((AttackPlaces::BishopAttack[bishopSquare][square] & occupiedWithTarget) ==
+                Option::PowerTwo[square])
+                return true;
         }
-        else
+        return false;
+    };
+
+    auto knightCorridorValue = [&](int knightSq, bool knightIsWhite,
+                                   int pawnPlace, bool passerIsWhite) -> int
+    {
+        if (knightIsWhite == passerIsWhite)
         {
-            for (int sq = pawnPlace - 8; sq >= 0; sq -= 8)
+            int minDist = 99;
+            const int direction = passerIsWhite ? 8 : -8;
+            for (int square = pawnPlace + direction;
+                 square >= 0 && square < 64;
+                 square += direction)
             {
-                int d = KnightDistance[knightSq][sq];
-                if (d < minDist) minDist = d;
+                minDist = std::min(minDist, KnightDistance[knightSq][square]);
             }
+            if (minDist == 0) return 20;
+            if (minDist == 1) return 0;
+            if (minDist == 2) return 10;
+            if (minDist == 3) return 5;
+            return 0;
         }
-        if (minDist == 0) return 20;
-        if (minDist == 1) return 0;
-        if (minDist == 2) return 10;
-        if (minDist == 3) return 5;
-        return 0;
+
+        int bestValue = 0;
+        bool hasTimelyUsefulDestination = false;
+        bool hasMaintainableDestination = false;
+        const int direction = passerIsWhite ? 8 : -8;
+        int pawnMoves = 1;
+        for (int square = pawnPlace + direction;
+             square >= 0 && square < 64;
+             square += direction, pawnMoves++)
+        {
+            const int distance = KnightDistance[knightSq][square];
+            const int knightArrivalPly = 2 * distance -
+                ((board.sideToMove == !knightIsWhite) ? 1 : 0);
+            const int pawnArrivalPly = 2 * pawnMoves -
+                ((board.sideToMove == !passerIsWhite) ? 1 : 0);
+
+            int value = 0;
+            if (distance == 0) value = 20;
+            else if (distance == 1) value = 15;
+            else if (distance == 2) value = 10;
+            else if (distance == 3) value = 5;
+
+            if (knightArrivalPly > pawnArrivalPly)
+                value = 0;
+
+            if (value > 0)
+            {
+                hasTimelyUsefulDestination = true;
+                if (!controlledByPasserKingOrBishop(square, passerIsWhite))
+                    hasMaintainableDestination = true;
+
+                int memo[64];
+                std::fill(std::begin(memo), std::end(memo), -1);
+                std::function<int(int)> minimumControlledLandings = [&](int from) -> int
+                {
+                    if (from == square)
+                        return 0;
+                    int &cached = memo[from];
+                    if (cached >= 0)
+                        return cached;
+                    cached = 64;
+                    const int remainingDistance = KnightDistance[from][square];
+                    const long long hops = AttackPlaces::KnightAttackPlaces[from];
+                    for (int hop = 0; hop < 64; hop++)
+                    {
+                        if ((hops & Option::PowerTwo[hop]) == 0 ||
+                            KnightDistance[hop][square] != remainingDistance - 1)
+                            continue;
+                        const int controlledLanding =
+                            controlledByPasserKingOrBishop(hop, passerIsWhite) ? 1 : 0;
+                        cached = std::min(cached,
+                            controlledLanding + minimumControlledLandings(hop));
+                    }
+                    return cached;
+                };
+                const int controlledLandings = minimumControlledLandings(knightSq);
+                value = value * std::max(1, 4 - controlledLandings) / 4;
+            }
+            bestValue = std::max(bestValue, value);
+        }
+        if (hasTimelyUsefulDestination && !hasMaintainableDestination)
+            return 0;
+        return bestValue;
     };
 
     int whiteNet = 0;
@@ -723,11 +800,11 @@ inline int EvaluatePassedPawnMinorAccessibility(Board &board)
             int accessibility = 0;
             for (int kSq : board.pieces[2])
             {
-                accessibility += knightCorridorValue(kSq, pawnPlace, true);
+                accessibility += knightCorridorValue(kSq, true, pawnPlace, true);
             }
             for (int kSq : board.pieces[10])
             {
-                accessibility -= knightCorridorValue(kSq, pawnPlace, true);
+                accessibility -= knightCorridorValue(kSq, false, pawnPlace, true);
             }
 
             int relRank = (pawnPlace / 8) + 1;
@@ -743,11 +820,11 @@ inline int EvaluatePassedPawnMinorAccessibility(Board &board)
             int accessibility = 0;
             for (int kSq : board.pieces[10])
             {
-                accessibility += knightCorridorValue(kSq, pawnPlace, false);
+                accessibility += knightCorridorValue(kSq, false, pawnPlace, false);
             }
             for (int kSq : board.pieces[2])
             {
-                accessibility -= knightCorridorValue(kSq, pawnPlace, false);
+                accessibility -= knightCorridorValue(kSq, true, pawnPlace, false);
             }
 
             int relRank = 8 - (pawnPlace / 8);
