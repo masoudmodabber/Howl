@@ -47,23 +47,41 @@ std::vector<Tuner::TunerPosition> Dataset(const std::string& fen, double result)
 
 Tuner::CoordinateDescentResult TuneOnePosition(const std::string& fen,
                                                 Tuner::ParameterFamily family,
-                                                Tuner::TunerEvaluationState& state)
+                                                Tuner::TunerEvaluationState& state,
+                                                double result)
 {
     Tuner::TunerRegistry registry = Tuner::TunerRegistry::CreateRegistry();
     state.LoadFromRegistry(registry);
-    auto train = Dataset(fen, 1.0);
-    auto validation = Dataset(fen, 1.0);
+    auto train = Dataset(fen, result);
+    auto validation = Dataset(fen, result);
     return Tuner::TunerCoordinateDescent::Tune(
         train, validation, state, registry, {family}, 554.17, 1);
+}
+
+double ExpectedForState(const std::string& fen, const Tuner::TunerEvaluationState& state)
+{
+    std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+    if (!board) throw std::runtime_error("Could not create tuner test board");
+    const int score = Tuner::TunerEvaluator::Evaluate(*board, state);
+    return Tuner::TunerLossEvaluator::CentipawnsToExpectedWhiteScore(score, 554.17);
 }
 
 int TestPieceValueSelection()
 {
     Tuner::TunerEvaluationState state;
+    Tuner::TunerRegistry registry = Tuner::TunerRegistry::CreateRegistry();
+    state.LoadFromRegistry(registry);
+    Tuner::TunerEvaluationState target = state;
+    target.QueenValue += 25;
+    target.Derive();
+    constexpr const char* fen = "7k/8/8/8/8/8/Q7/K7 w - - 0 1";
+    const double targetResult = ExpectedForState(fen, target);
     const auto result = TuneOnePosition(
-        "7k/8/8/8/8/8/Q7/K7 w - - 0 1", Tuner::ParameterFamily::PieceValue, state);
-    if (result.parametersExamined != 5 || result.optimizerSteps != 25 ||
-        result.changedParameters.empty())
+        fen, Tuner::ParameterFamily::PieceValue, state, targetResult);
+    if (result.parametersExamined != 5 || result.sweeps < 3 ||
+        result.optimizerSteps != result.sweeps * 25 ||
+        std::abs(state.QueenValue - Option::QueenValue) <= 10 ||
+        result.terminationReason.empty())
         return 1;
     for (const auto& change : result.changedParameters)
         if (change.family != Tuner::ParameterFamily::PieceValue) return 1;
@@ -73,15 +91,34 @@ int TestPieceValueSelection()
 int TestOtherFamilyFreezesPieceValue()
 {
     Tuner::TunerEvaluationState state;
+    Tuner::TunerRegistry registry = Tuner::TunerRegistry::CreateRegistry();
+    state.LoadFromRegistry(registry);
+    Tuner::TunerEvaluationState target = state;
+    target.DoubledPawnValue += 6;
+    target.Derive();
+    constexpr const char* fen = "7k/8/8/8/8/P7/P7/K7 w - - 0 1";
     const auto result = TuneOnePosition(
-        "7k/8/8/8/8/P7/P7/K7 w - - 0 1", Tuner::ParameterFamily::PawnStructure, state);
+        fen, Tuner::ParameterFamily::PawnStructure, state, ExpectedForState(fen, target));
     if (state.PawnValue != Option::PawnValue || state.KnightValue != Option::KnightValue ||
         state.BishopValue != Option::BishopValue || state.RookValue != Option::RookValue ||
         state.QueenValue != Option::QueenValue)
         return 1;
     for (const auto& change : result.changedParameters)
         if (change.family == Tuner::ParameterFamily::PieceValue) return 1;
-    return result.parametersExamined == 1 && result.optimizerSteps == 5 ? 0 : 1;
+    return result.parametersExamined == 1 && !result.changedParameters.empty() &&
+        result.optimizerSteps == result.sweeps * 5 ? 0 : 1;
+}
+
+int TestStopsAfterUnchangedSweep()
+{
+    Tuner::TunerEvaluationState state;
+    Tuner::TunerRegistry registry = Tuner::TunerRegistry::CreateRegistry();
+    state.LoadFromRegistry(registry);
+    constexpr const char* fen = "7k/8/8/8/8/8/8/K7 w - - 0 1";
+    const auto result = TuneOnePosition(
+        fen, Tuner::ParameterFamily::PieceValue, state, ExpectedForState(fen, state));
+    return result.sweeps == 1 && result.optimizerSteps == 25 &&
+        result.parametersChanged == 0 && !result.terminationReason.empty() ? 0 : 1;
 }
 
 int TestRefine1SelectionUnchanged()
@@ -127,6 +164,7 @@ int main(int argc, char* argv[])
     else if (test == "other_family_freezes_piece_value") result = TestOtherFamilyFreezesPieceValue();
     else if (test == "refine1_unchanged") result = TestRefine1SelectionUnchanged();
     else if (test == "parity_regression") result = TestParityRegression();
+    else if (test == "stops_after_unchanged_sweep") result = TestStopsAfterUnchangedSweep();
     CleanupEngine();
     if (result != 0) std::cerr << "Tuner test failed: " << test << '\n';
     return result;

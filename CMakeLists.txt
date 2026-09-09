@@ -52,7 +52,7 @@ if(BUILD_TESTING)
     )
     target_include_directories(howl_tuner_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
-    foreach(TUNER_CASE piece_value_only other_family_freezes_piece_value refine1_unchanged parity_regression)
+    foreach(TUNER_CASE piece_value_only other_family_freezes_piece_value refine1_unchanged parity_regression stops_after_unchanged_sweep)
         add_test(
             NAME tuner_${TUNER_CASE}
             COMMAND howl_tuner_tests ${TUNER_CASE}
