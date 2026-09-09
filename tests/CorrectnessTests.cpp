@@ -1895,6 +1895,38 @@ int RunSearch(const std::string& testCase)
         std::cout << "Single-PV iteration reporting matches bestMove (" << Search::completedBestMove << ")\n";
         return 0;
     }
+    if (testCase == "aspiration_policy")
+    {
+        using Window = std::pair<int, int>;
+        const Window initial{-50, 50};
+        const Window highRetry{50, 200000};
+        const Window lowRetry{-200000, -50};
+
+        const auto success = Search::AspirationWindowsForTesting(0, {10});
+        const auto failHigh =
+            Search::AspirationWindowsForTesting(0, {50, 100});
+        const auto failLow =
+            Search::AspirationWindowsForTesting(0, {-50, -100});
+        const auto persistentHigh =
+            Search::AspirationWindowsForTesting(0, {50, 200000, 200000});
+        const auto persistentLow =
+            Search::AspirationWindowsForTesting(0, {-50, -200000, -200000});
+
+        if (success != std::vector<Window>{initial} ||
+            failHigh != std::vector<Window>{initial, highRetry} ||
+            failLow != std::vector<Window>{initial, lowRetry} ||
+            persistentHigh != std::vector<Window>{initial, highRetry} ||
+            persistentLow != std::vector<Window>{initial, lowRetry} ||
+            failHigh.size() > 2 || failLow.size() > 2 ||
+            persistentHigh.size() > 2 || persistentLow.size() > 2)
+        {
+            std::cerr << "Aspiration policy pass/window sequence failure\n";
+            return 1;
+        }
+
+        std::cout << "Aspiration success and one directional retry verified\n";
+        return 0;
+    }
 
     throw std::runtime_error("Unknown search test case: " + testCase);
 }
@@ -3421,6 +3453,52 @@ int RunEvaluationCorrectness(const std::string& testCase)
             return 1;
         }
         std::cout << "King danger sign verified (attacking=" << evalAttack << " > far=" << evalFar << ")\n";
+        return 0;
+    }
+    if (testCase == "passed_pawn_minor_accessibility")
+    {
+        auto accessibility = [](const char *fen) {
+            std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+            return EvaluationLogic::PassedPawnMinorAccessibilityValueForTesting(*board);
+        };
+
+        const int reachesEarly = accessibility(
+            "7k/8/8/3P1n2/8/8/8/K7 b - - 0 1");
+        const int borderlineDefenderMoves = accessibility(
+            "7k/3P1n2/8/8/8/8/8/K7 b - - 0 1");
+        const int borderlinePasserMoves = accessibility(
+            "7k/3P1n2/8/8/8/8/8/K7 w - - 0 1");
+        const int bishopControlled = accessibility(
+            "7k/3PBn2/8/8/8/8/8/K7 b - - 0 1");
+        const int kingControlled = accessibility(
+            "7k/3PKn2/8/8/8/8/8/8 b - - 0 1");
+        const int friendlyKnightPasserMoves = accessibility(
+            "7k/8/8/3P4/8/5N2/8/K7 w - - 0 1");
+        const int friendlyKnightOtherMoves = accessibility(
+            "7k/8/8/3P4/8/5N2/8/K7 b - - 0 1");
+        const int mirrored = accessibility(
+            "7k/8/8/8/2N1p3/8/8/K7 w - - 0 1");
+
+        if (!(reachesEarly < borderlinePasserMoves &&
+              borderlineDefenderMoves < borderlinePasserMoves &&
+              bishopControlled > borderlineDefenderMoves &&
+              kingControlled > borderlineDefenderMoves &&
+              bishopControlled != 0 && kingControlled != 0 &&
+              friendlyKnightPasserMoves == 7 &&
+              friendlyKnightOtherMoves == friendlyKnightPasserMoves &&
+              mirrored == -reachesEarly))
+        {
+            std::cerr << "Passed-pawn minor accessibility failure: early=" << reachesEarly
+                      << ", defender_moves=" << borderlineDefenderMoves
+                      << ", passer_moves=" << borderlinePasserMoves
+                      << ", bishop_controlled=" << bishopControlled
+                      << ", king_controlled=" << kingControlled
+                      << ", friendly_passer_moves=" << friendlyKnightPasserMoves
+                      << ", friendly_other_moves=" << friendlyKnightOtherMoves
+                      << ", mirrored=" << mirrored << '\n';
+            return 1;
+        }
+        std::cout << "Scoped passed-pawn minor accessibility and symmetry verified\n";
         return 0;
     }
     if (testCase == "passed_pawn_table_symmetry")

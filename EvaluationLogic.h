@@ -70,7 +70,6 @@ struct EvaluationBreakdown
 class EvaluationLogic
 {
 public:
-
     static int CalculatePhase(const Board& thisBoard);
     static int Evaluate(Board& thisBoard);
     static EvaluationBreakdown EvaluateDetailed(Board& thisBoard);
@@ -96,6 +95,7 @@ public:
     static int TaperGroup3ValueForTesting(int middleGameValue,
                                           int endGameValue, int phase);
     static int KnightOutpostValueForTesting(Board& board, int phase);
+    static int PassedPawnMinorAccessibilityValueForTesting(Board& board);
     static int IsolatedPawnValueForTesting(Board& board, int phase);
     static int RookBehindPassedPawnValueForTesting(Board& board, int phase);
     static int UndefendedKingZoneDangerForTesting(Board& board, bool whiteKing);
