@@ -154,6 +154,21 @@ namespace
         return SearchBound::Exact;
     }
 
+    bool NullMoveMaterialEligible(const Board &board, int turn)
+    {
+        const int minorPieceCount =
+            static_cast<int>(board.pieces[turn * 8 + 2].size() +
+                             board.pieces[turn * 8 + 3].size());
+        const bool sparseMinorOnlyMaterial =
+            board.pieces[turn * 8 + 5].size() == 0 &&
+            board.pieces[turn * 8 + 4].size() == 0 &&
+            minorPieceCount <= 1;
+        const bool hasNonPawn = minorPieceCount > 0 ||
+            board.pieces[turn * 8 + 4].size() > 0 ||
+            board.pieces[turn * 8 + 5].size() > 0;
+        return hasNonPawn && !sparseMinorOnlyMaterial;
+    }
+
 }
 
 void PVSSearch::ResetHistory()
@@ -171,6 +186,13 @@ void PVSSearch::ResetKillers()
         killers[i][1] = KillerMove{};
     }
 }
+
+#if HOWL_CORRECTNESS_TESTING
+bool PVSSearch::NullMoveMaterialEligibleForTesting(const Board &board)
+{
+    return NullMoveMaterialEligible(board, board.sideToMove ? 1 : 0);
+}
+#endif
 
 void PVSSearch::RecordKiller(int ply, const Move &move)
 {
@@ -885,8 +907,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             for (int piece = 2; piece <= 5; ++piece)
                 totalNonPawnMaterialCount += static_cast<int>(board4.pieces[sideOffset + piece].size());
         }
-        bool hasNonPawn = nonPawnMaterialCount > 0;
-        if (hasNonPawn)
+        if (NullMoveMaterialEligible(board4, turn))
         {
             int staticEval = EvaluationLogic::Evaluate(board4);
             if (staticEval >= beta)

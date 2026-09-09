@@ -38,6 +38,7 @@ public:
     static void RecordKiller(int ply, const Move& move);
 
 #if HOWL_CORRECTNESS_TESTING
+    static bool NullMoveMaterialEligibleForTesting(const Board& board);
     static constexpr bool ProductionIGGEnabledForTesting()
     {
         return ProductionIGGEnabled;
