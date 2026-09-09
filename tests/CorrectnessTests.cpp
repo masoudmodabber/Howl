@@ -1653,6 +1653,18 @@ int RunSearch(const std::string& testCase)
         std::cout << "NMP tactical mate integrity verified (score=" << res->value << ")\n";
         return 0;
     }
+    if (testCase == "nmp_sparse_minor_endgame_guard")
+    {
+        std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard(
+            "8/8/8/N3kb2/1P5p/5P2/P7/K7 w - - 0 43"));
+        if (PVSSearch::NullMoveMaterialEligibleForTesting(*b))
+        {
+            std::cerr << "Sparse minor endgame NMP guard failed: material remained eligible\n";
+            return 1;
+        }
+        std::cout << "Sparse minor endgame NMP false-cutoff regression passed\n";
+        return 0;
+    }
     if (testCase == "futility_pruning_quiet_move_skip")
     {
         // Quiet middlegame test position
