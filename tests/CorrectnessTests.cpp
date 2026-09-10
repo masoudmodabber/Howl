@@ -3816,9 +3816,9 @@ int RunEvaluationCorrectness(const std::string& testCase)
             {"pawn attacks queen", Option::PawnAttackValueMiddleGame[5],
                 Option::PawnAttackValueEndGame[5], 86, 86, 96, 118, 118},
             {"knight mobility", Option::KnightMoveCountValueMiddleGame[5],
-                Option::KnightMoveCountValueEndGame[5], 25, 25, 22, 17, 17},
+                Option::KnightMoveCountValueEndGame[5], 24, 24, 21, 17, 17},
             {"bishop mobility", Option::BishopMoveCountValueMiddleGame[7],
-                Option::BishopMoveCountValueEndGame[7], 6, 6, 6, 8, 8}
+                Option::BishopMoveCountValueEndGame[7], 6, 6, 7, 9, 9}
         };
 
         for (const auto& tc : g1Cases)

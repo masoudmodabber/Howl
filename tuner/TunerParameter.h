@@ -17,7 +17,10 @@ enum class ParameterFamily
     CenterPresence,
     CenterMove,
     KingSafety,
-    Mobility,
+    KnightMobility,
+    BishopMobility,
+    RookMobility,
+    QueenMobility,
     Attack,
     Inline,
     RookFile,
@@ -150,40 +153,38 @@ public:
                          Option::WhiteKingPlaceSafetyMiddleGame[sq]);
         }
 
-        // 8. Mobility (156 parameters: MG & EG for P(3), N(9), B(14), R(15), Q(28), K(9))
-        struct MobilityBinding
+        // 8. Mobility v2 (38 structural parameters: base anchor plus non-negative increments)
+        const auto addMobilityGroup = [&registry](ParameterFamily family,
+                                                   const char* piece,
+                                                   const int* mgParameters,
+                                                   const int* egParameters,
+                                                   int parameterCount)
         {
-            const char* namePrefix;
-            const int* mgTable;
-            const int* egTable;
-            int count;
+            int semanticIndex = 0;
+            registry.Add(std::string(piece) + "MobilityMiddleGameBase", family,
+                         semanticIndex++, mgParameters[0]);
+            for (int i = 1; i < parameterCount; ++i)
+                registry.Add(std::string(piece) + "MobilityMiddleGameIncrement_" + std::to_string(i),
+                             family, semanticIndex++, mgParameters[i]);
+            registry.Add(std::string(piece) + "MobilityEndGameBase", family,
+                         semanticIndex++, egParameters[0]);
+            for (int i = 1; i < parameterCount; ++i)
+                registry.Add(std::string(piece) + "MobilityEndGameIncrement_" + std::to_string(i),
+                             family, semanticIndex++, egParameters[i]);
         };
 
-        const MobilityBinding mobilityTables[6] = {
-            {"PawnMoveCountValue_", Option::PawnMoveCountValueMiddleGame, Option::PawnMoveCountValueEndGame, 3},
-            {"KnightMoveCountValue_", Option::KnightMoveCountValueMiddleGame, Option::KnightMoveCountValueEndGame, 9},
-            {"BishopMoveCountValue_", Option::BishopMoveCountValueMiddleGame, Option::BishopMoveCountValueEndGame, 14},
-            {"RookMoveCountValue_", Option::RookMoveCountValueMiddleGame, Option::RookMoveCountValueEndGame, 15},
-            {"QueenMoveCountValue_", Option::QueenMoveCountValueMiddleGame, Option::QueenMoveCountValueEndGame, 28},
-            {"KingMoveCountValue_", Option::KingMoveCountValueMiddleGame, Option::KingMoveCountValueEndGame, 9}
-        };
-
-        int mobilitySemanticIndex = 0;
-        for (const auto& binding : mobilityTables)
-        {
-            for (int i = 0; i < binding.count; ++i)
-            {
-                registry.Add(std::string(binding.namePrefix) + "MiddleGame_" + std::to_string(i),
-                             ParameterFamily::Mobility, mobilitySemanticIndex++,
-                             binding.mgTable[i]);
-            }
-            for (int i = 0; i < binding.count; ++i)
-            {
-                registry.Add(std::string(binding.namePrefix) + "EndGame_" + std::to_string(i),
-                             ParameterFamily::Mobility, mobilitySemanticIndex++,
-                             binding.egTable[i]);
-            }
-        }
+        addMobilityGroup(ParameterFamily::KnightMobility, "Knight",
+                         Option::KnightMobilityMiddleGameParameters,
+                         Option::KnightMobilityEndGameParameters, 4);
+        addMobilityGroup(ParameterFamily::BishopMobility, "Bishop",
+                         Option::BishopMobilityMiddleGameParameters,
+                         Option::BishopMobilityEndGameParameters, 5);
+        addMobilityGroup(ParameterFamily::RookMobility, "Rook",
+                         Option::RookMobilityMiddleGameParameters,
+                         Option::RookMobilityEndGameParameters, 5);
+        addMobilityGroup(ParameterFamily::QueenMobility, "Queen",
+                         Option::QueenMobilityMiddleGameParameters,
+                         Option::QueenMobilityEndGameParameters, 5);
 
         // 9. Attack (60 parameters: 6 attackers * 5 victims * 2 phases)
         // Victim piece IDs: 1 (Pawn), 2 (Knight), 3 (Bishop), 4 (Rook), 5 (Queen)
