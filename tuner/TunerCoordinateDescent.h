@@ -293,7 +293,10 @@ public:
         case ParameterFamily::CenterPresence: return 1;
         case ParameterFamily::CenterMove: return 1;
         case ParameterFamily::KingSafety: return 2;
-        case ParameterFamily::Mobility: return 2;
+        case ParameterFamily::KnightMobility: return 2;
+        case ParameterFamily::BishopMobility: return 2;
+        case ParameterFamily::RookMobility: return 2;
+        case ParameterFamily::QueenMobility: return 2;
         case ParameterFamily::Attack: return 2;
         case ParameterFamily::RookFile: return 2;
         case ParameterFamily::KnightOutpost: return 2;
@@ -313,7 +316,7 @@ public:
         case ParameterFamily::PieceSquare: return 4;
         case ParameterFamily::CenterPresence: return 2;
         case ParameterFamily::KingSafety: return 4;
-        default: return 0; // CenterMove, Mobility, Attack, Inline are frozen
+        default: return 0; // CenterMove, mobility v2, Attack, Inline are frozen
         }
     }
 
@@ -326,7 +329,7 @@ public:
         case ParameterFamily::PieceSquare: return 4;
         case ParameterFamily::CenterPresence: return 2;
         case ParameterFamily::KingSafety: return 4;
-        default: return 0; // PieceValue, CenterMove, Mobility, Attack, Inline are frozen
+        default: return 0; // PieceValue, CenterMove, mobility v2, Attack, Inline are frozen
         }
     }
 
@@ -339,7 +342,7 @@ public:
         case ParameterFamily::PieceSquare: return 2;
         case ParameterFamily::CenterPresence: return 1;
         case ParameterFamily::KingSafety: return 2;
-        default: return 0; // PieceValue, CenterMove, Mobility, Attack, Inline are frozen
+        default: return 0; // PieceValue, CenterMove, mobility v2, Attack, Inline are frozen
         }
     }
 
@@ -354,7 +357,10 @@ public:
         case ParameterFamily::CenterPresence: return "CenterPresence";
         case ParameterFamily::CenterMove: return "CenterMove";
         case ParameterFamily::KingSafety: return "KingSafety";
-        case ParameterFamily::Mobility: return "Mobility";
+        case ParameterFamily::KnightMobility: return "KnightMobility";
+        case ParameterFamily::BishopMobility: return "BishopMobility";
+        case ParameterFamily::RookMobility: return "RookMobility";
+        case ParameterFamily::QueenMobility: return "QueenMobility";
         case ParameterFamily::Attack: return "Attack";
         case ParameterFamily::Inline: return "Inline";
         case ParameterFamily::RookFile: return "RookFile";
@@ -371,7 +377,9 @@ public:
             ParameterFamily::PieceValue, ParameterFamily::PawnStructure,
             ParameterFamily::PassedPawn, ParameterFamily::PieceSquare,
             ParameterFamily::CenterPresence, ParameterFamily::CenterMove,
-            ParameterFamily::KingSafety, ParameterFamily::Mobility,
+            ParameterFamily::KingSafety, ParameterFamily::KnightMobility,
+            ParameterFamily::BishopMobility, ParameterFamily::RookMobility,
+            ParameterFamily::QueenMobility,
             ParameterFamily::Attack, ParameterFamily::Inline,
             ParameterFamily::RookFile, ParameterFamily::KnightOutpost,
             ParameterFamily::IsolatedPawn, ParameterFamily::RookBehindPassedPawn
@@ -642,7 +650,7 @@ public:
                 ? GetFamilyDeltaRefine1(param.family) : 0;
             if (delta <= 0)
             {
-                // Frozen families: PieceValue, CenterMove, Mobility, Attack, Inline
+                // Frozen families: PieceValue, CenterMove, mobility v2, Attack, Inline
                 continue;
             }
 

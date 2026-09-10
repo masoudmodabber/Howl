@@ -3,6 +3,7 @@
 #include <crtdbg.h>
 #endif
 #include "Option.h"
+#include "MobilityV2.h"
 
 char Option::charPowerTwo[8] = {};
 char Option::charPowerTwoC[8] = {};
@@ -404,13 +405,21 @@ int Option::KingMoveValueBlackMiddleGame[64] = {};
 int Option::PawnMoveCountValueMiddleGame[3] = {0, 0, 0};
 int Option::PawnMoveCountValue[3][3] = {};
 
-int Option::KnightMoveCountValueMiddleGame[9] = {-20, -12, -5, 0, 12, 25, 31, 38, 38};
+int Option::KnightMobilityMiddleGameParameters[4] = {-12, 12, 24, 14};
+int Option::KnightMobilityEndGameParameters[4] = {-11, 8, 20, 10};
+int Option::KnightMoveCountValueMiddleGame[9] = {};
 int Option::KnightMoveCountValue[3][9] = {};
-int Option::BishopMoveCountValueMiddleGame[14] = {-30, -20, -12, -6, -2, 0, 3, 6, 10, 15, 20, 25, 29, 32};
+int Option::BishopMobilityMiddleGameParameters[5] = {-30, 26, 4, 9, 17};
+int Option::BishopMobilityEndGameParameters[5] = {-35, 29, 6, 13, 17};
+int Option::BishopMoveCountValueMiddleGame[14] = {};
 int Option::BishopMoveCountValue[3][14] = {};
-int Option::RookMoveCountValueMiddleGame[15] = {-16, -11, -6, -1, 4, 9, 13, 17, 21, 24, 26, 27, 28, 29, 30};
+int Option::RookMobilityMiddleGameParameters[5] = {-16, 20, 17, 6, 3};
+int Option::RookMobilityEndGameParameters[5] = {-25, 36, 36, 16, 3};
+int Option::RookMoveCountValueMiddleGame[15] = {};
 int Option::RookMoveCountValue[3][15] = {};
-int Option::QueenMoveCountValueMiddleGame[28] = {-10, -8, -6, -3, -1, 1, 3, 5, 8, 10, 12, 15, 16, 17, 18, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20};
+int Option::QueenMobilityMiddleGameParameters[5] = {-10, 9, 9, 8, 4};
+int Option::QueenMobilityEndGameParameters[5] = {-18, 16, 15, 15, 7};
+int Option::QueenMoveCountValueMiddleGame[28] = {};
 int Option::QueenMoveCountValue[3][28] = {};
 int Option::KingMoveCountValueMiddleGame[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 int Option::KingMoveCountValue[3][9] = {};
@@ -763,10 +772,10 @@ int Option::QueenMoveValueBlackEndGame[64] = {0};
 int Option::KingMoveValueBlackEndGame[64] = {0};
 
 int Option::PawnMoveCountValueEndGame[3] = {0};
-int Option::KnightMoveCountValueEndGame[9] = {-18, -11, -5, -3, 7, 17, 22, 27, 27};
-int Option::BishopMoveCountValueEndGame[14] = {-35, -24, -15, -8, -3, 0, 4, 8, 13, 19, 25, 30, 34, 37};
-int Option::RookMoveCountValueEndGame[15] = {-25, -16, -7, 2, 11, 20, 29, 38, 47, 54, 59, 62, 64, 65, 66};
-int Option::QueenMoveCountValueEndGame[28] = {-18, -13, -7, -2, 3, 8, 13, 19, 23, 27, 32, 34, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35};
+int Option::KnightMoveCountValueEndGame[9] = {};
+int Option::BishopMoveCountValueEndGame[14] = {};
+int Option::RookMoveCountValueEndGame[15] = {};
+int Option::QueenMoveCountValueEndGame[28] = {};
 int Option::KingMoveCountValueEndGame[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 int Option::PawnAttackValueEndGame[16] = {0, 0, 70, 70, 99, 118, 0, 0, 0, 0, 70, 70, 99, 118, 0, 0};
@@ -836,6 +845,15 @@ void Option::Initialize()
 {
     if (!initialized)
     {
+        MobilityV2::GenerateKnight(KnightMobilityMiddleGameParameters, KnightMoveCountValueMiddleGame);
+        MobilityV2::GenerateKnight(KnightMobilityEndGameParameters, KnightMoveCountValueEndGame);
+        MobilityV2::GenerateBishop(BishopMobilityMiddleGameParameters, BishopMoveCountValueMiddleGame);
+        MobilityV2::GenerateBishop(BishopMobilityEndGameParameters, BishopMoveCountValueEndGame);
+        MobilityV2::GenerateRook(RookMobilityMiddleGameParameters, RookMoveCountValueMiddleGame);
+        MobilityV2::GenerateRook(RookMobilityEndGameParameters, RookMoveCountValueEndGame);
+        MobilityV2::GenerateQueenMiddleGame(QueenMobilityMiddleGameParameters, QueenMoveCountValueMiddleGame);
+        MobilityV2::GenerateQueenEndGame(QueenMobilityEndGameParameters, QueenMoveCountValueEndGame);
+
         charPowerTwo[0] = (char)1;
         charPowerTwo[1] = (char)2;
         charPowerTwo[2] = (char)4;

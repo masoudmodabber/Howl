@@ -150,7 +150,95 @@ int TestParityRegression()
     if (!board) return 1;
     const int productionScore = EvaluationLogic::Evaluate(*board);
     const int tunerScore = Tuner::TunerEvaluator::Evaluate(*board, state);
-    return productionScore == -224 && tunerScore == productionScore ? 0 : 1;
+    return productionScore == -225 && tunerScore == productionScore ? 0 : 1;
+}
+
+template <std::size_t N>
+bool WithinRepresentationError(const int (&generated)[N],
+                               const int (&production)[N],
+                               int maximumError)
+{
+    for (std::size_t i = 0; i < N; ++i)
+        if (std::abs(generated[i] - production[i]) > maximumError) return false;
+    return true;
+}
+
+template <std::size_t N>
+bool IsNondecreasing(const int (&values)[N])
+{
+    for (std::size_t i = 1; i < N; ++i)
+        if (values[i] < values[i - 1]) return false;
+    return true;
+}
+
+int TestMobilityV2Structure()
+{
+    static const int knightMg[9] = {-20, -12, -5, 0, 12, 25, 31, 38, 38};
+    static const int knightEg[9] = {-18, -11, -5, -3, 7, 17, 22, 27, 27};
+    static const int bishopMg[14] = {-30, -20, -12, -6, -2, 0, 3, 6, 10, 15, 20, 25, 29, 32};
+    static const int bishopEg[14] = {-35, -24, -15, -8, -3, 0, 4, 8, 13, 19, 25, 30, 34, 37};
+    static const int rookMg[15] = {-16, -11, -6, -1, 4, 9, 13, 17, 21, 24, 26, 27, 28, 29, 30};
+    static const int rookEg[15] = {-25, -16, -7, 2, 11, 20, 29, 38, 47, 54, 59, 62, 64, 65, 66};
+    static const int queenMg[28] = {-10, -8, -6, -3, -1, 1, 3, 5, 8, 10, 12, 15, 16, 17, 18, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20};
+    static const int queenEg[28] = {-18, -13, -7, -2, 3, 8, 13, 19, 23, 27, 32, 34, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35};
+
+    if (!WithinRepresentationError(Option::KnightMoveCountValueMiddleGame, knightMg, 2) ||
+        !WithinRepresentationError(Option::KnightMoveCountValueEndGame, knightEg, 3) ||
+        !WithinRepresentationError(Option::BishopMoveCountValueMiddleGame, bishopMg, 2) ||
+        !WithinRepresentationError(Option::BishopMoveCountValueEndGame, bishopEg, 2) ||
+        !WithinRepresentationError(Option::RookMoveCountValueMiddleGame, rookMg, 1) ||
+        !WithinRepresentationError(Option::RookMoveCountValueEndGame, rookEg, 2) ||
+        !WithinRepresentationError(Option::QueenMoveCountValueMiddleGame, queenMg, 1) ||
+        !WithinRepresentationError(Option::QueenMoveCountValueEndGame, queenEg, 2))
+        return 1;
+
+    if (!IsNondecreasing(Option::KnightMoveCountValueMiddleGame) ||
+        !IsNondecreasing(Option::KnightMoveCountValueEndGame) ||
+        !IsNondecreasing(Option::BishopMoveCountValueMiddleGame) ||
+        !IsNondecreasing(Option::BishopMoveCountValueEndGame) ||
+        !IsNondecreasing(Option::RookMoveCountValueMiddleGame) ||
+        !IsNondecreasing(Option::RookMoveCountValueEndGame) ||
+        !IsNondecreasing(Option::QueenMoveCountValueMiddleGame) ||
+        !IsNondecreasing(Option::QueenMoveCountValueEndGame))
+        return 1;
+
+    if (Option::KnightMoveCountValueMiddleGame[8] != Option::KnightMoveCountValueMiddleGame[7] ||
+        Option::KnightMoveCountValueEndGame[8] != Option::KnightMoveCountValueEndGame[7])
+        return 1;
+    for (int i = 16; i < 28; ++i)
+        if (Option::QueenMoveCountValueMiddleGame[i] != Option::QueenMoveCountValueMiddleGame[15]) return 1;
+    for (int i = 13; i < 28; ++i)
+        if (Option::QueenMoveCountValueEndGame[i] != Option::QueenMoveCountValueEndGame[12]) return 1;
+    for (int i = 0; i < 3; ++i)
+        if (Option::PawnMoveCountValueMiddleGame[i] != 0 || Option::PawnMoveCountValueEndGame[i] != 0) return 1;
+    for (int i = 0; i < 9; ++i)
+        if (Option::KingMoveCountValueMiddleGame[i] != 0 || Option::KingMoveCountValueEndGame[i] != 0) return 1;
+
+    Tuner::TunerRegistry registry = Tuner::TunerRegistry::CreateRegistry();
+    const struct { Tuner::ParameterFamily family; int count; } groups[] = {
+        {Tuner::ParameterFamily::KnightMobility, 8},
+        {Tuner::ParameterFamily::BishopMobility, 10},
+        {Tuner::ParameterFamily::RookMobility, 10},
+        {Tuner::ParameterFamily::QueenMobility, 10}
+    };
+    for (const auto& group : groups)
+    {
+        int selected = 0;
+        for (const auto& parameter : registry.GetParameters())
+            if (Tuner::TunerCoordinateDescent::IsFamilyTunable(parameter.family, {group.family}))
+            {
+                if (parameter.family != group.family) return 1;
+                selected++;
+            }
+        if (selected != group.count) return 1;
+    }
+
+    Tuner::TunerEvaluationState state;
+    if (!state.LoadFromRegistry(registry)) return 1;
+    state.KnightMobilityMiddleGameParameters[1] = -100;
+    state.Derive();
+    if (!IsNondecreasing(state.KnightMoveCountValueMiddleGame)) return 1;
+    return 0;
 }
 }
 
@@ -165,6 +253,7 @@ int main(int argc, char* argv[])
     else if (test == "refine1_unchanged") result = TestRefine1SelectionUnchanged();
     else if (test == "parity_regression") result = TestParityRegression();
     else if (test == "stops_after_unchanged_sweep") result = TestStopsAfterUnchangedSweep();
+    else if (test == "mobility_v2_structure") result = TestMobilityV2Structure();
     CleanupEngine();
     if (result != 0) std::cerr << "Tuner test failed: " << test << '\n';
     return result;

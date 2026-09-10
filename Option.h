@@ -107,12 +107,20 @@ public:
 
     static int PawnMoveCountValueMiddleGame[3];
     static int PawnMoveCountValue[3][3];
+    static int KnightMobilityMiddleGameParameters[4];
+    static int KnightMobilityEndGameParameters[4];
     static int KnightMoveCountValueMiddleGame[9];
     static int KnightMoveCountValue[3][9];
+    static int BishopMobilityMiddleGameParameters[5];
+    static int BishopMobilityEndGameParameters[5];
     static int BishopMoveCountValueMiddleGame[14];
     static int BishopMoveCountValue[3][14];
+    static int RookMobilityMiddleGameParameters[5];
+    static int RookMobilityEndGameParameters[5];
     static int RookMoveCountValueMiddleGame[15];
     static int RookMoveCountValue[3][15];
+    static int QueenMobilityMiddleGameParameters[5];
+    static int QueenMobilityEndGameParameters[5];
     static int QueenMoveCountValueMiddleGame[28];
     static int QueenMoveCountValue[3][28];
     static int KingMoveCountValueMiddleGame[9];

@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <unordered_set>
 #include <vector>
+#include "MobilityV2.h"
 #include "tuner/TunerParameter.h"
 
 namespace Tuner
@@ -71,7 +72,17 @@ struct TunerEvaluationState
     // Family: KingSafety (64 squares)
     int WhiteKingPlaceSafetyMiddleGame[64] = {0};
 
-    // Family: Mobility (156: 6 pieces * 2 phases; counts: P3, N9, B14, R15, Q28, K9)
+    // Families: Mobility v2 (base anchor plus non-negative increments)
+    int KnightMobilityMiddleGameParameters[4] = {0};
+    int KnightMobilityEndGameParameters[4] = {0};
+    int BishopMobilityMiddleGameParameters[5] = {0};
+    int BishopMobilityEndGameParameters[5] = {0};
+    int RookMobilityMiddleGameParameters[5] = {0};
+    int RookMobilityEndGameParameters[5] = {0};
+    int QueenMobilityMiddleGameParameters[5] = {0};
+    int QueenMobilityEndGameParameters[5] = {0};
+
+    // Generated mobility bucket tables consumed by the evaluator.
     int PawnMoveCountValueMiddleGame[3] = {0};
     int PawnMoveCountValueEndGame[3] = {0};
     int KnightMoveCountValueMiddleGame[9] = {0};
@@ -269,41 +280,33 @@ struct TunerEvaluationState
                 return &WhiteKingPlaceSafetyMiddleGame[semanticIndex];
             return nullptr;
 
-        case ParameterFamily::Mobility:
-        {
-            if (semanticIndex < 0 || semanticIndex >= 156)
-                return nullptr;
-
-            struct MobilityLayout
-            {
-                int* mg;
-                int* eg;
-                int count;
-            };
-            const MobilityLayout mob[6] = {
-                {PawnMoveCountValueMiddleGame, PawnMoveCountValueEndGame, 3},
-                {KnightMoveCountValueMiddleGame, KnightMoveCountValueEndGame, 9},
-                {BishopMoveCountValueMiddleGame, BishopMoveCountValueEndGame, 14},
-                {RookMoveCountValueMiddleGame, RookMoveCountValueEndGame, 15},
-                {QueenMoveCountValueMiddleGame, QueenMoveCountValueEndGame, 28},
-                {KingMoveCountValueMiddleGame, KingMoveCountValueEndGame, 9}
-            };
-
-            int offset = 0;
-            for (int p = 0; p < 6; ++p)
-            {
-                int mgEnd = offset + mob[p].count;
-                if (semanticIndex < mgEnd)
-                    return &mob[p].mg[semanticIndex - offset];
-                offset = mgEnd;
-
-                int egEnd = offset + mob[p].count;
-                if (semanticIndex < egEnd)
-                    return &mob[p].eg[semanticIndex - offset];
-                offset = egEnd;
-            }
+        case ParameterFamily::KnightMobility:
+            if (semanticIndex >= 0 && semanticIndex < 4)
+                return &KnightMobilityMiddleGameParameters[semanticIndex];
+            if (semanticIndex >= 4 && semanticIndex < 8)
+                return &KnightMobilityEndGameParameters[semanticIndex - 4];
             return nullptr;
-        }
+
+        case ParameterFamily::BishopMobility:
+            if (semanticIndex >= 0 && semanticIndex < 5)
+                return &BishopMobilityMiddleGameParameters[semanticIndex];
+            if (semanticIndex >= 5 && semanticIndex < 10)
+                return &BishopMobilityEndGameParameters[semanticIndex - 5];
+            return nullptr;
+
+        case ParameterFamily::RookMobility:
+            if (semanticIndex >= 0 && semanticIndex < 5)
+                return &RookMobilityMiddleGameParameters[semanticIndex];
+            if (semanticIndex >= 5 && semanticIndex < 10)
+                return &RookMobilityEndGameParameters[semanticIndex - 5];
+            return nullptr;
+
+        case ParameterFamily::QueenMobility:
+            if (semanticIndex >= 0 && semanticIndex < 5)
+                return &QueenMobilityMiddleGameParameters[semanticIndex];
+            if (semanticIndex >= 5 && semanticIndex < 10)
+                return &QueenMobilityEndGameParameters[semanticIndex - 5];
+            return nullptr;
 
         case ParameterFamily::Attack:
         {
@@ -415,6 +418,19 @@ struct TunerEvaluationState
     // =========================================================================
     void Derive()
     {
+        MobilityV2::GenerateKnight(KnightMobilityMiddleGameParameters, KnightMoveCountValueMiddleGame);
+        MobilityV2::GenerateKnight(KnightMobilityEndGameParameters, KnightMoveCountValueEndGame);
+        MobilityV2::GenerateBishop(BishopMobilityMiddleGameParameters, BishopMoveCountValueMiddleGame);
+        MobilityV2::GenerateBishop(BishopMobilityEndGameParameters, BishopMoveCountValueEndGame);
+        MobilityV2::GenerateRook(RookMobilityMiddleGameParameters, RookMoveCountValueMiddleGame);
+        MobilityV2::GenerateRook(RookMobilityEndGameParameters, RookMoveCountValueEndGame);
+        MobilityV2::GenerateQueenMiddleGame(QueenMobilityMiddleGameParameters, QueenMoveCountValueMiddleGame);
+        MobilityV2::GenerateQueenEndGame(QueenMobilityEndGameParameters, QueenMoveCountValueEndGame);
+        std::fill(PawnMoveCountValueMiddleGame, PawnMoveCountValueMiddleGame + 3, 0);
+        std::fill(PawnMoveCountValueEndGame, PawnMoveCountValueEndGame + 3, 0);
+        std::fill(KingMoveCountValueMiddleGame, KingMoveCountValueMiddleGame + 9, 0);
+        std::fill(KingMoveCountValueEndGame, KingMoveCountValueEndGame + 9, 0);
+
         auto mirrorSquare = [](int sq) -> int
         {
             return (7 - (sq / 8)) * 8 + (sq % 8);
