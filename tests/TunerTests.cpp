@@ -327,6 +327,26 @@ int TestPassedPawnV2Structure()
                 return 1;
     return 0;
 }
+
+int TestPassedPawnV2ParallelStartup()
+{
+    Tuner::TunerRegistry registry = Tuner::TunerRegistry::CreateRegistry();
+    Tuner::TunerEvaluationState state;
+    if (!state.LoadFromRegistry(registry)) return 1;
+
+    std::vector<Tuner::TunerPosition> positions;
+    for (int i = 0; i < 64; ++i)
+    {
+        std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(
+            "7k/8/8/3P4/8/5N2/8/K7 w - - 0 1"));
+        if (!board) return 1;
+        positions.push_back({std::move(board), 1.0});
+    }
+
+    const double loss = Tuner::TunerCoordinateDescent::ComputeLoss(
+        positions, state, 554.17, 8);
+    return std::isfinite(loss) ? 0 : 1;
+}
 }
 
 int main(int argc, char* argv[])
@@ -342,6 +362,7 @@ int main(int argc, char* argv[])
     else if (test == "stops_after_unchanged_sweep") result = TestStopsAfterUnchangedSweep();
     else if (test == "mobility_v2_structure") result = TestMobilityV2Structure();
     else if (test == "passed_pawn_v2_structure") result = TestPassedPawnV2Structure();
+    else if (test == "passed_pawn_v2_parallel_startup") result = TestPassedPawnV2ParallelStartup();
     CleanupEngine();
     if (result != 0) std::cerr << "Tuner test failed: " << test << '\n';
     return result;

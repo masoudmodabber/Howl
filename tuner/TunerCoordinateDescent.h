@@ -251,6 +251,10 @@ public:
     {
         if (dataset.empty()) return 0.0;
 
+        // Passed-pawn accessibility owns a lazily initialized shared distance
+        // table. Initialize it before worker threads can enter the evaluator.
+        Detail::InitializeKnightDistance();
+
         std::vector<double> threadErrors(numThreads, 0.0);
         std::vector<std::thread> workers;
         workers.reserve(numThreads);
