@@ -1421,6 +1421,8 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                 }
                 if (MAtESearch)
                     LMRDepth = 0;
+                if (isPVNode)
+                    LMRDepth = 0;
                 const bool isTTMove = ttHit && ttEntry.bestMove != 0 &&
                     move->beginPlace == TTMoveHelper::UnpackFrom(ttEntry.bestMove) &&
                     move->endPlace == TTMoveHelper::UnpackTo(ttEntry.bestMove) &&
