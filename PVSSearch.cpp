@@ -214,9 +214,11 @@ namespace
 {
     int g_futilityPruningSkippedQuietMoves = 0;
     PVSSearch::MoveOrderingStats g_moveOrderingStats;
+    PVSSearch::MoveOrderingQualityStats g_orderingQualityStats;
 
-    void RecordMoveOrderingCutoff(int moveIndex, bool isTTMove, const Move &move, int depth, int ply)
+    void RecordMoveOrderingCutoff(int moveIndex, bool isTTMove, const Move &move, int depth, int ply, bool isPV, bool isCutNode)
     {
+        g_orderingQualityStats.recordCutoff(moveIndex + 1, isPV, isCutNode, IsQuietMove(move));
         g_moveOrderingStats.totalBetaCutoffs++;
         g_moveOrderingStats.allCutoffs.add(moveIndex);
 
@@ -715,6 +717,53 @@ void PVSSearch::PrintNullMoveStatsForTesting()
     PrintNullBucketRow("Margin 150 to 299:", g_nullMoveStats.margin150To299);
     PrintNullBucketRow("Margin 300+:", g_nullMoveStats.margin300Plus);
 }
+
+PVSSearch::MoveOrderingQualityStats& PVSSearch::GetMoveOrderingQualityStatsForTesting()
+{
+    return g_orderingQualityStats;
+}
+
+void PVSSearch::ResetMoveOrderingQualityStatsForTesting()
+{
+    g_orderingQualityStats.reset();
+}
+
+int PVSSearch::DiagnosticCombinedHistory(int side, const Move &prevMove, const Move &move)
+{
+    return CombinedHistoryScore(side, prevMove, move);
+}
+
+int PVSSearch::DiagnosticMainHistory(int side, const Move &move)
+{
+    return HistoryScore(side, move);
+}
+
+int PVSSearch::DiagnosticContinuationHistory(const Move &prevMove, const Move &move)
+{
+    return ContinuationHistoryScore(prevMove, move);
+}
+
+int PVSSearch::DiagnosticUnifiedOrderingScore(int turn, const Move &prevMove, int depthGone, const Move *m)
+{
+    const bool isQuiet = IsQuietMove(*m);
+    if (!isQuiet)
+    {
+        if (m->value >= 0)
+            return 1000000 + BasePvsOrderingScore(m);
+        else
+            return BasePvsOrderingScore(m);
+    }
+
+    if (depthGone >= 0 && depthGone < PVSSearch::MaxKillerPly)
+    {
+        if (PVSSearch::killers[depthGone][0] == *m)
+            return 500000 + (m->givesCheck ? CheckOrderingBonus : 0);
+        if (PVSSearch::killers[depthGone][1] == *m)
+            return 400000 + (m->givesCheck ? CheckOrderingBonus : 0);
+    }
+
+    return 100000 + CombinedHistoryScore(turn, prevMove, *m) + BasePvsOrderingScore(m);
+}
 #endif
 
 MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool selectiveSearch)
@@ -1068,47 +1117,34 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
 #if HOWL_CORRECTNESS_TESTING
     TranspositionTable::CheckShadowEntryOnProbe(board4.ZobristHashCode, depth, alpha, beta, isPVNode, moveList, false);
 #endif
-    const auto pvsOrderingScore = [](const Move *move)
+    const auto calculateUnifiedOrderingScore = [turn, &prevMove, depthGone](const Move *m) -> int
     {
-        return BasePvsOrderingScore(move);
+        const bool isQuiet = IsQuietMove(*m);
+        if (!isQuiet)
+        {
+            if (m->value >= 0)
+                return 1000000 + BasePvsOrderingScore(m);
+            else
+                return BasePvsOrderingScore(m);
+        }
+
+        if (depthGone >= 0 && depthGone < PVSSearch::MaxKillerPly)
+        {
+            if (PVSSearch::killers[depthGone][0] == *m)
+                return 500000 + (m->givesCheck ? CheckOrderingBonus : 0);
+            if (PVSSearch::killers[depthGone][1] == *m)
+                return 400000 + (m->givesCheck ? CheckOrderingBonus : 0);
+        }
+
+        return 100000 + CombinedHistoryScore(turn, prevMove, *m) + BasePvsOrderingScore(m);
     };
+
     std::stable_sort(moveList.moves, moveList.moves + moveList.count,
-                     [turn, &prevMove](const Move *a, const Move *b)
+                     [&calculateUnifiedOrderingScore](const Move *a, const Move *b)
                      {
-                         const int aOrderingScore = BasePvsOrderingScore(a);
-                         const int bOrderingScore = BasePvsOrderingScore(b);
-                         if (aOrderingScore != bOrderingScore)
-                             return aOrderingScore > bOrderingScore;
-                         if (!IsQuietMove(*a) || !IsQuietMove(*b))
-                             return false;
-                         return CombinedHistoryScore(turn, prevMove, *a) >
-                                CombinedHistoryScore(turn, prevMove, *b);
+                         return calculateUnifiedOrderingScore(a) >
+                                calculateUnifiedOrderingScore(b);
                      });
-    if (depthGone >= 0 && depthGone < MaxKillerPly)
-    {
-        bool boosted = false;
-        for (int i = 0; i < moveList.count; ++i)
-        {
-            Move *m = moveList.moves[i];
-            if (m->endPiece == 0 && m->promotionPiece <= 0)
-            {
-                if (killers[depthGone][0] == *m || killers[depthGone][1] == *m)
-                {
-                    m->value = std::max(m->value, 30);
-                    boosted = true;
-#if HOWL_CORRECTNESS_TESTING
-                    g_moveOrderingStats.killerCandidatesEncountered++;
-#endif
-                }
-            }
-        }
-        if (boosted)
-        {
-            std::sort(moveList.moves, moveList.moves + moveList.count,
-                      [&pvsOrderingScore](const Move *a, const Move *b)
-                      { return pvsOrderingScore(a) > pvsOrderingScore(b); });
-        }
-    }
     bool hasTTMove = false;
     if (ttHit && ttEntry.bestMove != 0)
     {
@@ -1296,7 +1332,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     if (bestMoveValue >= beta)
                     {
 #if HOWL_CORRECTNESS_TESTING
-                        RecordMoveOrderingCutoff(i, hasTTMove, *move, depth, depthGone);
+                        RecordMoveOrderingCutoff(i, hasTTMove, *move, depth, depthGone, isPVNode, nullWindowSearch || beta == alpha + 1);
 #endif
                         if (!selectiveSearch)
                         {
@@ -1616,7 +1652,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     if (value >= beta)
                     {
 #if HOWL_CORRECTNESS_TESTING
-                        RecordMoveOrderingCutoff(i, false, *move, depth, depthGone);
+                        RecordMoveOrderingCutoff(i, false, *move, depth, depthGone, isPVNode, nullWindowSearch || beta == alpha + 1);
 #endif
                         if (!selectiveSearch)
                         {
@@ -1683,6 +1719,24 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
         }
         else
         {
+#if HOWL_CORRECTNESS_TESTING
+            if (SelectedMove != nullptr)
+            {
+                int rank = 0;
+                for (int k = 0; k < moveList.count; ++k)
+                {
+                    if (moveList.moves[k] == SelectedMove)
+                    {
+                        rank = k + 1;
+                        break;
+                    }
+                }
+                if (rank > 0)
+                {
+                    g_orderingQualityStats.recordBestMove(rank, isPVNode, IsQuietMove(*SelectedMove));
+                }
+            }
+#endif
             const bool resultSelective = bestMoveSelective || selectiveSearch;
             const SearchBound resultBound = ClassifyBound(
                 bestMoveValue, origAlpha, origBeta);
