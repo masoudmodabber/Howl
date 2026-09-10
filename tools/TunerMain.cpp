@@ -37,27 +37,33 @@ void CleanupEngine()
 
 int main(int argc, char* argv[])
 {
-    if (argc != 2)
+    if (argc < 2)
     {
-        std::cerr << "Usage: howl_tuner <ParameterFamily>\n";
+        std::cerr << "Usage: howl_tuner <ParameterFamily> [ParameterFamily ...]\n";
         return 2;
     }
 
-    Tuner::ParameterFamily family;
-    if (!Tuner::TunerCoordinateDescent::FamilyFromString(argv[1], family))
+    std::vector<Tuner::ParameterFamily> families;
+    families.reserve(static_cast<std::size_t>(argc - 1));
+    for (int i = 1; i < argc; ++i)
     {
-        std::cerr << "Unknown parameter family: " << argv[1] << '\n';
-        return 2;
+        Tuner::ParameterFamily family;
+        if (!Tuner::TunerCoordinateDescent::FamilyFromString(argv[i], family))
+        {
+            std::cerr << "Unknown parameter family: " << argv[i] << '\n';
+            return 2;
+        }
+        families.push_back(family);
     }
 
     InitializeEngine();
     const auto result = Tuner::TunerCoordinateDescent::RunFamilies(
-        "tuner-train.tsv", "tuner-validation.tsv", {family});
+        "tuner-train.tsv", "tuner-validation.tsv", families);
     CleanupEngine();
 
     if (result.parametersExamined == 0)
     {
-        std::cerr << "No tunable parameters found for " << argv[1] << '\n';
+        std::cerr << "No tunable parameters found for selected families.\n";
         return 1;
     }
 
