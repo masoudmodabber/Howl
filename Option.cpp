@@ -4,6 +4,7 @@
 #endif
 #include "Option.h"
 #include "MobilityV2.h"
+#include "PassedPawnV2.h"
 
 char Option::charPowerTwo[8] = {};
 char Option::charPowerTwoC[8] = {};
@@ -38,14 +39,10 @@ int Option::RookBehindPassedPawnMiddleGame = 4;
 int Option::RookBehindPassedPawnEndGame = 12;
 int Option::pieceMovement[2][7][120] = {};
 
-int Option::WhitePassedPawnValueMiddleGam[] = {0, 0, 0, 0, 0, 0, 0, 0,
-                                               5, 8, 10, 12, 12, 10, 8, 5,
-                                               8, 10, 12, 15, 15, 12, 10, 8,
-                                               10, 12, 15, 18, 18, 15, 12, 10,
-                                               12, 15, 18, 20, 20, 18, 15, 12,
-                                               15, 18, 20, 22, 22, 20, 18, 15,
-                                               18, 20, 22, 25, 25, 22, 20, 18,
-                                               0, 0, 0, 0, 0, 0, 0, 0};
+int Option::PassedPawnMiddleGameParameters[6] = {9, 2, 3, 2, 3, 2};
+int Option::PassedPawnEndGameParameters[6] = {15, 10, 15, 20, 35, 55};
+int Option::PassedPawnMiddleGameFileAmplitude = 7;
+int Option::WhitePassedPawnValueMiddleGam[64] = {};
 
 int Option::PawnInValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                             -20, 0, 0, 0, 0, 0, 0, -20,
@@ -451,14 +448,7 @@ int Option::BlackRookAttackValueMovement[16] = {0, 10, 25, 35, 50, 150, 0, 0, 0,
 int Option::BlackQueenAttackValueMovement[16] = {0, 5, 20, 35, 50, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int Option::BlackKingAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::WhitePassedPawnValueEndGame[] = {  0,   0,   0,   0,   0,   0,   0,   0,
-                                             15,  15,  15,  15,  15,  15,  15,  15,
-                                             25,  25,  25,  25,  25,  25,  25,  25,
-                                             40,  40,  40,  40,  40,  40,  40,  40,
-                                             60,  60,  60,  60,  60,  60,  60,  60,
-                                             95,  95,  95,  95,  95,  95,  95,  95,
-                                            150, 150, 150, 150, 150, 150, 150, 150,
-                                              0,   0,   0,   0,   0,   0,   0,   0};
+int Option::WhitePassedPawnValueEndGame[64] = {};
 
 int Option::PawnInValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                          -20, 0, 0, 0, 0, 0, 0, -20,
@@ -845,6 +835,12 @@ void Option::Initialize()
 {
     if (!initialized)
     {
+        PassedPawnV2::Generate(PassedPawnMiddleGameParameters,
+                               PassedPawnMiddleGameFileAmplitude,
+                               PassedPawnEndGameParameters,
+                               WhitePassedPawnValueMiddleGam,
+                               WhitePassedPawnValueEndGame);
+
         MobilityV2::GenerateKnight(KnightMobilityMiddleGameParameters, KnightMoveCountValueMiddleGame);
         MobilityV2::GenerateKnight(KnightMobilityEndGameParameters, KnightMoveCountValueEndGame);
         MobilityV2::GenerateBishop(BishopMobilityMiddleGameParameters, BishopMoveCountValueMiddleGame);

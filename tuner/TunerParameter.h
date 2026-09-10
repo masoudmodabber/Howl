@@ -12,7 +12,7 @@ enum class ParameterFamily
 {
     PieceValue,
     PawnStructure,
-    PassedPawn,
+    PassedPawnV2,
     PieceSquare,
     CenterPresence,
     CenterMove,
@@ -56,19 +56,21 @@ public:
         // 2. PawnStructure (1 parameter)
         registry.Add("DoubledPawnValue", ParameterFamily::PawnStructure, 0, Option::DoubledPawnValue);
 
-        // 3. PassedPawn (128 parameters: 64 MG + 64 EG)
-        for (int sq = 0; sq < 64; ++sq)
-        {
-            registry.Add("WhitePassedPawnValueMiddleGam_" + std::to_string(sq),
-                         ParameterFamily::PassedPawn, sq,
-                         Option::WhitePassedPawnValueMiddleGam[sq]);
-        }
-        for (int sq = 0; sq < 64; ++sq)
-        {
-            registry.Add("WhitePassedPawnValueEndGame_" + std::to_string(sq),
-                         ParameterFamily::PassedPawn, 64 + sq,
-                         Option::WhitePassedPawnValueEndGame[sq]);
-        }
+        // 3. PassedPawnV2 (13 parameters: 6 MG ranks, 6 EG ranks, 1 MG file amplitude)
+        registry.Add("PassedPawnMiddleGameBase", ParameterFamily::PassedPawnV2, 0,
+                     Option::PassedPawnMiddleGameParameters[0]);
+        for (int i = 1; i < 6; ++i)
+            registry.Add("PassedPawnMiddleGameIncrement_" + std::to_string(i),
+                         ParameterFamily::PassedPawnV2, i,
+                         Option::PassedPawnMiddleGameParameters[i]);
+        registry.Add("PassedPawnEndGameBase", ParameterFamily::PassedPawnV2, 6,
+                     Option::PassedPawnEndGameParameters[0]);
+        for (int i = 1; i < 6; ++i)
+            registry.Add("PassedPawnEndGameIncrement_" + std::to_string(i),
+                         ParameterFamily::PassedPawnV2, 6 + i,
+                         Option::PassedPawnEndGameParameters[i]);
+        registry.Add("PassedPawnMiddleGameFileAmplitude", ParameterFamily::PassedPawnV2, 12,
+                     Option::PassedPawnMiddleGameFileAmplitude);
 
         // 4. PieceSquare (768 parameters: 6 pieces * 2 phases * 64 squares)
         struct PstBinding

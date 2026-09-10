@@ -5,6 +5,7 @@
 #include <unordered_set>
 #include <vector>
 #include "MobilityV2.h"
+#include "PassedPawnV2.h"
 #include "tuner/TunerParameter.h"
 
 namespace Tuner
@@ -34,7 +35,12 @@ struct TunerEvaluationState
     int RookBehindPassedPawnMiddleGame = 0;
     int RookBehindPassedPawnEndGame = 0;
 
-    // Family: PassedPawn (128: 64 MG + 64 EG)
+    // Family: PassedPawnV2 (6 MG ranks, 6 EG ranks, 1 MG file amplitude)
+    int PassedPawnMiddleGameParameters[6] = {0};
+    int PassedPawnEndGameParameters[6] = {0};
+    int PassedPawnMiddleGameFileAmplitude = 0;
+
+    // Generated passed-pawn lookup tables consumed by the evaluator.
     int WhitePassedPawnValueMiddleGam[64] = {0};
     int WhitePassedPawnValueEndGame[64] = {0};
 
@@ -227,11 +233,13 @@ struct TunerEvaluationState
             if (semanticIndex == 0) return &DoubledPawnValue;
             return nullptr;
 
-        case ParameterFamily::PassedPawn:
-            if (semanticIndex >= 0 && semanticIndex < 64)
-                return &WhitePassedPawnValueMiddleGam[semanticIndex];
-            if (semanticIndex >= 64 && semanticIndex < 128)
-                return &WhitePassedPawnValueEndGame[semanticIndex - 64];
+        case ParameterFamily::PassedPawnV2:
+            if (semanticIndex >= 0 && semanticIndex < 6)
+                return &PassedPawnMiddleGameParameters[semanticIndex];
+            if (semanticIndex >= 6 && semanticIndex < 12)
+                return &PassedPawnEndGameParameters[semanticIndex - 6];
+            if (semanticIndex == 12)
+                return &PassedPawnMiddleGameFileAmplitude;
             return nullptr;
 
         case ParameterFamily::PieceSquare:
@@ -418,6 +426,12 @@ struct TunerEvaluationState
     // =========================================================================
     void Derive()
     {
+        PassedPawnV2::Generate(PassedPawnMiddleGameParameters,
+                               PassedPawnMiddleGameFileAmplitude,
+                               PassedPawnEndGameParameters,
+                               WhitePassedPawnValueMiddleGam,
+                               WhitePassedPawnValueEndGame);
+
         MobilityV2::GenerateKnight(KnightMobilityMiddleGameParameters, KnightMoveCountValueMiddleGame);
         MobilityV2::GenerateKnight(KnightMobilityEndGameParameters, KnightMoveCountValueEndGame);
         MobilityV2::GenerateBishop(BishopMobilityMiddleGameParameters, BishopMoveCountValueMiddleGame);

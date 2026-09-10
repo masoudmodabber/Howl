@@ -200,7 +200,7 @@ public:
     {
         static const std::vector<ParameterFamily> families = {
             ParameterFamily::PawnStructure,
-            ParameterFamily::PassedPawn,
+            ParameterFamily::PassedPawnV2,
             ParameterFamily::PieceSquare,
             ParameterFamily::CenterPresence,
             ParameterFamily::KingSafety
@@ -288,7 +288,7 @@ public:
         {
         case ParameterFamily::PieceValue: return 5;
         case ParameterFamily::PawnStructure: return 2;
-        case ParameterFamily::PassedPawn: return 2;
+        case ParameterFamily::PassedPawnV2: return 2;
         case ParameterFamily::PieceSquare: return 2;
         case ParameterFamily::CenterPresence: return 1;
         case ParameterFamily::CenterMove: return 1;
@@ -312,7 +312,7 @@ public:
         {
         case ParameterFamily::PieceValue: return 10;
         case ParameterFamily::PawnStructure: return 4;
-        case ParameterFamily::PassedPawn: return 4;
+        case ParameterFamily::PassedPawnV2: return 4;
         case ParameterFamily::PieceSquare: return 4;
         case ParameterFamily::CenterPresence: return 2;
         case ParameterFamily::KingSafety: return 4;
@@ -325,7 +325,7 @@ public:
         switch (family)
         {
         case ParameterFamily::PawnStructure: return 4;
-        case ParameterFamily::PassedPawn: return 4;
+        case ParameterFamily::PassedPawnV2: return 4;
         case ParameterFamily::PieceSquare: return 4;
         case ParameterFamily::CenterPresence: return 2;
         case ParameterFamily::KingSafety: return 4;
@@ -338,7 +338,7 @@ public:
         switch (family)
         {
         case ParameterFamily::PawnStructure: return 2;
-        case ParameterFamily::PassedPawn: return 2;
+        case ParameterFamily::PassedPawnV2: return 2;
         case ParameterFamily::PieceSquare: return 2;
         case ParameterFamily::CenterPresence: return 1;
         case ParameterFamily::KingSafety: return 2;
@@ -352,7 +352,7 @@ public:
         {
         case ParameterFamily::PieceValue: return "PieceValue";
         case ParameterFamily::PawnStructure: return "PawnStructure";
-        case ParameterFamily::PassedPawn: return "PassedPawn";
+        case ParameterFamily::PassedPawnV2: return "PassedPawnV2";
         case ParameterFamily::PieceSquare: return "PieceSquare";
         case ParameterFamily::CenterPresence: return "CenterPresence";
         case ParameterFamily::CenterMove: return "CenterMove";
@@ -375,7 +375,7 @@ public:
     {
         const ParameterFamily families[] = {
             ParameterFamily::PieceValue, ParameterFamily::PawnStructure,
-            ParameterFamily::PassedPawn, ParameterFamily::PieceSquare,
+            ParameterFamily::PassedPawnV2, ParameterFamily::PieceSquare,
             ParameterFamily::CenterPresence, ParameterFamily::CenterMove,
             ParameterFamily::KingSafety, ParameterFamily::KnightMobility,
             ParameterFamily::BishopMobility, ParameterFamily::RookMobility,
@@ -637,7 +637,7 @@ public:
 
         // Initialize countChangedByFamily for enabled families in refinement
         result.countChangedByFamily["PawnStructure"] = 0;
-        result.countChangedByFamily["PassedPawn"] = 0;
+        result.countChangedByFamily["PassedPawnV2"] = 0;
         result.countChangedByFamily["PieceSquare"] = 0;
         result.countChangedByFamily["CenterPresence"] = 0;
         result.countChangedByFamily["KingSafety"] = 0;

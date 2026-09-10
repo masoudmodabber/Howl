@@ -57,6 +57,9 @@ public:
     // Changeable
     static int pieceMovement[2][7][120];
     static int WhitePassedPawnValueMiddleGam[64];
+    static int PassedPawnMiddleGameParameters[6];
+    static int PassedPawnEndGameParameters[6];
+    static int PassedPawnMiddleGameFileAmplitude;
     static int PawnInValueWhiteMiddleGame[64];
     static int KnightInValueWhiteMiddleGame[64];
     static int BishopInValueWhiteMiddleGame[64];
