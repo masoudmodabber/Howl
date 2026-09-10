@@ -5,6 +5,8 @@
 #include "Move.h"
 #include "Board.h"
 #include "MoveLogic.h"
+#include <algorithm>
+#include <cmath>
 
 class PVSSearch {
     static constexpr bool ProductionIGGEnabled = false;
@@ -247,6 +249,116 @@ public:
         NullMoveBucket r3;
         NullMoveBucket r4;
     };
+
+    struct OrderingCategoryStats {
+        std::vector<int> ranks;
+
+        void add(int rank) {
+            ranks.push_back(rank);
+        }
+
+        size_t count() const { return ranks.size(); }
+
+        double rank1Pct() const {
+            if (ranks.empty()) return 0.0;
+            size_t c = 0;
+            for (int r : ranks) if (r == 1) c++;
+            return 100.0 * c / ranks.size();
+        }
+        double topNPct(int n) const {
+            if (ranks.empty()) return 0.0;
+            size_t c = 0;
+            for (int r : ranks) if (r <= n) c++;
+            return 100.0 * c / ranks.size();
+        }
+        double meanRank() const {
+            if (ranks.empty()) return 0.0;
+            double sum = 0.0;
+            for (int r : ranks) sum += r;
+            return sum / ranks.size();
+        }
+        double medianRank() const {
+            if (ranks.empty()) return 0.0;
+            std::vector<int> copy = ranks;
+            std::sort(copy.begin(), copy.end());
+            size_t n = copy.size();
+            if (n % 2 == 1) return copy[n / 2];
+            return 0.5 * (copy[n / 2 - 1] + copy[n / 2]);
+        }
+        int p95Rank() const {
+            if (ranks.empty()) return 0;
+            std::vector<int> copy = ranks;
+            std::sort(copy.begin(), copy.end());
+            size_t idx = static_cast<size_t>(std::ceil(0.95 * copy.size())) - 1;
+            if (idx >= copy.size()) idx = copy.size() - 1;
+            return copy[idx];
+        }
+    };
+
+    struct MoveOrderingQualityStats {
+        OrderingCategoryStats pvNodes;
+        OrderingCategoryStats cutNodes;
+        OrderingCategoryStats otherNonPvNodes;
+        OrderingCategoryStats quietMoves;
+        OrderingCategoryStats captureMoves;
+
+        uint64_t totalBetaCutoffs = 0;
+        uint64_t betaCutoffsRank1 = 0;
+        uint64_t betaCutoffsTop3 = 0;
+
+        void recordCutoff(int initialRank, bool isPV, bool isCutNode, bool isQuiet) {
+            totalBetaCutoffs++;
+            if (initialRank == 1) betaCutoffsRank1++;
+            if (initialRank <= 3) betaCutoffsTop3++;
+
+            if (isPV) {
+                pvNodes.add(initialRank);
+            } else if (isCutNode) {
+                cutNodes.add(initialRank);
+            } else {
+                otherNonPvNodes.add(initialRank);
+            }
+
+            if (isQuiet) {
+                quietMoves.add(initialRank);
+            } else {
+                captureMoves.add(initialRank);
+            }
+        }
+
+        void recordBestMove(int initialRank, bool isPV, bool isQuiet) {
+            if (isPV) {
+                pvNodes.add(initialRank);
+            } else {
+                otherNonPvNodes.add(initialRank);
+            }
+
+            if (isQuiet) {
+                quietMoves.add(initialRank);
+            } else {
+                captureMoves.add(initialRank);
+            }
+        }
+
+        void reset() {
+            pvNodes.ranks.clear();
+            cutNodes.ranks.clear();
+            otherNonPvNodes.ranks.clear();
+            quietMoves.ranks.clear();
+            captureMoves.ranks.clear();
+            totalBetaCutoffs = 0;
+            betaCutoffsRank1 = 0;
+            betaCutoffsTop3 = 0;
+        }
+    };
+
+    static MoveOrderingQualityStats& GetMoveOrderingQualityStatsForTesting();
+    static void ResetMoveOrderingQualityStatsForTesting();
+
+    static int DiagnosticCombinedHistory(int side, const Move &prevMove, const Move &move);
+    static int DiagnosticMainHistory(int side, const Move &move);
+    static int DiagnosticContinuationHistory(const Move &prevMove, const Move &move);
+    static int DiagnosticUnifiedOrderingScore(int turn, const Move &prevMove, int depthGone, const Move *m);
 
     static NullMoveStats GetNullMoveStatsForTesting();
     static void ResetNullMoveStatsForTesting();
