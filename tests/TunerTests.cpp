@@ -136,7 +136,7 @@ int TestRefine1SelectionUnchanged()
             Tuner::TunerCoordinateDescent::GetFamilyDeltaRefine1(parameter.family) > 0)
             selected++;
     }
-    return selected == 1345 ? 0 : 1;
+    return selected == 1230 ? 0 : 1;
 }
 
 int TestParityRegression()
@@ -240,6 +240,93 @@ int TestMobilityV2Structure()
     if (!IsNondecreasing(state.KnightMoveCountValueMiddleGame)) return 1;
     return 0;
 }
+
+int TestPassedPawnV2Structure()
+{
+    static const int productionMg[64] = {
+        0,0,0,0,0,0,0,0, 5,8,10,12,12,10,8,5,
+        8,10,12,15,15,12,10,8, 10,12,15,18,18,15,12,10,
+        12,15,18,20,20,18,15,12, 15,18,20,22,22,20,18,15,
+        18,20,22,25,25,22,20,18, 0,0,0,0,0,0,0,0
+    };
+    static const int productionEg[64] = {
+        0,0,0,0,0,0,0,0, 15,15,15,15,15,15,15,15,
+        25,25,25,25,25,25,25,25, 40,40,40,40,40,40,40,40,
+        60,60,60,60,60,60,60,60, 95,95,95,95,95,95,95,95,
+        150,150,150,150,150,150,150,150, 0,0,0,0,0,0,0,0
+    };
+    static const int expectedMgRanks[6] = {9, 11, 14, 16, 19, 21};
+    static const int expectedEgRanks[6] = {15, 25, 40, 60, 95, 150};
+
+    int mgRanks[6];
+    int egRanks[6];
+    PassedPawnV2::DecodeRanks(Option::PassedPawnMiddleGameParameters, mgRanks);
+    PassedPawnV2::DecodeRanks(Option::PassedPawnEndGameParameters, egRanks);
+    for (int rank = 0; rank < 6; ++rank)
+        if (mgRanks[rank] != expectedMgRanks[rank] || egRanks[rank] != expectedEgRanks[rank])
+            return 1;
+
+    int maximumMgError = 0;
+    int totalMgError = 0;
+    for (int square = 0; square < 64; ++square)
+    {
+        const int mgError = std::abs(Option::WhitePassedPawnValueMiddleGam[square] - productionMg[square]);
+        maximumMgError = std::max(maximumMgError, mgError);
+        totalMgError += mgError;
+        if (Option::WhitePassedPawnValueEndGame[square] != productionEg[square]) return 1;
+    }
+    if (maximumMgError > 4 || static_cast<double>(totalMgError) / 48.0 > 2.42) return 1;
+
+    for (int rank = 0; rank < 8; ++rank)
+        for (int file = 0; file < 4; ++file)
+        {
+            const int left = rank * 8 + file;
+            const int right = rank * 8 + 7 - file;
+            if (Option::WhitePassedPawnValueMiddleGam[left] != Option::WhitePassedPawnValueMiddleGam[right] ||
+                Option::WhitePassedPawnValueEndGame[left] != Option::WhitePassedPawnValueEndGame[right])
+                return 1;
+        }
+
+    for (int file = 0; file < 8; ++file)
+    {
+        if (Option::WhitePassedPawnValueMiddleGam[file] != 0 ||
+            Option::WhitePassedPawnValueEndGame[file] != 0 ||
+            Option::WhitePassedPawnValueMiddleGam[56 + file] != 0 ||
+            Option::WhitePassedPawnValueEndGame[56 + file] != 0)
+            return 1;
+        for (int rank = 2; rank <= 6; ++rank)
+            if (Option::WhitePassedPawnValueMiddleGam[rank * 8 + file] <
+                    Option::WhitePassedPawnValueMiddleGam[(rank - 1) * 8 + file] ||
+                Option::WhitePassedPawnValueEndGame[rank * 8 + file] <
+                    Option::WhitePassedPawnValueEndGame[(rank - 1) * 8 + file])
+                return 1;
+    }
+
+    Tuner::TunerRegistry registry = Tuner::TunerRegistry::CreateRegistry();
+    int selected = 0;
+    for (const auto& parameter : registry.GetParameters())
+        if (Tuner::TunerCoordinateDescent::IsFamilyTunable(
+                parameter.family, {Tuner::ParameterFamily::PassedPawnV2}))
+        {
+            if (parameter.family != Tuner::ParameterFamily::PassedPawnV2) return 1;
+            selected++;
+        }
+    if (selected != 13) return 1;
+
+    Tuner::TunerEvaluationState state;
+    if (!state.LoadFromRegistry(registry)) return 1;
+    state.PassedPawnMiddleGameParameters[1] = -100;
+    state.PassedPawnEndGameParameters[1] = -100;
+    state.Derive();
+    for (int file = 0; file < 8; ++file)
+        for (int rank = 2; rank <= 6; ++rank)
+            if (state.WhitePassedPawnValueMiddleGam[rank * 8 + file] <
+                    state.WhitePassedPawnValueMiddleGam[(rank - 1) * 8 + file] ||
+                state.WhitePassedPawnValueEndGame[rank * 8 + file] <
+                    state.WhitePassedPawnValueEndGame[(rank - 1) * 8 + file])
+                return 1;
+    return 0;
+}
 }
 
 int main(int argc, char* argv[])
@@ -254,6 +341,7 @@ int main(int argc, char* argv[])
     else if (test == "parity_regression") result = TestParityRegression();
     else if (test == "stops_after_unchanged_sweep") result = TestStopsAfterUnchangedSweep();
     else if (test == "mobility_v2_structure") result = TestMobilityV2Structure();
+    else if (test == "passed_pawn_v2_structure") result = TestPassedPawnV2Structure();
     CleanupEngine();
     if (result != 0) std::cerr << "Tuner test failed: " << test << '\n';
     return result;
