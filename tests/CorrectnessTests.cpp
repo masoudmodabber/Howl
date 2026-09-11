@@ -1,6 +1,7 @@
 #include "BoardInitializer.h"
 #include "BoardLogic.h"
 #include "BoardMaker.h"
+#include "CentralKingAttackPressure.h"
 #include "ChessStringManipulation.h"
 #include "EvaluationLogic.h"
 #include "GameLogic.h"
@@ -3887,7 +3888,8 @@ int RunEvaluationCorrectness(const std::string& testCase)
                 return 1;
             }
 
-            int expectedKingSafety = bd.kingAttackNet + bd.kingPlacementNet + bd.pawnShieldNet + bd.centralKingExposureNet;
+            int expectedKingSafety = bd.kingAttackNet + bd.kingPlacementNet + bd.pawnShieldNet +
+                                     bd.centralKingExposureNet + bd.centralKingAttackPressureNet;
             if (bd.kingSafetyTotal != expectedKingSafety)
             {
                 std::cerr << "King safety breakdown mismatch on FEN: " << fen << '\n';
@@ -3970,6 +3972,77 @@ int RunEvaluationCorrectness(const std::string& testCase)
         }
 
         std::cout << "Passed pawn phase interpolation tests passed\n";
+        return 0;
+    }
+    if (testCase == "central_king_attack_pressure")
+    {
+        InitializeEngine();
+        const char* preFen = "r3kb1r/ppp2ppp/3qbn2/4N3/2Bn4/P1N5/1PPP1PPP/R1BQR1K1 b kq - 2 9";
+        const char* be7Fen = "r3k2r/ppp1bppp/3qbn2/4N3/2Bn4/P1N5/1PPP1PPP/R1BQR1K1 w kq - 3 10";
+        const char* nd7Fen = "r3kb1r/pppn1ppp/3qb3/4N3/2Bn4/P1N5/1PPP1PPP/R1BQR1K1 w kq - 3 10";
+        const char* nb5Fen = "r3kb1r/pppn1ppp/3qb3/1N2N3/2Bn4/P7/1PPP1PPP/R1BQR1K1 b kq - 4 10";
+        const char* castledFen = "2kr1b1r/ppp2ppp/3qbn2/4N3/2Bn4/P1N5/1PPP1PPP/R1BQR1K1 w KQ - 3 10";
+
+        std::unique_ptr<Board> pre(BoardMaker::MakeInitialBoard(preFen));
+        std::unique_ptr<Board> be7(BoardMaker::MakeInitialBoard(be7Fen));
+        std::unique_ptr<Board> nd7(BoardMaker::MakeInitialBoard(nd7Fen));
+        std::unique_ptr<Board> nb5(BoardMaker::MakeInitialBoard(nb5Fen));
+        std::unique_ptr<Board> castled(BoardMaker::MakeInitialBoard(castledFen));
+        const auto prePressure = CentralKingAttackPressure::Evaluate(*pre, false);
+        const auto be7Pressure = CentralKingAttackPressure::Evaluate(*be7, false);
+        const auto nd7Pressure = CentralKingAttackPressure::Evaluate(*nd7, false);
+        const auto nb5Pressure = CentralKingAttackPressure::Evaluate(*nb5, false);
+        const auto castledPressure = CentralKingAttackPressure::Evaluate(*castled, false);
+
+        if (!prePressure.immediateCastling || !be7Pressure.immediateCastling ||
+            !nd7Pressure.immediateCastling)
+        {
+            std::cerr << "Expected an immediately available queenside route in all three positions\n";
+            return 1;
+        }
+        if (!prePressure.centralKingActive || !be7Pressure.centralKingActive ||
+            !nd7Pressure.centralKingActive ||
+            prePressure.multiBlockerHeavyLines != 1 ||
+            be7Pressure.multiBlockerHeavyLines != 1 ||
+            nd7Pressure.multiBlockerHeavyLines != 1 ||
+            prePressure.heavyLinePressure != 6 ||
+            prePressure.contribution >= 0 ||
+            nd7Pressure.contribution > prePressure.contribution)
+        {
+            std::cerr << "Central pressure alignment mismatch: pre="
+                      << prePressure.contribution << " Be7="
+                      << be7Pressure.contribution << " Nd7="
+                      << nd7Pressure.contribution << '\n';
+            return 1;
+        }
+        if (castledPressure.centralKingActive || castledPressure.contribution != 0)
+        {
+            std::cerr << "Castled king must not receive central pressure, got "
+                      << castledPressure.contribution << '\n';
+            return 1;
+        }
+        if (nb5Pressure.outerAttackers <= nd7Pressure.outerAttackers ||
+            nb5Pressure.nonlinearEscalation <= nd7Pressure.nonlinearEscalation ||
+            nb5Pressure.contribution >= nd7Pressure.contribution)
+        {
+            std::cerr << "Outer-zone attacker must escalate central pressure after Nb5\n";
+            return 1;
+        }
+
+        std::unique_ptr<Board> closed(BoardMaker::MakeInitialBoard(
+            "4k3/8/8/3pp3/3PP3/8/8/4K3 w - - 0 1"));
+        const auto closedWhite = CentralKingAttackPressure::Evaluate(*closed, true);
+        const auto closedBlack = CentralKingAttackPressure::Evaluate(*closed, false);
+        if (closedWhite.generalCentreOpenness != 4 ||
+            closedBlack.generalCentreOpenness != 4 ||
+            !closedWhite.centreLocked || !closedBlack.centreLocked ||
+            closedWhite.contribution != 0 || closedBlack.contribution != 0)
+        {
+            std::cerr << "Closed centre must suppress central king pressure\n";
+            return 1;
+        }
+
+        std::cout << "Central king attack pressure structure verified\n";
         return 0;
     }
     if (testCase == "central_king_exposure")

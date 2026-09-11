@@ -133,7 +133,7 @@ if(BUILD_TESTING)
         )
     endforeach()
 
-    foreach(EVAL_CASE black_en_passant black_knight_attack bishop_pair_color king_danger_sign passed_pawn_minor_accessibility passed_pawn_table_symmetry king_safety_table_symmetry pawn_move_center_symmetry game_phase_calculation phase_taper_interpolation breakdown_reconciliation passed_pawn_phase_interpolation piece_balance_continuous)
+    foreach(EVAL_CASE black_en_passant black_knight_attack bishop_pair_color king_danger_sign passed_pawn_minor_accessibility passed_pawn_table_symmetry king_safety_table_symmetry pawn_move_center_symmetry game_phase_calculation phase_taper_interpolation breakdown_reconciliation passed_pawn_phase_interpolation piece_balance_continuous central_king_attack_pressure)
         add_test(
             NAME eval_${EVAL_CASE}
             COMMAND howl_correctness_tests eval ${EVAL_CASE}
