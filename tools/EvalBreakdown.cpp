@@ -73,6 +73,10 @@ int main(int argc, char* argv[])
               << std::right << std::setw(10) << "-" 
               << std::setw(10) << "-" 
               << std::setw(10) << bd.pieceEvaluation << "\n";
+    std::cout << std::left << std::setw(22) << "Lone King Guidance"
+              << std::right << std::setw(10) << "-"
+              << std::setw(10) << "-"
+              << std::setw(10) << bd.loneKingMateGuidance << "\n";
     std::cout << std::left << std::setw(22) << "Bishop Pair" 
               << std::right << std::setw(10) << bd.whiteBishopPair 
               << std::setw(10) << bd.blackBishopPair 

@@ -1123,6 +1123,124 @@ int EvaluationLogic::CalculatePhase(const Board &thisBoard)
 
 namespace
 {
+int LoneKingMateGuidance(Board &board)
+{
+    const auto materialCount = [&board](int offset)
+    {
+        int count = 0;
+        for (int piece = 1; piece <= 5; ++piece)
+            count += static_cast<int>(board.pieces[offset + piece].size());
+        return count;
+    };
+
+    const bool blackIsLone = materialCount(8) == 0 &&
+        (board.pieces[4].size() > 0 || board.pieces[5].size() > 0);
+    const bool whiteIsLone = materialCount(0) == 0 &&
+        (board.pieces[12].size() > 0 || board.pieces[13].size() > 0);
+    if (blackIsLone == whiteIsLone)
+        return 0;
+
+    const bool whiteWinning = blackIsLone;
+    const int loneKingSquare = board.pieces[whiteWinning ? 14 : 6].front();
+    const int winningKingSquare = board.pieces[whiteWinning ? 6 : 14].front();
+    const int file = loneKingSquare % 8;
+    const int rank = loneKingSquare / 8;
+    const int edgeDistance = std::min({file, 7 - file, rank, 7 - rank});
+    const int edgeSteps = 3 - edgeDistance;
+    const int nearestCornerDistance = std::min(file, 7 - file) + std::min(rank, 7 - rank);
+    const int cornerSteps = 6 - nearestCornerDistance;
+
+    // 1. Determine the area in which winning rook(s) or queen(s) confine the lone king.
+    const int winningOffset = whiteWinning ? 0 : 8;
+    int minCutFile = -1, maxCutFile = 8;
+    int minCutRank = -1, maxCutRank = 8;
+    auto updateCuts = [&](int sq)
+    {
+        const int f = sq % 8;
+        const int r = sq / 8;
+        if (f < file && f > minCutFile) minCutFile = f;
+        if (f > file && f < maxCutFile) maxCutFile = f;
+        if (r < rank && r > minCutRank) minCutRank = r;
+        if (r > rank && r < maxCutRank) maxCutRank = r;
+    };
+    for (int sq : board.pieces[winningOffset + 4]) updateCuts(sq);
+    for (int sq : board.pieces[winningOffset + 5]) updateCuts(sq);
+
+    const int westSpace = file - std::max(0, minCutFile + 1);
+    const int eastSpace = std::min(7, maxCutFile - 1) - file;
+    const int southSpace = rank - std::max(0, minCutRank + 1);
+    const int northSpace = std::min(7, maxCutRank - 1) - rank;
+
+    const auto squareAttacked = [&board, loneKingSquare](int target, bool whiteAttacks)
+    {
+        const long long targetBit = Option::PowerTwo[target];
+        const long long occupancy =
+            ((board.whitePieces | board.blackPieces) & ~Option::PowerTwo[loneKingSquare]) |
+            targetBit;
+        const int offset = whiteAttacks ? 0 : 8;
+        for (int square : board.pieces[offset + 1])
+            if (((whiteAttacks ? AttackPlaces::WhitePawnAttackPlaces[square]
+                                : AttackPlaces::BlackPawnAttackPlaces[square]) & targetBit) != 0)
+                return true;
+        for (int square : board.pieces[offset + 2])
+            if ((AttackPlaces::KnightAttackPlaces[square] & targetBit) != 0)
+                return true;
+        for (int square : board.pieces[offset + 3])
+            if ((AttackPlaces::BishopAttack[square][target] & occupancy) == targetBit)
+                return true;
+        for (int square : board.pieces[offset + 4])
+            if ((AttackPlaces::RookAttack[square][target] & occupancy) == targetBit)
+                return true;
+        for (int square : board.pieces[offset + 5])
+            if ((AttackPlaces::QueenAttack[square][target] & occupancy) == targetBit)
+                return true;
+        for (int square : board.pieces[offset + 6])
+            if ((AttackPlaces::KingAttackPlaces[square] & targetBit) != 0)
+                return true;
+        return false;
+    };
+
+    int safeNeighbours = 0;
+    int confinementSupport = 0;
+    for (int rankDelta = -1; rankDelta <= 1; ++rankDelta)
+    {
+        for (int fileDelta = -1; fileDelta <= 1; ++fileDelta)
+        {
+            if (rankDelta == 0 && fileDelta == 0)
+                continue;
+            const int targetRank = rank + rankDelta;
+            const int targetFile = file + fileDelta;
+            if (targetRank < 0 || targetRank > 7 || targetFile < 0 || targetFile > 7)
+                continue;
+            const int target = targetRank * 8 + targetFile;
+            if (!squareAttacked(target, whiteWinning))
+                ++safeNeighbours;
+
+            // 2. Identify boundary squares through which the lone king could expand back into a larger area.
+            const bool isBoundaryOrEscape =
+                (maxCutFile <= 7 && targetFile >= maxCutFile) ||
+                (minCutFile >= 0 && targetFile <= minCutFile) ||
+                (maxCutRank <= 7 && targetRank >= maxCutRank) ||
+                (minCutRank >= 0 && targetRank <= minCutRank) ||
+                (eastSpace > westSpace && targetFile > file) ||
+                (westSpace > eastSpace && targetFile < file) ||
+                (northSpace > southSpace && targetRank > rank) ||
+                (southSpace > northSpace && targetRank < rank);
+
+            // 3. Reward the winning king for controlling those boundary / escape squares.
+            if (isBoundaryOrEscape &&
+                (AttackPlaces::KingAttackPlaces[winningKingSquare] & Option::PowerTwo[target]) != 0)
+            {
+                ++confinementSupport;
+            }
+        }
+    }
+
+    const int guidance = 200 + 12 * edgeSteps + 6 * cornerSteps + 8 * confinementSupport +
+                         10 * (8 - safeNeighbours);
+    return whiteWinning ? guidance : -guidance;
+}
+
 int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
 {
     long long piecesBinary = thisBoard.whitePieces | thisBoard.blackPieces;
@@ -1231,7 +1349,9 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
         oppositeColorBishop = (0.9 * phase + 0.75 * (24 - phase)) / 24;
     }
 
-    int unscaled = pieceEvaluation + bishopPairVaue + movement + pawnStructure + kingSafety + rookValue + center + temp;
+    const int loneKingMateGuidance = LoneKingMateGuidance(thisBoard);
+    int unscaled = pieceEvaluation + bishopPairVaue + movement + pawnStructure + kingSafety +
+                   rookValue + center + temp + loneKingMateGuidance;
 
     double endgameScaleFactor = oppositeColorBishop;
     if (unscaled > 0)
@@ -1294,6 +1414,7 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
         breakdown->materialNet = whitePieceEvaluation - blackPieceEvaluation;
         breakdown->pieceBalance = pieceBalance;
         breakdown->pieceEvaluation = pieceEvaluation;
+        breakdown->loneKingMateGuidance = loneKingMateGuidance;
 
         breakdown->whiteBishopPair = whiteBishopPair;
         breakdown->blackBishopPair = blackBishopPair;

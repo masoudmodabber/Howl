@@ -45,6 +45,7 @@ bool Search::isMoveTime{false};
 int Search::overAllIteration = 0;
 int Search::moveCount = 0;
 int64_t Search::searchNodeCount = 0;
+std::atomic<uint64_t> Search::tablebaseHits{0};
 std::string Search::Score = "";
 bool Search::mated = false;
 
@@ -230,6 +231,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     int beta = 200000;
     moveCount = 0;
     searchNodeCount = 0;
+    tablebaseHits.store(0, std::memory_order_relaxed);
 
     bool previousMoveWasCheck = false;
     if (BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove))
@@ -1013,6 +1015,8 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
 
             if (Option::MultiPV <= 1)
             {
+                completedInfo += " tbhits " + std::to_string(
+                    tablebaseHits.load(std::memory_order_relaxed));
                 DiagnosticLogger::Log("EMIT_INFO", completedInfo, DiagnosticLogger::currentSearchId.load());
                 std::cout << completedInfo << '\n';
             }
@@ -1209,13 +1213,14 @@ bool Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
                       << " score " << Score
                       << " time " << elapsed_ms
                       << " nodes " << safeNodeCount
+                      << " tbhits " << tablebaseHits.load(std::memory_order_relaxed)
                       << " nps " << nps
                       << " pv " << ChessStringManipulation::PVToString(*(moveList.moves[i]), 0, false, board4) << '\n';
         }
     }
     else
     {
-        std::string infoStr = "info depth 1 time " + std::to_string(elapsed_ms) + " nodes " + std::to_string(searchNodeCount) + " nps " + std::to_string(nps) + " pv " + ChessStringManipulation::PVToString(*(moveList.moves[0]), 1, mated, board4) + " score " + Score;
+        std::string infoStr = "info depth 1 time " + std::to_string(elapsed_ms) + " nodes " + std::to_string(searchNodeCount) + " tbhits " + std::to_string(tablebaseHits.load(std::memory_order_relaxed)) + " nps " + std::to_string(nps) + " pv " + ChessStringManipulation::PVToString(*(moveList.moves[0]), 1, mated, board4) + " score " + Score;
         DiagnosticLogger::Log("EMIT_INFO", infoStr, DiagnosticLogger::currentSearchId.load());
         std::cout << infoStr << '\n';
     }
@@ -1301,6 +1306,7 @@ int Search::PrintKBest(std::vector<MovePrintValue *> &movesPrintValue, int KBest
                   << " score " << mpv->scoreText
                   << " time " << elapsed_ms
                   << " nodes " << safeNodeCount
+                  << " tbhits " << tablebaseHits.load(std::memory_order_relaxed)
                   << " nps " << nps
                   << " pv " << mpv->pv << '\n';
     }

@@ -9,6 +9,8 @@
 char Option::charPowerTwo[8] = {};
 char Option::charPowerTwoC[8] = {};
 int Option::MultiPV = 1;
+std::string Option::SyzygyPath;
+int Option::SyzygyProbeLimit = 5;
 int Option::nullWindowSize = 1;
 int Option::checkExtension = 4;
 int Option::checkExtensionNonPV = 1;

@@ -2,6 +2,8 @@
 #ifndef OPTION_H
 #define OPTION_H
 
+#include <string>
+
 class Option
 {
 public:
@@ -13,6 +15,8 @@ public:
 
     // Option
     static int MultiPV;
+    static std::string SyzygyPath;
+    static int SyzygyProbeLimit;
     static int nullWindowSize;
     static int checkExtension;
     static int checkExtensionNonPV;

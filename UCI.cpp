@@ -8,6 +8,7 @@
 #include <sstream>
 #include <string>
 #include <chrono>
+#include <algorithm>
 #include "BoardInitializer.h"
 #include "LastFourMoves.h"
 #include "ChessStringManipulation.h"
@@ -16,6 +17,8 @@
 #include "BoardMaker.h"
 #include "HashMemoryBudget.h"
 #include "RepetitionHistory.h"
+#include "Option.h"
+#include "Tablebase.h"
 
 #include "DiagnosticLogger.h"
 
@@ -213,6 +216,8 @@ void UCI::Run(std::istream& in, std::ostream& out)
             out << "id author Masoud Modabber\n";
             out << "option name MultiPV type spin default 1 min 1 max 99\n";
             out << "option name Hash type spin min 8 max 1024 default 40\n";
+            out << "option name SyzygyPath type string default <empty>\n";
+            out << "option name SyzygyProbeLimit type spin default 5 min 0 max 7\n";
             out << "uciok\n" << std::flush;
         }
         else if (order == "isready")
@@ -342,6 +347,35 @@ void UCI::Run(std::istream& in, std::ostream& out)
             if (order.compare(0, 19, "setoption name Hash") == 0)
             {
                 ApplyHashOptionCommand(order, out);
+                continue;
+            }
+            if (order.rfind("setoption name SyzygyPath", 0) == 0)
+            {
+                const std::string marker = " value ";
+                const std::size_t valueAt = order.find(marker);
+                Option::SyzygyPath = valueAt == std::string::npos
+                    ? std::string() : order.substr(valueAt + marker.size());
+                if (!Tablebase::Initialize(Option::SyzygyPath) &&
+                    !Option::SyzygyPath.empty())
+                    out << "info string no Syzygy tablebases found at path\n";
+                continue;
+            }
+            if (order.rfind("setoption name SyzygyProbeLimit", 0) == 0)
+            {
+                const std::string marker = " value ";
+                const std::size_t valueAt = order.find(marker);
+                if (valueAt != std::string::npos)
+                {
+                    try
+                    {
+                        Option::SyzygyProbeLimit = std::clamp(
+                            std::stoi(order.substr(valueAt + marker.size())), 0, 7);
+                    }
+                    catch (const std::exception &)
+                    {
+                        out << "info string invalid SyzygyProbeLimit value\n";
+                    }
+                }
                 continue;
             }
             std::string tempString = order.substr(15);
