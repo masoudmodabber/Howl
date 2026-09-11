@@ -1902,6 +1902,7 @@ int RunSearch(const std::string& testCase)
         const Window initial{-50, 50};
         const Window highRetry{50, 200000};
         const Window lowRetry{-200000, -50};
+        const Window fullWindow{-200000, 200000};
 
         const auto success = Search::AspirationWindowsForTesting(0, {10});
         const auto failHigh =
@@ -1916,16 +1917,16 @@ int RunSearch(const std::string& testCase)
         if (success != std::vector<Window>{initial} ||
             failHigh != std::vector<Window>{initial, highRetry} ||
             failLow != std::vector<Window>{initial, lowRetry} ||
-            persistentHigh != std::vector<Window>{initial, highRetry} ||
-            persistentLow != std::vector<Window>{initial, lowRetry} ||
+            persistentHigh != std::vector<Window>{initial, highRetry, fullWindow} ||
+            persistentLow != std::vector<Window>{initial, lowRetry, fullWindow} ||
             failHigh.size() > 2 || failLow.size() > 2 ||
-            persistentHigh.size() > 2 || persistentLow.size() > 2)
+            persistentHigh.size() > 3 || persistentLow.size() > 3)
         {
             std::cerr << "Aspiration policy pass/window sequence failure\n";
             return 1;
         }
 
-        std::cout << "Aspiration success and one directional retry verified\n";
+        std::cout << "Aspiration success, directional retry, and bounded full-window fallback verified\n";
         return 0;
     }
 

@@ -95,10 +95,10 @@ namespace
         return SearchBound::Exact;
     }
 
-    bool AdvanceAspirationWindow(int score, bool exactMate, bool& retryUsed,
+    bool AdvanceAspirationWindow(int score, bool exactMate, int& retriesUsed,
                                  int& alpha, int& beta)
     {
-        if (exactMate || retryUsed || (score > alpha && score < beta))
+        if (exactMate || (score > alpha && score < beta))
             return false;
 
         const bool failLow = score <= alpha;
@@ -106,16 +106,31 @@ namespace
         if (!failLow && !failHigh)
             return false;
 
-        if (failHigh)
-            alpha = beta;
-        else
-            beta = alpha;
-        if (failHigh)
-            beta = FullSearchBeta;
-        else
+        if (retriesUsed == 0)
+        {
+            if (failHigh)
+            {
+                alpha = beta;
+                beta = FullSearchBeta;
+            }
+            else
+            {
+                beta = alpha;
+                alpha = FullSearchAlpha;
+            }
+            retriesUsed = 1;
+            return true;
+        }
+
+        if (retriesUsed == 1)
+        {
             alpha = FullSearchAlpha;
-        retryUsed = true;
-        return true;
+            beta = FullSearchBeta;
+            retriesUsed = 2;
+            return true;
+        }
+
+        return false;
     }
 }
 
@@ -127,12 +142,12 @@ std::vector<std::pair<int, int>> Search::AspirationWindowsForTesting(
                          previousScore - InitialAspirationDelta);
     int beta = std::min(FullSearchBeta,
                         previousScore + InitialAspirationDelta);
-    bool retryUsed = false;
+    int retriesUsed = 0;
     std::vector<std::pair<int, int>> windows;
     for (int score : searchScores)
     {
         windows.emplace_back(alpha, beta);
-        if (!AdvanceAspirationWindow(score, false, retryUsed, alpha, beta))
+        if (!AdvanceAspirationWindow(score, false, retriesUsed, alpha, beta))
             break;
     }
     return windows;
@@ -376,7 +391,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             aspBeta = std::min(200000,
                                prevCompletedScore + InitialAspirationDelta);
         }
-        bool aspirationRetryUsed = false;
+        int aspirationRetriesUsed = 0;
         bool iterationCompleted = false;
 
         while (active.load(std::memory_order_relaxed))
@@ -928,7 +943,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             if (Option::MultiPV <= 1 && !iterationMateExact)
             {
                 if (AdvanceAspirationWindow(iterScore, false,
-                                            aspirationRetryUsed,
+                                            aspirationRetriesUsed,
                                             aspAlpha, aspBeta))
                 {
                     deleteMovesPrintValue(movesPrintValue);
