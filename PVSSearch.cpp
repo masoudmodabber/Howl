@@ -986,6 +986,8 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                 uncertainty += staticMargin < 150 ? 1 : 0;
                 uncertainty += nullMargin < 100 ? 1 : 0;
                 uncertainty += (R * 3 >= depth * 2) ? 1 : 0;
+                if (nullFailedHigh && !sparseMaterialRisk && uncertainty == 3)
+                    cutoffAccepted = false;
                 const bool verificationRequired = nullFailedHigh && sparseMaterialRisk &&
                     (totalPieceCount <= 6 || uncertainty >= 2);
                 if (verificationRequired)
