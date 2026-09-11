@@ -2,6 +2,7 @@
 #define HOWL_TUNER_EVALUATOR_H
 
 #include "Board.h"
+#include "CentralKingAttackPressure.h"
 #include "Option.h"
 #include "KingSetup.h"
 #include "AttackPlaces.h"
@@ -1616,7 +1617,12 @@ public:
         int blackKingPlacement = (state.BlackKingPlaceSafetyMiddleGame[blackKingSq] * phase
                                   + state.KingInValueBlackEndGame[blackKingSq] * (24 - phase)) / 24;
         int kingPlacementNet = whiteKingPlacement - blackKingPlacement;
-        int kingSafety = kingDangerNet + kingPlacementNet;
+        const CentralKingAttackPressure::Result whiteCentralPressure =
+            CentralKingAttackPressure::Evaluate(thisBoard, true);
+        const CentralKingAttackPressure::Result blackCentralPressure =
+            CentralKingAttackPressure::Evaluate(thisBoard, false);
+        int kingSafety = kingDangerNet + kingPlacementNet +
+                         whiteCentralPressure.contribution - blackCentralPressure.contribution;
 
         // Pawn Structure
         int pawnStructure = Detail::GetPawnStructureValue(thisBoard, phase, state);

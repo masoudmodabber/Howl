@@ -97,10 +97,39 @@ int main(int argc, char* argv[])
               << std::right << std::setw(10) << bd.whitePawnShield 
               << std::setw(10) << bd.blackPawnShield 
               << std::setw(10) << bd.pawnShieldNet << "\n";
-    std::cout << std::left << std::setw(22) << "Central King Exposure" 
-              << std::right << std::setw(10) << bd.whiteCentralKingExposure 
-              << std::setw(10) << bd.blackCentralKingExposure 
-              << std::setw(10) << bd.centralKingExposureNet << "\n";
+    std::cout << std::left << std::setw(22) << "Central Attack Pressure"
+              << std::right << std::setw(10) << bd.whiteCentralKingAttackPressure
+              << std::setw(10) << bd.blackCentralKingAttackPressure
+              << std::setw(10) << bd.centralKingAttackPressureNet << "\n";
+    std::cout << "Central attack pressure: centre=" << bd.centralGeneralOpenness << "/8"
+              << " effective=" << bd.centralEffectiveOpenness << "/16"
+              << " state=" << (bd.centralCentreLocked ? "locked" :
+                                (bd.centralCentreOpen ? "open" : "mixed"))
+              << " d/e=" << bd.centralDFileExposure << "/" << bd.centralEFileExposure
+              << " | White active=" << (bd.whiteCentralKingActive ? "yes" : "no")
+              << " heavy=" << bd.whiteHeavyLinePressure
+              << " lines=" << bd.whiteDirectHeavyLines << "/"
+              << bd.whiteOneBlockerHeavyLines << "/" << bd.whiteMultiBlockerHeavyLines
+              << " bishop=" << bd.whiteBishopDiagonalPressure
+              << " bishop-lines=" << bd.whiteDirectBishopLines << "/"
+              << bd.whiteOneBlockerBishopLines << "/" << bd.whiteMultiBlockerBishopLines
+              << " inner=" << bd.whiteInnerAttackers << "(" << bd.whiteInnerAttackContribution << ")"
+              << " outer=" << bd.whiteOuterAttackers << "(" << bd.whiteOuterAttackContribution << ")"
+              << " escalation=" << bd.whiteNonlinearEscalation
+              << " castle=" << (bd.whiteImmediateCastling ? "yes" : "no")
+              << " mitigation=" << bd.whiteCastlingMitigation
+              << " | Black active=" << (bd.blackCentralKingActive ? "yes" : "no")
+              << " heavy=" << bd.blackHeavyLinePressure
+              << " lines=" << bd.blackDirectHeavyLines << "/"
+              << bd.blackOneBlockerHeavyLines << "/" << bd.blackMultiBlockerHeavyLines
+              << " bishop=" << bd.blackBishopDiagonalPressure
+              << " bishop-lines=" << bd.blackDirectBishopLines << "/"
+              << bd.blackOneBlockerBishopLines << "/" << bd.blackMultiBlockerBishopLines
+              << " inner=" << bd.blackInnerAttackers << "(" << bd.blackInnerAttackContribution << ")"
+              << " outer=" << bd.blackOuterAttackers << "(" << bd.blackOuterAttackContribution << ")"
+              << " escalation=" << bd.blackNonlinearEscalation
+              << " castle=" << (bd.blackImmediateCastling ? "yes" : "no")
+              << " mitigation=" << bd.blackCastlingMitigation << "\n";
     std::cout << std::left << std::setw(22) << "King Safety Total" 
               << std::right << std::setw(10) << "-" 
               << std::setw(10) << "-" 

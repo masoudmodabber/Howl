@@ -3,6 +3,7 @@
 #include <crtdbg.h>
 #endif
 #include "EvaluationLogic.h"
+#include "CentralKingAttackPressure.h"
 #include "Option.h"
 #include "KingSetup.h"
 #include "AttackPlaces.h"
@@ -1200,7 +1201,13 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     int blackKingPlacement = (Option::BlackKingPlaceSafetyMiddleGame[blackKingSq] * phase
                               + Option::KingInValueBlackEndGame[blackKingSq] * (24 - phase)) / 24;
     int kingPlacementNet = whiteKingPlacement - blackKingPlacement;
-    int kingSafety = kingDangerNet + kingPlacementNet;
+    const CentralKingAttackPressure::Result whiteCentralPressure =
+        CentralKingAttackPressure::Evaluate(thisBoard, true);
+    const CentralKingAttackPressure::Result blackCentralPressure =
+        CentralKingAttackPressure::Evaluate(thisBoard, false);
+    const int centralPressureNet =
+        whiteCentralPressure.contribution - blackCentralPressure.contribution;
+    int kingSafety = kingDangerNet + kingPlacementNet + centralPressureNet;
 
     // Pawn Structure
     int pawnStructure = EvaluationLogic::GetPawnStructureValue(thisBoard, phase);
@@ -1309,6 +1316,47 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
         breakdown->whiteCentralKingExposure = 0;
         breakdown->blackCentralKingExposure = 0;
         breakdown->centralKingExposureNet = 0;
+        breakdown->whiteCentralKingAttackPressure = whiteCentralPressure.contribution;
+        breakdown->blackCentralKingAttackPressure = blackCentralPressure.contribution;
+        breakdown->centralKingAttackPressureNet = centralPressureNet;
+        breakdown->centralGeneralOpenness = whiteCentralPressure.generalCentreOpenness;
+        breakdown->centralEffectiveOpenness = whiteCentralPressure.effectiveOpenness;
+        breakdown->centralDFileExposure = whiteCentralPressure.dFileExposure;
+        breakdown->centralEFileExposure = whiteCentralPressure.eFileExposure;
+        breakdown->centralCentreLocked = whiteCentralPressure.centreLocked;
+        breakdown->centralCentreOpen = whiteCentralPressure.centreOpen;
+        breakdown->whiteCentralKingActive = whiteCentralPressure.centralKingActive;
+        breakdown->blackCentralKingActive = blackCentralPressure.centralKingActive;
+        breakdown->whiteHeavyLinePressure = whiteCentralPressure.heavyLinePressure;
+        breakdown->blackHeavyLinePressure = blackCentralPressure.heavyLinePressure;
+        breakdown->whiteBishopDiagonalPressure = whiteCentralPressure.bishopDiagonalPressure;
+        breakdown->blackBishopDiagonalPressure = blackCentralPressure.bishopDiagonalPressure;
+        breakdown->whiteDirectHeavyLines = whiteCentralPressure.directHeavyLines;
+        breakdown->blackDirectHeavyLines = blackCentralPressure.directHeavyLines;
+        breakdown->whiteOneBlockerHeavyLines = whiteCentralPressure.oneBlockerHeavyLines;
+        breakdown->blackOneBlockerHeavyLines = blackCentralPressure.oneBlockerHeavyLines;
+        breakdown->whiteMultiBlockerHeavyLines = whiteCentralPressure.multiBlockerHeavyLines;
+        breakdown->blackMultiBlockerHeavyLines = blackCentralPressure.multiBlockerHeavyLines;
+        breakdown->whiteDirectBishopLines = whiteCentralPressure.directBishopLines;
+        breakdown->blackDirectBishopLines = blackCentralPressure.directBishopLines;
+        breakdown->whiteOneBlockerBishopLines = whiteCentralPressure.oneBlockerBishopLines;
+        breakdown->blackOneBlockerBishopLines = blackCentralPressure.oneBlockerBishopLines;
+        breakdown->whiteMultiBlockerBishopLines = whiteCentralPressure.multiBlockerBishopLines;
+        breakdown->blackMultiBlockerBishopLines = blackCentralPressure.multiBlockerBishopLines;
+        breakdown->whiteInnerAttackers = whiteCentralPressure.innerAttackers;
+        breakdown->blackInnerAttackers = blackCentralPressure.innerAttackers;
+        breakdown->whiteOuterAttackers = whiteCentralPressure.outerAttackers;
+        breakdown->blackOuterAttackers = blackCentralPressure.outerAttackers;
+        breakdown->whiteInnerAttackContribution = whiteCentralPressure.innerAttackContribution;
+        breakdown->blackInnerAttackContribution = blackCentralPressure.innerAttackContribution;
+        breakdown->whiteOuterAttackContribution = whiteCentralPressure.outerAttackContribution;
+        breakdown->blackOuterAttackContribution = blackCentralPressure.outerAttackContribution;
+        breakdown->whiteNonlinearEscalation = whiteCentralPressure.nonlinearEscalation;
+        breakdown->blackNonlinearEscalation = blackCentralPressure.nonlinearEscalation;
+        breakdown->whiteCastlingMitigation = whiteCentralPressure.castlingMitigation;
+        breakdown->blackCastlingMitigation = blackCentralPressure.castlingMitigation;
+        breakdown->whiteImmediateCastling = whiteCentralPressure.immediateCastling;
+        breakdown->blackImmediateCastling = blackCentralPressure.immediateCastling;
         breakdown->kingSafetyTotal = kingSafety;
         breakdown->whiteKingDanger = whiteKingDanger.danger;
         breakdown->blackKingDanger = blackKingDanger.danger;
