@@ -1,9 +1,14 @@
 cmake_minimum_required(VERSION 3.10)
-project(Howl)
+project(Howl C CXX)
 set(CMAKE_CXX_STANDARD 17)
+add_library(fathom STATIC
+    third_party/fathom/src/tbprobe.c
+)
+target_include_directories(fathom PUBLIC third_party/fathom/src)
 file(GLOB SOURCES "*.cpp")
 list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/tools_scratch_test_node_counts.cpp")
 add_executable(howl ${SOURCES})
+target_link_libraries(howl PRIVATE fathom)
 
 set(TUNER_ENGINE_SOURCES ${SOURCES})
 list(REMOVE_ITEM TUNER_ENGINE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
@@ -12,6 +17,7 @@ add_executable(howl_tuner
     ${TUNER_ENGINE_SOURCES}
 )
 target_include_directories(howl_tuner PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(howl_tuner PRIVATE fathom)
 
 include(CTest)
 
@@ -25,6 +31,7 @@ if(BUILD_TESTING)
     )
     target_include_directories(howl_correctness_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_definitions(howl_correctness_tests PRIVATE HOWL_CORRECTNESS_TESTING=1)
+    target_link_libraries(howl_correctness_tests PRIVATE fathom)
 
     add_executable(howl_benchmark
         tests/Benchmark.cpp
@@ -35,6 +42,7 @@ if(BUILD_TESTING)
         HOWL_BENCHMARK_RELEASE=$<IF:$<CONFIG:Release>,1,0>
         HOWL_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     )
+    target_link_libraries(howl_benchmark PRIVATE fathom)
 
     add_executable(howl_memory_stress
         tests/MemoryStress.cpp
@@ -45,12 +53,14 @@ if(BUILD_TESTING)
         HOWL_MEMORY_STRESS_RELEASE=$<IF:$<CONFIG:Release>,1,0>
         HOWL_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     )
+    target_link_libraries(howl_memory_stress PRIVATE fathom)
 
     add_executable(howl_tuner_tests
         tests/TunerTests.cpp
         ${TEST_ENGINE_SOURCES}
     )
     target_include_directories(howl_tuner_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(howl_tuner_tests PRIVATE fathom)
 
     foreach(TUNER_CASE piece_value_only other_family_freezes_piece_value refine1_unchanged parity_regression stops_after_unchanged_sweep mobility_v2_structure passed_pawn_v2_structure passed_pawn_v2_parallel_startup)
         add_test(
@@ -65,6 +75,7 @@ if(BUILD_TESTING)
     )
     target_include_directories(howl_eval_breakdown PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_definitions(howl_eval_breakdown PRIVATE HOWL_CORRECTNESS_TESTING=1)
+    target_link_libraries(howl_eval_breakdown PRIVATE fathom)
 
     add_executable(howl_phase_curve_tool
         tools/PhaseCurveTool.cpp
@@ -72,6 +83,7 @@ if(BUILD_TESTING)
     )
     target_include_directories(howl_phase_curve_tool PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_definitions(howl_phase_curve_tool PRIVATE HOWL_CORRECTNESS_TESTING=1)
+    target_link_libraries(howl_phase_curve_tool PRIVATE fathom)
 
     foreach(POSITION start kiwipete position3 position4 position5 position6)
         add_test(
@@ -133,7 +145,14 @@ if(BUILD_TESTING)
         )
     endforeach()
 
-    foreach(EVAL_CASE black_en_passant black_knight_attack bishop_pair_color king_danger_sign passed_pawn_minor_accessibility passed_pawn_table_symmetry king_safety_table_symmetry pawn_move_center_symmetry game_phase_calculation phase_taper_interpolation breakdown_reconciliation passed_pawn_phase_interpolation piece_balance_continuous central_king_attack_pressure)
+    foreach(TABLEBASE_CASE disabled invalid_path above_limit unsupported_state win draw loss search_result)
+        add_test(
+            NAME tablebase_${TABLEBASE_CASE}
+            COMMAND howl_correctness_tests tablebase ${TABLEBASE_CASE}
+        )
+    endforeach()
+
+    foreach(EVAL_CASE lone_king_mate_guidance black_en_passant black_knight_attack bishop_pair_color king_danger_sign passed_pawn_minor_accessibility passed_pawn_table_symmetry king_safety_table_symmetry pawn_move_center_symmetry game_phase_calculation phase_taper_interpolation breakdown_reconciliation passed_pawn_phase_interpolation piece_balance_continuous central_king_attack_pressure)
         add_test(
             NAME eval_${EVAL_CASE}
             COMMAND howl_correctness_tests eval ${EVAL_CASE}

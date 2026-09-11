@@ -14,6 +14,7 @@ struct EvaluationBreakdown
     int materialNet = 0;
     double pieceBalance = 1.0;
     int pieceEvaluation = 0;
+    int loneKingMateGuidance = 0;
 
     int whiteBishopPair = 0;
     int blackBishopPair = 0;

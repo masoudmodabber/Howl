@@ -4,6 +4,7 @@
 #include "CentralKingAttackPressure.h"
 #include "ChessStringManipulation.h"
 #include "EvaluationLogic.h"
+#include "Tablebase.h"
 #include "GameLogic.h"
 #include "HashMemoryBudget.h"
 #include "KingSetup.h"
@@ -3381,6 +3382,57 @@ int RunUCI(const std::string& testCase)
 
 int RunEvaluationCorrectness(const std::string& testCase)
 {
+    if (testCase == "lone_king_mate_guidance")
+    {
+        struct GuidanceCase
+        {
+            const char *name;
+            const char *fen;
+        };
+        const GuidanceCase cases[] = {
+            {"KRK centre, king far", "K7/8/8/8/3k4/8/8/7R w - - 0 1"},
+            {"KRK edge, king far", "7K/8/8/8/k7/8/8/7R w - - 0 1"},
+            {"KRK centre, king close", "8/8/8/8/3k4/8/1K6/7R w - - 0 1"},
+            {"KRK centre, restricted", "K7/8/8/7R/3k4/8/8/8 w - - 0 1"},
+            {"KQK", "K7/8/8/8/3k4/8/8/7Q w - - 0 1"},
+            {"K2RK", "K7/8/8/8/3k4/8/8/6RR w - - 0 1"}
+        };
+
+        EvaluationBreakdown results[6];
+        for (int i = 0; i < 6; ++i)
+        {
+            std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(cases[i].fen));
+            EvaluationLogic::ClearEvalCacheForTesting();
+            results[i] = EvaluationLogic::EvaluateDetailed(*board);
+            std::cout << cases[i].name
+                      << ": material=" << results[i].pieceEvaluation
+                      << " guidance=" << results[i].loneKingMateGuidance
+                      << " final=" << results[i].sideToMoveTotal << '\n';
+            if (results[i].loneKingMateGuidance <= 0)
+                return 1;
+        }
+
+        if (results[1].loneKingMateGuidance <= results[0].loneKingMateGuidance ||
+            results[2].loneKingMateGuidance <= results[0].loneKingMateGuidance ||
+            results[3].loneKingMateGuidance <= results[0].loneKingMateGuidance)
+        {
+            std::cerr << "Lone king mate guidance gradient is not monotonic\n";
+            return 1;
+        }
+
+        std::unique_ptr<Board> minorOnly(BoardMaker::MakeInitialBoard(
+            "8/8/8/8/3k4/8/8/K6B w - - 0 1"));
+        std::unique_ptr<Board> mirrored(BoardMaker::MakeInitialBoard(
+            "k6r/8/8/3K4/8/8/8/8 b - - 0 1"));
+        const EvaluationBreakdown minor = EvaluationLogic::EvaluateDetailed(*minorOnly);
+        const EvaluationBreakdown blackWins = EvaluationLogic::EvaluateDetailed(*mirrored);
+        if (minor.loneKingMateGuidance != 0 || blackWins.loneKingMateGuidance >= 0)
+        {
+            std::cerr << "Lone king mate guidance activation or symmetry failure\n";
+            return 1;
+        }
+        return 0;
+    }
     if (testCase == "black_en_passant")
     {
         // Compare White en passant vs Black en passant under 180-degree rotation
@@ -3872,7 +3924,7 @@ int RunEvaluationCorrectness(const std::string& testCase)
                 return 1;
             }
 
-            int expectedUnscaled = bd.pieceEvaluation + bd.bishopPairNet + bd.mobilityNet +
+            int expectedUnscaled = bd.pieceEvaluation + bd.loneKingMateGuidance + bd.bishopPairNet + bd.mobilityNet +
                                    bd.pawnStructureNet + bd.kingSafetyTotal + bd.rookConnectionNet +
                                    bd.centerNet + bd.tempoNet;
             if (bd.unscaledTotal != expectedUnscaled)
@@ -5370,11 +5422,80 @@ int RunQSearchMoveGenCorrectnessTest()
     return 0;
 }
 
+namespace
+{
+int RunTablebaseTest(const std::string &testCase)
+{
+    if (testCase == "disabled")
+    {
+        if (!Tablebase::Initialize("") || Tablebase::IsAvailable() ||
+            Tablebase::MaxPieces() != 0)
+            return 1;
+        return 0;
+    }
+    if (testCase == "invalid_path")
+    {
+        Tablebase::Initialize("/definitely/not/a/howl/tablebase/path");
+        return Tablebase::IsAvailable() ? 1 : 0;
+    }
+    if (testCase == "above_limit")
+    {
+        std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(
+            "7k/8/8/8/8/8/6Q1/6K1 w - - 0 1"));
+        return Tablebase::PieceCount(*board) > 2 ? 0 : 1;
+    }
+    if (testCase == "unsupported_state")
+    {
+        std::unique_ptr<Board> castling(BoardMaker::MakeInitialBoard(
+            "4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1"));
+        std::unique_ptr<Board> rule50(BoardMaker::MakeInitialBoard(
+            "7k/8/8/8/8/8/6Q1/6K1 w - - 1 1"));
+        return Tablebase::IsPositionStateSupported(*castling) ||
+                       Tablebase::IsPositionStateSupported(*rule50)
+                   ? 1 : 0;
+    }
+
+    const char *path = std::getenv("HOWL_SYZYGY_PATH");
+    if (path == nullptr || !Tablebase::Initialize(path))
+    {
+        std::cout << "SKIP: set HOWL_SYZYGY_PATH to the documented tablebase directory\n";
+        return 0;
+    }
+
+    const char *fen = testCase == "win" || testCase == "search_result"
+        ? "7k/8/8/8/8/8/6Q1/6K1 w - - 0 1"
+        : testCase == "loss"
+            ? "7k/8/8/8/8/8/6Q1/6K1 b - - 0 1"
+            : "7k/8/8/8/8/8/8/6K1 w - - 0 1";
+    std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+    const std::optional<Tablebase::Wdl> result = Tablebase::ProbeWdl(*board, 5);
+    const Tablebase::Wdl expected = testCase == "win" || testCase == "search_result"
+        ? Tablebase::Wdl::Win
+        : testCase == "loss" ? Tablebase::Wdl::Loss : Tablebase::Wdl::Draw;
+    if (!result.has_value() || *result != expected)
+        return 1;
+
+    if (testCase == "search_result")
+    {
+        Move previous{};
+        Move move1{}, move2{}, move3{};
+        Search::tablebaseHits.store(0);
+        std::unique_ptr<MovePrintValue> searched(PVSSearch::PVS(
+            true, -200000, 200000, 4, previous, move1, move2, move3,
+            *board, false, true, 1, false, false));
+        if (searched->value != Tablebase::WinScore ||
+            searched->bound != SearchBound::Exact || Search::tablebaseHits != 1)
+            return 1;
+    }
+    return 0;
+}
+}
+
 int main(int argc, char* argv[])
 {
     if (argc != 3)
     {
-        std::cerr << "Usage: howl_correctness_tests <perft|restoration|zobrist|search|qsearch|cache|lifecycle|memory|uci> <case>\n";
+        std::cerr << "Usage: howl_correctness_tests <perft|restoration|zobrist|search|qsearch|cache|lifecycle|memory|uci|tablebase> <case>\n";
         return 2;
     }
 
@@ -5384,7 +5505,11 @@ int main(int argc, char* argv[])
         std::string testType = argv[1];
         int result = 0;
 
-        if (testType == "zobrist")
+        if (testType == "tablebase")
+        {
+            result = RunTablebaseTest(argv[2]);
+        }
+        else if (testType == "zobrist")
         {
             result = RunZobrist(argv[2]);
         }
