@@ -145,7 +145,7 @@ if(BUILD_TESTING)
         )
     endforeach()
 
-    foreach(TABLEBASE_CASE disabled invalid_path above_limit unsupported_state win draw loss search_result)
+    foreach(TABLEBASE_CASE disabled invalid_path above_limit unsupported_state missing_king win draw loss search_result)
         add_test(
             NAME tablebase_${TABLEBASE_CASE}
             COMMAND howl_correctness_tests tablebase ${TABLEBASE_CASE}

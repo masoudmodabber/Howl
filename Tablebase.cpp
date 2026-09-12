@@ -66,6 +66,8 @@ int Tablebase::PieceCount(const Board &position)
 
 bool Tablebase::IsPositionStateSupported(const Board &position)
 {
+    if (position.pieces[6].count != 1 || position.pieces[14].count != 1)
+        return false;
     if (position.whiteSmallCastle || position.whiteBigCastle ||
         position.blackSmallCastle || position.blackBigCastle)
         return false;

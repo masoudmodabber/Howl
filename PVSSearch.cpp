@@ -800,19 +800,6 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
 
     const int origAlpha = alpha;
     const int origBeta = beta;
-    if (!MAtESearch && depthGone > 0)
-    {
-        const std::optional<Tablebase::Wdl> wdl =
-            Tablebase::ProbeWdl(board4, Option::SyzygyProbeLimit);
-        if (wdl.has_value())
-        {
-            Search::tablebaseHits.fetch_add(1, std::memory_order_relaxed);
-            retValue->value = Tablebase::Score(*wdl);
-            retValue->bound = SearchBound::Exact;
-            delete MPValue;
-            return retValue;
-        }
-    }
     if (depth == 0)
     {
         delete retValue;
@@ -931,6 +918,20 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
         delete MPValue;
         MPValue = nullptr;
         return retValue;
+    }
+
+    if (!MAtESearch && depthGone > 0)
+    {
+        const std::optional<Tablebase::Wdl> wdl =
+            Tablebase::ProbeWdl(board4, Option::SyzygyProbeLimit);
+        if (wdl.has_value())
+        {
+            Search::tablebaseHits.fetch_add(1, std::memory_order_relaxed);
+            retValue->value = Tablebase::Score(*wdl);
+            retValue->bound = SearchBound::Exact;
+            delete MPValue;
+            return retValue;
+        }
     }
     if (depth == 1 && BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove))
     {
