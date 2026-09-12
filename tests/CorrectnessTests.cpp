@@ -5450,9 +5450,30 @@ int RunTablebaseTest(const std::string &testCase)
             "4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1"));
         std::unique_ptr<Board> rule50(BoardMaker::MakeInitialBoard(
             "7k/8/8/8/8/8/6Q1/6K1 w - - 1 1"));
+        std::unique_ptr<Board> noWhiteKing(BoardMaker::MakeInitialBoard(
+            "8/8/8/8/8/8/4k3/4r3 w - - 0 1"));
+        std::unique_ptr<Board> noBlackKing(BoardMaker::MakeInitialBoard(
+            "8/8/8/8/8/8/4K3/4R3 w - - 0 1"));
         return Tablebase::IsPositionStateSupported(*castling) ||
-                       Tablebase::IsPositionStateSupported(*rule50)
+                       Tablebase::IsPositionStateSupported(*rule50) ||
+                       Tablebase::IsPositionStateSupported(*noWhiteKing) ||
+                       Tablebase::IsPositionStateSupported(*noBlackKing)
                    ? 1 : 0;
+    }
+    if (testCase == "missing_king")
+    {
+        std::unique_ptr<Board> noWhiteKing(BoardMaker::MakeInitialBoard(
+            "8/8/8/8/8/8/4k3/4r3 w - - 0 1"));
+        std::unique_ptr<Board> noBlackKing(BoardMaker::MakeInitialBoard(
+            "8/8/8/8/8/8/4K3/4R3 w - - 0 1"));
+        if (Tablebase::IsPositionStateSupported(*noWhiteKing) ||
+            Tablebase::IsPositionStateSupported(*noBlackKing) ||
+            Tablebase::IsProbeEligible(*noWhiteKing, 5) ||
+            Tablebase::IsProbeEligible(*noBlackKing, 5))
+            return 1;
+        const auto res1 = Tablebase::ProbeWdl(*noWhiteKing, 5);
+        const auto res2 = Tablebase::ProbeWdl(*noBlackKing, 5);
+        return (!res1.has_value() && !res2.has_value()) ? 0 : 1;
     }
 
     const char *path = std::getenv("HOWL_SYZYGY_PATH");

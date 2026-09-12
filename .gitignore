@@ -215,6 +215,7 @@ match-engines/
 
 # Tuner datasets and output files
 tuner-corpus/
+spsa_state/
 *.tsv
 
 # Scratch / temporary investigation files
