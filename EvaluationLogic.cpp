@@ -1290,18 +1290,18 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     int whiteBishopPair = 0;
     int blackBishopPair = 0;
     const int totalPawns = pieces[1].size() + pieces[9].size();
-    const int bpBonus = std::max(15, 50 - totalPawns * 2);
+    const int bpBonus = std::max(0, 48 - totalPawns * 3);
     if (pieces[3].size() == 2 && ((pieces[3][0] / 8 + pieces[3][0] % 8) % 2) != ((pieces[3][1] / 8 + pieces[3][1] % 8) % 2))    
     {
         int dev = 0;
         for (int sq : pieces[3]) if (sq != 2 && sq != 5) dev++;
-        whiteBishopPair = (dev >= 2) ? bpBonus : (dev == 1 ? bpBonus / 2 : 0);
+        whiteBishopPair = (dev >= 2) ? bpBonus : (dev == 1 ? (bpBonus / 2) : 0);
     }
     if (pieces[11].size() == 2 && ((pieces[11][0] / 8 + pieces[11][0] % 8) % 2) != ((pieces[11][1] / 8 + pieces[11][1] % 8) % 2))
     {
         int dev = 0;
         for (int sq : pieces[11]) if (sq != 58 && sq != 61) dev++;
-        blackBishopPair = (dev >= 2) ? bpBonus : (dev == 1 ? bpBonus / 2 : 0);
+        blackBishopPair = (dev >= 2) ? bpBonus : (dev == 1 ? (bpBonus / 2) : 0);
     }
     int bishopPairVaue = whiteBishopPair - blackBishopPair;
 
@@ -1575,7 +1575,17 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int phase)
         {
             if (whitePawnPerColumn[counter].size() > 1)
             {
-                doubledPawnValueWhite += Option::DoubledPawnValue * (whitePawnPerColumn[counter].size() - 1);
+                int penalty = Option::DoubledPawnValue * (whitePawnPerColumn[counter].size() - 1);
+                for (int psq : whitePawnPerColumn[counter])
+                {
+                    if ((AttackPlaces::WhitePawnAttackPlaces[psq] & whitePawns) != 0 ||
+                        (AttackPlaces::BlackPawnAttackPlaces[psq] & whitePawns) != 0)
+                    {
+                        penalty = 0;
+                        break;
+                    }
+                }
+                doubledPawnValueWhite += penalty;
             }
         }
         int singlePastWhite = 0;
@@ -1601,7 +1611,21 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int phase)
             const int endGameValue = pawnPlace / 8 * 2;
             goForwardPawnWhite += TaperGroup3Value(0, endGameValue, phase);
         }
-        whitePawnSum = doubledPawnValueWhite + singlePastWhite + isolatedPawnValueWhite + goForwardPawnWhite;
+        int pawnChainWhite = 0;
+        for (int pawnPlace : thisBoard.pieces[1])
+        {
+            if ((AttackPlaces::BlackPawnAttackPlaces[pawnPlace] & whitePawns) != 0)
+            {
+                pawnChainWhite += 6;
+                int r = pawnPlace / 8, f = pawnPlace % 8;
+                if (f >= 2 && f <= 5)
+                {
+                    if (r >= 3) pawnChainWhite += 6;
+                    if (r >= 4) pawnChainWhite += 6;
+                }
+            }
+        }
+        whitePawnSum = doubledPawnValueWhite + singlePastWhite + isolatedPawnValueWhite + goForwardPawnWhite + pawnChainWhite;
         PawnEvalCache.Add(whitePawns, whitePawnSum, 0, phase);
     }
     int blackPawnSum;
@@ -1621,7 +1645,17 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int phase)
         {
             if (blackPawnPerColumn[counter].size() > 1)
             {
-                doubledPawnValueBlack += Option::DoubledPawnValue * (blackPawnPerColumn[counter].size() - 1);
+                int penalty = Option::DoubledPawnValue * (blackPawnPerColumn[counter].size() - 1);
+                for (int psq : blackPawnPerColumn[counter])
+                {
+                    if ((AttackPlaces::BlackPawnAttackPlaces[psq] & blackPawns) != 0 ||
+                        (AttackPlaces::WhitePawnAttackPlaces[psq] & blackPawns) != 0)
+                    {
+                        penalty = 0;
+                        break;
+                    }
+                }
+                doubledPawnValueBlack += penalty;
             }
         }
         int singlePastBlack = 0;
@@ -1648,7 +1682,21 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int phase)
             const int endGameValue = (7 - (pawnPlace / 8)) * 2;
             goForwardPawnBlack += TaperGroup3Value(0, endGameValue, phase);
         }
-        blackPawnSum = doubledPawnValueBlack + singlePastBlack + isolatedPawnValueBlack + goForwardPawnBlack;
+        int pawnChainBlack = 0;
+        for (int pawnPlace : thisBoard.pieces[9])
+        {
+            if ((AttackPlaces::WhitePawnAttackPlaces[pawnPlace] & blackPawns) != 0)
+            {
+                pawnChainBlack += 6;
+                int r = pawnPlace / 8, f = pawnPlace % 8;
+                if (f >= 2 && f <= 5)
+                {
+                    if (r <= 4) pawnChainBlack += 6;
+                    if (r <= 3) pawnChainBlack += 6;
+                }
+            }
+        }
+        blackPawnSum = doubledPawnValueBlack + singlePastBlack + isolatedPawnValueBlack + goForwardPawnBlack + pawnChainBlack;
         PawnEvalCache.Add(blackPawns, blackPawnSum, 1, phase);
     }
     whitePawnSum -= blackPawnSum;
@@ -1825,6 +1873,24 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int phase)
                         else
                         {
                             whiteRookFileBonus += TaperGroup2Value(Option::RookSemiOpenFileMiddleGame, Option::RookSemiOpenFileEndGame, phase);
+                            int targetSq = -1;
+                            for (int r = 1; r < 7; ++r) {
+                                if (mainBoard[r * 8 + file] == 9) { targetSq = r * 8 + file; break; }
+                            }
+                            if (targetSq != -1) {
+                                bool hasNeighborBehind = false;
+                                int targetRank = targetSq / 8;
+                                for (int adjF : {file - 1, file + 1}) {
+                                    if (adjF >= 0 && adjF < 8) {
+                                        for (int r = targetRank; r < 7; ++r) {
+                                            if (mainBoard[r * 8 + adjF] == 9) { hasNeighborBehind = true; break; }
+                                        }
+                                    }
+                                }
+                                if (!hasNeighborBehind) {
+                                    whiteRookFileBonus += 25;
+                                }
+                            }
                         }
                     }
                     moveCount = 0;
@@ -1861,6 +1927,32 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int phase)
                     moveCount = 0;
                     movement += taperedGroup2Table(Option::QueenInValueWhite, piecePoisiion);
                     centerValue += Option::QueenInCenterValueWhite[piecePoisiion];
+                    int qFile = piecePoisiion % 8;
+                    unsigned long long qFileMask = 0x0101010101010101ULL << qFile;
+                    if ((thisBoard.whitePawns & qFileMask) == 0 && (thisBoard.blackPawns & qFileMask) != 0)
+                    {
+                        int targetSq = -1;
+                        for (int r = 1; r < 7; ++r) {
+                            if (mainBoard[r * 8 + qFile] == 9) { targetSq = r * 8 + qFile; break; }
+                        }
+                        if (targetSq != -1) {
+                            bool hasNeighborBehind = false;
+                            int targetRank = targetSq / 8;
+                            for (int adjF : {qFile - 1, qFile + 1}) {
+                                if (adjF >= 0 && adjF < 8) {
+                                    for (int r = targetRank; r < 7; ++r) {
+                                        if (mainBoard[r * 8 + adjF] == 9) { hasNeighborBehind = true; break; }
+                                    }
+                                }
+                            }
+                            if (!hasNeighborBehind) {
+                                movement += 20;
+                                for (int rsq : thisBoard.pieces[4]) {
+                                    if (rsq % 8 == qFile) { movement += 15; break; }
+                                }
+                            }
+                        }
+                    }
                     for (int direction = 0; direction <= 14; direction += 2)
                     {
                         for (int counter = 0; counter < PieceMoves::QueenMoves[piecePoisiion][direction].size(); counter++)
@@ -2057,6 +2149,24 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int phase)
                         else
                         {
                             blackRookFileBonus += TaperGroup2Value(Option::RookSemiOpenFileMiddleGame, Option::RookSemiOpenFileEndGame, phase);
+                            int targetSq = -1;
+                            for (int r = 6; r >= 1; --r) {
+                                if (mainBoard[r * 8 + file] == 1) { targetSq = r * 8 + file; break; }
+                            }
+                            if (targetSq != -1) {
+                                bool hasNeighborBehind = false;
+                                int targetRank = targetSq / 8;
+                                for (int adjF : {file - 1, file + 1}) {
+                                    if (adjF >= 0 && adjF < 8) {
+                                        for (int r = targetRank; r >= 1; --r) {
+                                            if (mainBoard[r * 8 + adjF] == 1) { hasNeighborBehind = true; break; }
+                                        }
+                                    }
+                                }
+                                if (!hasNeighborBehind) {
+                                    blackRookFileBonus += 25;
+                                }
+                            }
                         }
                     }
                     moveCount = 0;
@@ -2095,6 +2205,32 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int phase)
                     moveCount = 0;
                     movement -= taperedGroup2Table(Option::QueenInValueBlack, piecePoisiion);
                     centerValue -= Option::QueenInCenterValueBlack[piecePoisiion];
+                    int qFile = piecePoisiion % 8;
+                    unsigned long long qFileMask = 0x0101010101010101ULL << qFile;
+                    if ((thisBoard.blackPawns & qFileMask) == 0 && (thisBoard.whitePawns & qFileMask) != 0)
+                    {
+                        int targetSq = -1;
+                        for (int r = 6; r >= 1; --r) {
+                            if (mainBoard[r * 8 + qFile] == 1) { targetSq = r * 8 + qFile; break; }
+                        }
+                        if (targetSq != -1) {
+                            bool hasNeighborBehind = false;
+                            int targetRank = targetSq / 8;
+                            for (int adjF : {qFile - 1, qFile + 1}) {
+                                if (adjF >= 0 && adjF < 8) {
+                                    for (int r = targetRank; r >= 1; --r) {
+                                        if (mainBoard[r * 8 + adjF] == 1) { hasNeighborBehind = true; break; }
+                                    }
+                                }
+                            }
+                            if (!hasNeighborBehind) {
+                                movement -= 20;
+                                for (int rsq : thisBoard.pieces[12]) {
+                                    if (rsq % 8 == qFile) { movement -= 15; break; }
+                                }
+                            }
+                        }
+                    }
 
                     int directions[] = {0, 2, 4, 6, 8, 10, 12, 14};
 
@@ -2161,24 +2297,101 @@ int *EvaluationLogic::PieceMoveCount(Board &thisBoard, int phase)
     movement += rookFileNet;
 
     
+    bool whiteCastled = (!thisBoard.whiteSmallCastle && !thisBoard.whiteBigCastle && (thisBoard.pieces[6].front() == 6 || thisBoard.pieces[6].front() == 2));
+    bool blackCastled = (!thisBoard.blackSmallCastle && !thisBoard.blackBigCastle && (thisBoard.pieces[14].front() == 62 || thisBoard.pieces[14].front() == 58));
+
     // Premature Queen activity with undeveloped sleeping minor pieces
     if (phase >= 16) {
-        bool whiteQueenActive = false;
-        for (int sq : thisBoard.pieces[5]) if (sq != 3) whiteQueenActive = true;
-        if (whiteQueenActive) {
+        if (!whiteCastled) {
             int sleep = 0;
             for (int sq : thisBoard.pieces[2]) if (sq == 1 || sq == 6) sleep++;
             for (int sq : thisBoard.pieces[3]) if (sq == 2 || sq == 5) sleep++;
-            movement -= 28 * sleep;
+            if (sleep > 0) {
+                for (int sq : thisBoard.pieces[5]) {
+                    int rank = sq / 8;
+                    if (rank >= 2) {
+                        int advance = rank - 1;
+                        int pen = 14 * advance * sleep;
+                        if (advance >= 2 && sleep >= 2) pen += 15;
+                        movement -= pen;
+                    }
+                }
+            }
         }
 
-        bool blackQueenActive = false;
-        for (int sq : thisBoard.pieces[13]) if (sq != 59) blackQueenActive = true;
-        if (blackQueenActive) {
+        if (!blackCastled) {
             int sleep = 0;
             for (int sq : thisBoard.pieces[10]) if (sq == 57 || sq == 62) sleep++;
             for (int sq : thisBoard.pieces[11]) if (sq == 58 || sq == 61) sleep++;
-            movement += 28 * sleep;
+            if (sleep > 0) {
+                for (int sq : thisBoard.pieces[13]) {
+                    int rank = sq / 8;
+                    if (rank <= 5) {
+                        int advance = 6 - rank;
+                        int pen = 14 * advance * sleep;
+                        if (advance >= 2 && sleep >= 2) pen += 15;
+                        movement += pen;
+                    }
+                }
+            }
+        }
+    }
+
+    // Pinned vulnerable pawn (modest generic static penalty)
+    for (int psq : thisBoard.pieces[1]) {
+        int r = psq / 8, c = psq % 8;
+        int ksq = thisBoard.pieces[6].front();
+        int kr = ksq / 8, kc = ksq % 8;
+        int dr = kr - r, dc = kc - c;
+        if (dr == 0 || dc == 0 || std::abs(dr) == std::abs(dc)) {
+            int stepR = (dr == 0) ? 0 : (dr > 0 ? 1 : -1);
+            int stepC = (dc == 0) ? 0 : (dc > 0 ? 1 : -1);
+            bool clearToKing = true;
+            for (int cr = r + stepR, cc = c + stepC; cr != kr || cc != kc; cr += stepR, cc += stepC) {
+                if (mainBoard[cr * 8 + cc] != 0) { clearToKing = false; break; }
+            }
+            if (clearToKing) {
+                for (int cr = r - stepR, cc = c - stepC; cr >= 0 && cr < 8 && cc >= 0 && cc < 8; cr -= stepR, cc -= stepC) {
+                    int p = mainBoard[cr * 8 + cc];
+                    if (p != 0) {
+                        bool isSlider = (stepR == 0 || stepC == 0) ? (p == 12 || p == 13) : (p == 11 || p == 13);
+                        if (isSlider) {
+                            if ((AttackPlaces::BlackPawnAttackPlaces[psq] & thisBoard.whitePawns) == 0) {
+                                movement -= 45;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    for (int psq : thisBoard.pieces[9]) {
+        int r = psq / 8, c = psq % 8;
+        int ksq = thisBoard.pieces[14].front();
+        int kr = ksq / 8, kc = ksq % 8;
+        int dr = kr - r, dc = kc - c;
+        if (dr == 0 || dc == 0 || std::abs(dr) == std::abs(dc)) {
+            int stepR = (dr == 0) ? 0 : (dr > 0 ? 1 : -1);
+            int stepC = (dc == 0) ? 0 : (dc > 0 ? 1 : -1);
+            bool clearToKing = true;
+            for (int cr = r + stepR, cc = c + stepC; cr != kr || cc != kc; cr += stepR, cc += stepC) {
+                if (mainBoard[cr * 8 + cc] != 0) { clearToKing = false; break; }
+            }
+            if (clearToKing) {
+                for (int cr = r - stepR, cc = c - stepC; cr >= 0 && cr < 8 && cc >= 0 && cc < 8; cr -= stepR, cc -= stepC) {
+                    int p = mainBoard[cr * 8 + cc];
+                    if (p != 0) {
+                        bool isSlider = (stepR == 0 || stepC == 0) ? (p == 4 || p == 5) : (p == 3 || p == 5);
+                        if (isSlider) {
+                            if ((AttackPlaces::WhitePawnAttackPlaces[psq] & thisBoard.blackPawns) == 0) {
+                                movement += 45;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
         }
     }
 
