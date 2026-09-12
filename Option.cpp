@@ -55,9 +55,9 @@ int Option::PawnInValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                             -20, 0, 0, 0, 0, 0, 0, -20,
                                             0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KnightInValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
-                                              0, 0, 0, 0, 0, 0, 0, 0,
-                                              0, 0, 0, 0, 0, 0, 0, 0,
+int Option::KnightInValueWhiteMiddleGame[] = {0, 0, 0, -8, -12, 0, 0, 0,
+                                              0, 0, 0, 6, 18, 0, 0, 0,
+                                              0, 0, 6, 0, 0, 6, 0, 0,
                                               0, 0, 4, 8, 8, 4, 0, 0,
                                               0, 4, 17, 26, 26, 17, 4, 0,
                                               0, 8, 26, 35, 35, 26, 8, 0,
