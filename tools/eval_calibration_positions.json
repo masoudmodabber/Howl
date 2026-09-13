@@ -1,0 +1,216 @@
+{
+  "description": "Permanent Howl evaluator calibration dataset with target scores and relative move ordering constraints.",
+  "positions": [
+    {
+      "id": "Pos 1",
+      "base_fen": "1n1qkb1r/rb1n1ppp/p3p3/2ppP3/N2P4/1R2BP2/1PP3PP/3QKBNR b Kk - 1 11",
+      "move": null,
+      "expected_white_pov_cp": 0,
+      "tolerance_percent": 20,
+      "notes": "Pos 1 static baseline evaluation"
+    },
+    {
+      "id": "Pos 2",
+      "base_fen": "1n1qkb1r/1r1n1ppp/p3p3/3NP3/3Q4/5P2/1PP3PP/2B1KBNR w Kk - 0 13",
+      "move": null,
+      "expected_white_pov_cp": -20,
+      "tolerance_percent": 20,
+      "notes": "Pos 2 static baseline evaluation"
+    },
+    {
+      "id": "Pos 3",
+      "base_fen": "1n1qkb1r/1r1nppp1/p6p/3NP3/3Q4/5P2/1PP3PP/2B1KBNR w Kk - 0 13",
+      "move": null,
+      "expected_white_pov_cp": 85,
+      "tolerance_percent": 20,
+      "notes": "Pos 3 static baseline evaluation"
+    },
+    {
+      "id": "Pos 4",
+      "base_fen": "2r2rk1/6pp/5p2/RN1pP3/1p3P2/1P2K3/2P3PP/8 w - - 0 29",
+      "move": null,
+      "expected_white_pov_cp": -70,
+      "tolerance_percent": 20,
+      "notes": "Pos 4 static baseline evaluation"
+    },
+    {
+      "id": "Pos 5",
+      "base_fen": "rn1qkb1r/1bpppppp/p4n2/3P4/R3P3/5P2/1PP3PP/1NBQKBNR b Kkq - 0 6",
+      "move": null,
+      "expected_white_pov_cp": 200,
+      "tolerance_percent": 20,
+      "notes": "Pos 5 static baseline evaluation"
+    },
+    {
+      "id": "Pos 6 Qd2",
+      "base_fen": "rnb1k2r/pp2nppp/4p3/q1ppP3/3P4/P1P2N2/2P2PPP/R1BQKB1R w KQkq - 2 8",
+      "move": "Qd2",
+      "expected_white_pov_cp": 73,
+      "tolerance_percent": 20,
+      "notes": "Pos 6 after Qd2"
+    },
+    {
+      "id": "Pos 6 h4",
+      "base_fen": "rnb1k2r/pp2nppp/4p3/q1ppP3/3P4/P1P2N2/2P2PPP/R1BQKB1R w KQkq - 2 8",
+      "move": "h4",
+      "expected_white_pov_cp": -9,
+      "tolerance_percent": 20,
+      "notes": "Pos 6 after h4"
+    },
+    {
+      "id": "Pos 7 Bb7",
+      "base_fen": "r1b2rk1/p1q2pp1/1pn1p1np/2ppP3/3P4/P1P1B3/2P1BPPP/R2QNRK1 b - - 1 14",
+      "move": "Bb7",
+      "expected_white_pov_cp": -79,
+      "tolerance_percent": 20,
+      "notes": "Pos 7 after Bb7"
+    },
+    {
+      "id": "Pos 7 Nge7",
+      "base_fen": "r1b2rk1/p1q2pp1/1pn1p1np/2ppP3/3P4/P1P1B3/2P1BPPP/R2QNRK1 b - - 1 14",
+      "move": "Nge7",
+      "expected_white_pov_cp": -49,
+      "tolerance_percent": 20,
+      "notes": "Pos 7 after Nge7"
+    },
+    {
+      "id": "Pos 8 Rd1",
+      "base_fen": "r4rk1/p1qb1pp1/1p2p1np/2ppP3/3P1P2/P1P1Q3/2P1B1PP/R3NRK1 w - - 1 18",
+      "move": "Rd1",
+      "expected_white_pov_cp": -61,
+      "tolerance_percent": 20,
+      "notes": "Pos 8 after Rd1"
+    },
+    {
+      "id": "Pos 9 Nf5",
+      "base_fen": "2r2rk1/p1qbnpp1/1p2p2p/3pP2B/3P1P2/P2NQ3/2P3PP/R1R3K1 b - - 2 21",
+      "move": "Nf5",
+      "expected_white_pov_cp": -88,
+      "tolerance_percent": 20,
+      "notes": "Pos 9 after Nf5"
+    },
+    {
+      "id": "Pos 9 Bc6",
+      "base_fen": "2r2rk1/p1qbnpp1/1p2p2p/3pP2B/3P1P2/P2NQ3/2P3PP/R1R3K1 b - - 2 21",
+      "move": "Bc6",
+      "expected_white_pov_cp": -19,
+      "tolerance_percent": 20,
+      "notes": "Pos 9 after Bc6"
+    },
+    {
+      "id": "Pos 10 Qb1",
+      "base_fen": "1q6/r1pnk1p1/2QppbB1/8/p2PR2P/2P2PB1/2P1KP2/8 b - - 1 40",
+      "move": "Qb1",
+      "expected_white_pov_cp": 160,
+      "tolerance_percent": 20,
+      "notes": "Pos 10 after Qb1"
+    },
+    {
+      "id": "Pos 10 a3",
+      "base_fen": "1q6/r1pnk1p1/2QppbB1/8/p2PR2P/2P2PB1/2P1KP2/8 b - - 1 40",
+      "move": "a3",
+      "expected_white_pov_cp": 207,
+      "tolerance_percent": 20,
+      "notes": "Pos 10 after a3"
+    },
+    {
+      "id": "Pos 11 Qc4",
+      "base_fen": "1q6/r1pnk1p1/2QppbB1/8/3PR2P/p1P2PB1/2P1KP2/8 w - - 0 41",
+      "move": "Qc4",
+      "expected_white_pov_cp": 400,
+      "tolerance_percent": 30,
+      "notes": "Pos 11 after Qc4"
+    },
+    {
+      "id": "Pos 11 c4",
+      "base_fen": "1q6/r1pnk1p1/2QppbB1/8/3PR2P/p1P2PB1/2P1KP2/8 w - - 0 41",
+      "move": "c4",
+      "expected_white_pov_cp": 300,
+      "tolerance_percent": 20,
+      "notes": "Pos 11 after c4"
+    },
+    {
+      "id": "Pos 12 Qb6",
+      "base_fen": "r2qkb1r/1p5p/p1n2np1/3b1p2/3p4/P2Q1NN1/1P2PPPP/R1B1KB1R b KQkq - 3 15",
+      "move": "Qb6",
+      "expected_white_pov_cp": -152,
+      "tolerance_percent": 20,
+      "notes": "Pos 12 after Qb6"
+    },
+    {
+      "id": "Pos 12 Ne4",
+      "base_fen": "r2qkb1r/1p5p/p1n2np1/3b1p2/3p4/P2Q1NN1/1P2PPPP/R1B1KB1R b KQkq - 3 15",
+      "move": "Ne4",
+      "expected_white_pov_cp": -77,
+      "tolerance_percent": 20,
+      "notes": "Pos 12 after Ne4"
+    },
+    {
+      "id": "Pos 13 O-O",
+      "base_fen": "r3k2r/1p5p/pq4p1/3b1p2/1b1p4/3Q2N1/3NPPPP/R3KB1R b KQkq - 0 20",
+      "move": "O-O",
+      "expected_white_pov_cp": -110,
+      "tolerance_percent": 20,
+      "notes": "Pos 13 after O-O"
+    },
+    {
+      "id": "Pos 13 O-O-O",
+      "base_fen": "r3k2r/1p5p/pq4p1/3b1p2/1b1p4/3Q2N1/3NPPPP/R3KB1R b KQkq - 0 20",
+      "move": "O-O-O",
+      "expected_white_pov_cp": -43,
+      "tolerance_percent": 20,
+      "notes": "Pos 13 after O-O-O"
+    }
+  ],
+  "ordering_constraints": [
+    {
+      "id": "Pos 6",
+      "higher_id": "Pos 6 Qd2",
+      "lower_id": "Pos 6 h4",
+      "relation": ">",
+      "notes": "Qd2 > h4 (White POV)"
+    },
+    {
+      "id": "Pos 7",
+      "higher_id": "Pos 7 Nge7",
+      "lower_id": "Pos 7 Bb7",
+      "relation": ">",
+      "notes": "Bb7 < Nge7 (White POV)"
+    },
+    {
+      "id": "Pos 9",
+      "higher_id": "Pos 9 Bc6",
+      "lower_id": "Pos 9 Nf5",
+      "relation": ">",
+      "notes": "Nf5 < Bc6 (White POV)"
+    },
+    {
+      "id": "Pos 10",
+      "higher_id": "Pos 10 a3",
+      "lower_id": "Pos 10 Qb1",
+      "relation": ">",
+      "notes": "Qb1 < a3 (White POV)"
+    },
+    {
+      "id": "Pos 11",
+      "higher_id": "Pos 11 Qc4",
+      "lower_id": "Pos 11 c4",
+      "relation": ">",
+      "notes": "Qc4 > c4 (White POV)"
+    },
+    {
+      "id": "Pos 12",
+      "higher_id": "Pos 12 Ne4",
+      "lower_id": "Pos 12 Qb6",
+      "relation": ">",
+      "notes": "Qb6 < Ne4 (White POV)"
+    },
+    {
+      "id": "Pos 13",
+      "higher_id": "Pos 13 O-O-O",
+      "lower_id": "Pos 13 O-O",
+      "relation": ">",
+      "notes": "O-O < O-O-O (White POV)"
+    }
+  ]
+}

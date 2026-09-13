@@ -134,6 +134,18 @@ int main(int argc, char* argv[])
               << " escalation=" << bd.blackNonlinearEscalation
               << " castle=" << (bd.blackImmediateCastling ? "yes" : "no")
               << " mitigation=" << bd.blackCastlingMitigation << "\n";
+    std::cout << std::left << std::setw(22) << "King Danger"
+              << std::right << std::setw(10) << bd.whiteKingDanger
+              << std::setw(10) << bd.blackKingDanger
+              << std::setw(10) << bd.kingAttackNet << "\n";
+    std::cout << "  White KD: attWt=" << bd.whiteAttackerWeight << " defWt=" << bd.whiteDefenderWeight
+              << " esc=" << bd.whiteEscapeSafety << " file=" << bd.whiteFilePressure
+              << " diag=" << bd.whiteDiagonalPressure << " shelter=" << bd.whitePawnShelter
+              << " phaseScale=" << bd.whitePhaseScale << "%\n";
+    std::cout << "  Black KD: attWt=" << bd.blackAttackerWeight << " defWt=" << bd.blackDefenderWeight
+              << " esc=" << bd.blackEscapeSafety << " file=" << bd.blackFilePressure
+              << " diag=" << bd.blackDiagonalPressure << " shelter=" << bd.blackPawnShelter
+              << " phaseScale=" << bd.blackPhaseScale << "%\n";
     std::cout << std::left << std::setw(22) << "King Safety Total" 
               << std::right << std::setw(10) << "-" 
               << std::setw(10) << "-" 
@@ -142,6 +154,11 @@ int main(int argc, char* argv[])
               << std::right << std::setw(10) << "-" 
               << std::setw(10) << "-" 
               << std::setw(10) << bd.pawnStructureNet << "\n";
+    std::cout << "  Pawn details: base=" << bd.pawnBaseNet
+              << " kingRace=" << bd.passedPawnKingRaceNet
+              << " minorAcc=" << bd.passedPawnMinorAccessibilityNet
+              << " corridor=" << bd.passedPawnCorridorSafetyNet
+              << " rookBehind=" << bd.rookBehindPassedPawnNet << "\n";
     std::cout << std::left << std::setw(22) << "Rook Connectivity" 
               << std::right << std::setw(10) << "-" 
               << std::setw(10) << "-" 

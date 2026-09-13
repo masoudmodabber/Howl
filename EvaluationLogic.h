@@ -97,6 +97,11 @@ struct EvaluationBreakdown
     int blackPhaseScale = 0;
 
     int pawnStructureNet = 0;
+    int pawnBaseNet = 0;
+    int passedPawnKingRaceNet = 0;
+    int passedPawnMinorAccessibilityNet = 0;
+    int passedPawnCorridorSafetyNet = 0;
+    int rookBehindPassedPawnNet = 0;
     int rookConnectionNet = 0;
     int tempoNet = 0;
 
