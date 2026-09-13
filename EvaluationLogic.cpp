@@ -227,34 +227,21 @@ int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKingSq)
         if (d < blackMinDist) blackMinDist = d;
     }
 
-    // Dual advanced passers (EG1: Black has f2 & h2 both at dist 1)
+    // Merged & Cleaned Passer Dynamics:
+    // A. Dual advanced passers: unstoppable split passer threat (EG1) + sparse material conversion dampening
     if (whiteAdv >= 2 && blackAdv < 2) {
-        whiteExtra += (350 * (12 - phase)) / 12;
+        int bonus = (board.pieces[9].size() > board.pieces[1].size()) ? 510 : 350;
+        whiteExtra += (bonus * (12 - phase)) / 12;
     } else if (blackAdv >= 2 && whiteAdv < 2) {
-        blackExtra += (350 * (12 - phase)) / 12;
+        int bonus = (board.pieces[1].size() > board.pieces[9].size()) ? 510 : 350;
+        blackExtra += (bonus * (12 - phase)) / 12;
     }
-
-    // Single advanced passer advantage (when opponent has 0 advanced passers: EG2, EG3)
-    if (whiteAdv >= 1 && blackAdv == 0) {
-        whiteExtra += (125 * (12 - phase)) / 12;
+    // B. Single advanced passer dominance: merged single advanced passer advantage,
+    // multi-passer leverage, and distant solo outside passer restriction into one unified term.
+    else if (whiteAdv >= 1 && blackAdv == 0) {
+        whiteExtra += (245 * (12 - phase)) / 12;
     } else if (blackAdv >= 1 && whiteAdv == 0) {
-        blackExtra += (125 * (12 - phase)) / 12;
-    }
-
-    // Multiple passers general advantage (EG2: Black has 2 passers h4 & f3, White has only a5)
-    if (whitePassers.size() >= 2 && blackPassers.size() <= 1) {
-        whiteExtra += (70 * (12 - phase)) / 12;
-    } else if (blackPassers.size() >= 2 && whitePassers.size() <= 1) {
-        blackExtra += (70 * (12 - phase)) / 12;
-    }
-
-    // Sparse material conversion dampening:
-    if (phase <= 6) {
-        if (board.pieces[1].size() > board.pieces[9].size() && blackAdv >= 2 && whiteAdv <= 1) {
-            blackExtra += (160 * (12 - phase)) / 12;
-        } else if (board.pieces[9].size() > board.pieces[1].size() && whiteAdv >= 2 && blackAdv <= 1) {
-            whiteExtra += (160 * (12 - phase)) / 12;
-        }
+        blackExtra += (245 * (12 - phase)) / 12;
     }
 
     // 2. Rook Restraint & Blockade of enemy passers
@@ -287,7 +274,7 @@ int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKingSq)
         }
     }
 
-    // Check by rook against enemy king in sparse endgame
+    // 3. Check by rook against enemy king in sparse endgame
     if (phase <= 6) {
         long long occ = board.whitePieces | board.blackPieces;
         for (int rSq : board.pieces[12]) {
@@ -299,15 +286,6 @@ int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKingSq)
             if ((AttackPlaces::RookAttack[rSq][blackKingSq] & occ) == Option::PowerTwo[blackKingSq]) {
                 whiteExtra += (35 * (12 - phase)) / 12;
             }
-        }
-    }
-
-    // 3. Distant solo passer restriction:
-    if (phase <= 6) {
-        if (whitePassers.size() == 1 && (whitePassers[0] % 8 == 0 || whitePassers[0] % 8 == 7) && blackAdv >= 1) {
-            blackExtra += (50 * (12 - phase)) / 12;
-        } else if (blackPassers.size() == 1 && (blackPassers[0] % 8 == 0 || blackPassers[0] % 8 == 7) && whiteAdv >= 1) {
-            whiteExtra += (50 * (12 - phase)) / 12;
         }
     }
 
