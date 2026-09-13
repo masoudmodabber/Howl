@@ -1,0 +1,160 @@
+{
+  "description": "Permanent Howl endgame evaluator calibration dataset with target scores and relative move ordering constraints.",
+  "positions": [
+    {
+      "id": "EG1 Rd2",
+      "base_fen": "5R2/4P3/3K4/P3P3/4k3/8/1r3p1p/8 b - - 0 49",
+      "move": "Rd2",
+      "expected_white_pov_cp": -135,
+      "tolerance_percent": 20,
+      "notes": "Endgame 1 after Rd2"
+    },
+    {
+      "id": "EG1 Kd4",
+      "base_fen": "5R2/4P3/3K4/P3P3/4k3/8/1r3p1p/8 b - - 0 49",
+      "move": "Kd4",
+      "expected_white_pov_cp": -25,
+      "tolerance_percent": 20,
+      "notes": "Endgame 1 after Kd4"
+    },
+    {
+      "id": "EG2 Ra2",
+      "base_fen": "5R2/8/2K1p3/P3P3/3Pk2p/5p2/7r/8 b - - 1 45",
+      "move": "Ra2",
+      "expected_white_pov_cp": -244,
+      "tolerance_percent": 20,
+      "notes": "Endgame 2 after Ra2"
+    },
+    {
+      "id": "EG2 Rg2",
+      "base_fen": "5R2/8/2K1p3/P3P3/3Pk2p/5p2/7r/8 b - - 1 45",
+      "move": "Rg2",
+      "expected_white_pov_cp": -179,
+      "tolerance_percent": 20,
+      "notes": "Endgame 2 after Rg2"
+    },
+    {
+      "id": "EG3 Bf4",
+      "base_fen": "5B2/5R2/4p2b/PK2P2p/3Pk3/5p2/7r/8 b - - 8 43",
+      "move": "Bf4",
+      "expected_white_pov_cp": -193,
+      "tolerance_percent": 20,
+      "notes": "Endgame 3 after Bf4"
+    },
+    {
+      "id": "EG3 Bg5",
+      "base_fen": "5B2/5R2/4p2b/PK2P2p/3Pk3/5p2/7r/8 b - - 8 43",
+      "move": "Bg5",
+      "expected_white_pov_cp": -119,
+      "tolerance_percent": 20,
+      "notes": "Endgame 3 after Bg5"
+    },
+    {
+      "id": "EG4 Kd3",
+      "base_fen": "8/2R3b1/4p1k1/4P2p/P1KP4/2B2p2/2r5/8 w - - 0 39",
+      "move": "Kd3",
+      "expected_white_pov_cp": -85,
+      "tolerance_percent": 20,
+      "notes": "Endgame 4 after Kd3"
+    },
+    {
+      "id": "EG4 Kb4",
+      "base_fen": "8/2R3b1/4p1k1/4P2p/P1KP4/2B2p2/2r5/8 w - - 0 39",
+      "move": "Kb4",
+      "expected_white_pov_cp": -185,
+      "tolerance_percent": 20,
+      "notes": "Endgame 4 after Kb4"
+    },
+    {
+      "id": "EG5 Bh4",
+      "base_fen": "8/p3r1b1/4p1k1/4P2p/2RP1p2/2K4P/P4B2/8 w - - 1 31",
+      "move": "Bh4",
+      "expected_white_pov_cp": 14,
+      "tolerance_percent": 20,
+      "notes": "Endgame 5 after Bh4"
+    },
+    {
+      "id": "EG5 Rb4",
+      "base_fen": "8/p3r1b1/4p1k1/4P2p/2RP1p2/2K4P/P4B2/8 w - - 1 31",
+      "move": "Rb4",
+      "expected_white_pov_cp": -43,
+      "tolerance_percent": 20,
+      "notes": "Endgame 5 after Rb4"
+    },
+    {
+      "id": "EG6 Kc3",
+      "base_fen": "6k1/p1r3b1/4p1pp/5p2/2pPP3/4BP1P/P1K2P2/1R6 w - f6 0 24",
+      "move": "Kc3",
+      "expected_white_pov_cp": 143,
+      "tolerance_percent": 20,
+      "notes": "Endgame 6 after Kc3"
+    },
+    {
+      "id": "EG6 e5",
+      "base_fen": "6k1/p1r3b1/4p1pp/5p2/2pPP3/4BP1P/P1K2P2/1R6 w - f6 0 24",
+      "move": "e5",
+      "expected_white_pov_cp": 61,
+      "tolerance_percent": 20,
+      "notes": "Endgame 6 after e5"
+    },
+    {
+      "id": "EG6 d5",
+      "base_fen": "6k1/p1r3b1/4p1pp/5p2/2pPP3/4BP1P/P1K2P2/1R6 w - f6 0 24",
+      "move": "d5",
+      "expected_white_pov_cp": 89,
+      "tolerance_percent": 20,
+      "notes": "Endgame 6 after d5"
+    }
+  ],
+  "ordering_constraints": [
+    {
+      "id": "EG1",
+      "higher_id": "EG1 Kd4",
+      "lower_id": "EG1 Rd2",
+      "relation": ">",
+      "notes": "Rd2 < Kd4 (White POV)"
+    },
+    {
+      "id": "EG2",
+      "higher_id": "EG2 Rg2",
+      "lower_id": "EG2 Ra2",
+      "relation": ">",
+      "notes": "Ra2 < Rg2 (White POV)"
+    },
+    {
+      "id": "EG3",
+      "higher_id": "EG3 Bg5",
+      "lower_id": "EG3 Bf4",
+      "relation": ">",
+      "notes": "Bf4 < Bg5 (White POV)"
+    },
+    {
+      "id": "EG4",
+      "higher_id": "EG4 Kd3",
+      "lower_id": "EG4 Kb4",
+      "relation": ">",
+      "notes": "Kb4 < Kd3 (White POV)"
+    },
+    {
+      "id": "EG5",
+      "higher_id": "EG5 Bh4",
+      "lower_id": "EG5 Rb4",
+      "relation": ">",
+      "notes": "Bh4 > Rb4 (White POV)"
+    },
+    {
+      "id": "EG6",
+      "higher_id": "EG6 Kc3",
+      "lower_id": "EG6 d5",
+      "relation": ">",
+      "notes": "Kc3 > d5 > e5 (White POV)"
+    },
+    {
+      "id": "EG6_sub",
+      "higher_id": "EG6 d5",
+      "lower_id": "EG6 e5",
+      "relation": ">",
+      "notes": "d5 > e5 (White POV)"
+    }
+  ]
+}

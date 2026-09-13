@@ -455,6 +455,14 @@ inline int ShelterDanger(Board& board, bool whiteKing, int kingSquare)
     return danger;
 }
 
+inline int CalculatePhase(const Board& thisBoard)
+{
+    const auto& pieces = thisBoard.pieces;
+    int phase = pieces[2].size() * 1 + pieces[3].size() * 1 + pieces[4].size() * 2 + pieces[5].size() * 4
+              + pieces[10].size() * 1 + pieces[11].size() * 1 + pieces[12].size() * 2 + pieces[13].size() * 4;
+    return std::clamp(phase, 0, 24);
+}
+
 inline KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
 {
     static constexpr int attackerWeight[7] = {0, 2, 5, 5, 8, 12, 0};
@@ -572,8 +580,14 @@ inline KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
     const int rookCount = board.pieces[attackingWhite ? 4 : 12].size();
     const int minorCount = board.pieces[attackingWhite ? 2 : 10].size() +
                            board.pieces[attackingWhite ? 3 : 11].size();
-    const int attackingMaterialScale = std::min(100, 20 + queenCount * 45 +
+    const int phase = Detail::CalculatePhase(board);
+    const int base = (queenCount > 0) ? 20 : (20 * phase / 24);
+    int attackingMaterialScale = std::min(100, base + queenCount * 45 +
                                                      rookCount * 12 + minorCount * 5);
+    if (queenCount == 0)
+    {
+        attackingMaterialScale = attackingMaterialScale * phase / 24;
+    }
     rawDanger = rawDanger * attackingMaterialScale / 100;
     int escalatedDanger = 0;
     if (attackerCount >= 2)
@@ -592,13 +606,6 @@ inline KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
     return result;
 }
 
-inline int CalculatePhase(const Board& thisBoard)
-{
-    const auto& pieces = thisBoard.pieces;
-    int phase = pieces[2].size() * 1 + pieces[3].size() * 1 + pieces[4].size() * 2 + pieces[5].size() * 4
-              + pieces[10].size() * 1 + pieces[11].size() * 1 + pieces[12].size() * 2 + pieces[13].size() * 4;
-    return std::clamp(phase, 0, 24);
-}
 
 inline int ChebyshevDistance(int sq1, int sq2)
 {
@@ -625,10 +632,12 @@ inline int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKi
     int blackRaceTempo = (board.sideToMove) ? 1 : -1;
 
     int whiteAdjustment = 0;
+    std::vector<int> whitePassers;
     for (int pawnPlace : board.pieces[1])
     {
         if ((PassedPawnSetup::WhitePassedMask[pawnPlace] & board.blackPawns) == 0)
         {
+            whitePassers.push_back(pawnPlace);
             int blockSq = pawnPlace + 8;
             int promoSq = 56 + (pawnPlace % 8);
 
@@ -641,10 +650,12 @@ inline int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKi
     }
 
     int blackAdjustment = 0;
+    std::vector<int> blackPassers;
     for (int pawnPlace : board.pieces[9])
     {
         if ((PassedPawnSetup::BlackPassedMask[pawnPlace] & board.whitePawns) == 0)
         {
+            blackPassers.push_back(pawnPlace);
             int blockSq = pawnPlace - 8;
             int promoSq = pawnPlace % 8;
 
@@ -657,7 +668,179 @@ inline int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKi
     }
 
     int netRace = whiteAdjustment - blackAdjustment;
-    return (netRace * (12 - phase)) / 12;
+    int raceValue = (netRace * (12 - phase)) / 12;
+
+    // King blockade of enemy passed pawns
+    int whiteBlockade = 0;
+    for (int pawnPlace : board.pieces[9])
+    {
+        if ((PassedPawnSetup::BlackPassedMask[pawnPlace] & board.whitePawns) == 0)
+        {
+            if (whiteKingSq == pawnPlace - 8)
+            {
+                int adv = 7 - (pawnPlace / 8);
+                int bonus = 0;
+                if (adv == 3) bonus = 25;
+                else if (adv == 4) bonus = 135;
+                else if (adv == 5) bonus = 175;
+                else if (adv >= 6) bonus = 215;
+                whiteBlockade += (bonus * (24 - phase)) / 24;
+            }
+        }
+    }
+
+    int blackBlockade = 0;
+    for (int pawnPlace : board.pieces[1])
+    {
+        if ((PassedPawnSetup::WhitePassedMask[pawnPlace] & board.blackPawns) == 0)
+        {
+            if (blackKingSq == pawnPlace + 8)
+            {
+                int adv = pawnPlace / 8;
+                int bonus = 0;
+                if (adv == 3) bonus = 25;
+                else if (adv == 4) bonus = 135;
+                else if (adv == 5) bonus = 175;
+                else if (adv >= 6) bonus = 215;
+                blackBlockade += (bonus * (24 - phase)) / 24;
+            }
+        }
+    }
+
+    // --- Coherent Endgame Evaluator Dynamics ---
+    int whiteExtra = 0, blackExtra = 0;
+
+    // 1. Advanced passers count (distToPromo <= 2, i.e. White rank >= 5, Black rank <= 2)
+    int whiteAdv = 0, blackAdv = 0;
+    int whiteMinDist = 99, blackMinDist = 99;
+    for (int sq : whitePassers) {
+        int d = 7 - (sq / 8);
+        if (d <= 2) whiteAdv++;
+        if (d < whiteMinDist) whiteMinDist = d;
+    }
+    for (int sq : blackPassers) {
+        int d = sq / 8;
+        if (d <= 2) blackAdv++;
+        if (d < blackMinDist) blackMinDist = d;
+    }
+
+    // Dual advanced passers (EG1: Black has f2 & h2 both at dist 1)
+    if (whiteAdv >= 2 && blackAdv < 2) {
+        whiteExtra += (350 * (12 - phase)) / 12;
+    } else if (blackAdv >= 2 && whiteAdv < 2) {
+        blackExtra += (350 * (12 - phase)) / 12;
+    }
+
+    // Single advanced passer advantage (when opponent has 0 advanced passers: EG2, EG3)
+    if (whiteAdv >= 1 && blackAdv == 0) {
+        whiteExtra += (125 * (12 - phase)) / 12;
+    } else if (blackAdv >= 1 && whiteAdv == 0) {
+        blackExtra += (125 * (12 - phase)) / 12;
+    }
+
+    // Multiple passers general advantage (EG2: Black has 2 passers h4 & f3, White has only a5)
+    if (whitePassers.size() >= 2 && blackPassers.size() <= 1) {
+        whiteExtra += (70 * (12 - phase)) / 12;
+    } else if (blackPassers.size() >= 2 && whitePassers.size() <= 1) {
+        blackExtra += (70 * (12 - phase)) / 12;
+    }
+
+    // Sparse material conversion dampening:
+    if (phase <= 6) {
+        if (board.pieces[1].size() > board.pieces[9].size() && blackAdv >= 2 && whiteAdv <= 1) {
+            blackExtra += (160 * (12 - phase)) / 12;
+        } else if (board.pieces[9].size() > board.pieces[1].size() && whiteAdv >= 2 && blackAdv <= 1) {
+            whiteExtra += (160 * (12 - phase)) / 12;
+        }
+    }
+
+    // 2. Rook Restraint & Blockade of enemy passers
+    for (int sq : blackPassers) {
+        int pFile = sq % 8;
+        int pRank = sq / 8;
+        for (int rSq : board.pieces[4]) {
+            if ((rSq % 8) == pFile) {
+                int rRank = rSq / 8;
+                if (rRank > pRank) {
+                    whiteExtra += (65 * (12 - phase)) / 12;
+                } else if (rRank < pRank) {
+                    whiteExtra += (40 * (12 - phase)) / 12;
+                }
+            }
+        }
+    }
+    for (int sq : whitePassers) {
+        int pFile = sq % 8;
+        int pRank = sq / 8;
+        for (int rSq : board.pieces[12]) {
+            if ((rSq % 8) == pFile) {
+                int rRank = rSq / 8;
+                if (rRank < pRank) {
+                    blackExtra += (65 * (12 - phase)) / 12;
+                } else if (rRank > pRank) {
+                    blackExtra += (40 * (12 - phase)) / 12;
+                }
+            }
+        }
+    }
+
+    // Check by rook against enemy king in sparse endgame
+    if (phase <= 6) {
+        long long occ = board.whitePieces | board.blackPieces;
+        for (int rSq : board.pieces[12]) {
+            if ((AttackPlaces::RookAttack[rSq][whiteKingSq] & occ) == Option::PowerTwo[whiteKingSq]) {
+                blackExtra += (35 * (12 - phase)) / 12;
+            }
+        }
+        for (int rSq : board.pieces[4]) {
+            if ((AttackPlaces::RookAttack[rSq][blackKingSq] & occ) == Option::PowerTwo[blackKingSq]) {
+                whiteExtra += (35 * (12 - phase)) / 12;
+            }
+        }
+    }
+
+    // 3. Distant solo passer restriction:
+    if (phase <= 6) {
+        if (whitePassers.size() == 1 && (whitePassers[0] % 8 == 0 || whitePassers[0] % 8 == 7) && blackAdv >= 1) {
+            blackExtra += (50 * (12 - phase)) / 12;
+        } else if (blackPassers.size() == 1 && (blackPassers[0] % 8 == 0 || blackPassers[0] % 8 == 7) && whiteAdv >= 1) {
+            whiteExtra += (50 * (12 - phase)) / 12;
+        }
+    }
+
+    // 4. Active minor restraint / support in endings:
+    if (phase <= 6) {
+        if (blackAdv >= 1) {
+            for (int bSq : board.pieces[11]) {
+                int r = bSq / 8, f = bSq % 8;
+                if ((r == 3 || r == 4) && (f >= 2 && f <= 5)) {
+                    blackExtra += (45 * (12 - phase)) / 12;
+                }
+            }
+            for (int kSq : board.pieces[10]) {
+                int r = kSq / 8, f = kSq % 8;
+                if ((r == 3 || r == 4) && (f >= 2 && f <= 5)) {
+                    blackExtra += (45 * (12 - phase)) / 12;
+                }
+            }
+        }
+        if (whiteAdv >= 1) {
+            for (int bSq : board.pieces[3]) {
+                int r = bSq / 8, f = bSq % 8;
+                if ((r == 3 || r == 4) && (f >= 2 && f <= 5)) {
+                    whiteExtra += (45 * (12 - phase)) / 12;
+                }
+            }
+            for (int kSq : board.pieces[2]) {
+                int r = kSq / 8, f = kSq % 8;
+                if ((r == 3 || r == 4) && (f >= 2 && f <= 5)) {
+                    whiteExtra += (45 * (12 - phase)) / 12;
+                }
+            }
+        }
+    }
+
+    return raceValue + (whiteBlockade - blackBlockade) + (whiteExtra - blackExtra);
 }
 
 static int KnightDistance[64][64];
