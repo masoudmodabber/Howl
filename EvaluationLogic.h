@@ -114,14 +114,48 @@ struct EvaluationBreakdown
     int sideToMoveTotal = 0;
 };
 
+struct MovementResult
+{
+    int movement = 0;
+    int attackNet = 0;
+    int center = 0;
+    int rookFileNet = 0;
+    int whiteRookFile = 0;
+    int blackRookFile = 0;
+};
+
+struct EvaluationContext
+{
+    Board& board;
+    int phase = 0;
+    int whiteKingSq = 0;
+    int blackKingSq = 0;
+    int whiteKingFile = 0;
+    int blackKingFile = 0;
+
+    uint8_t whitePawnFiles = 0;
+    uint8_t blackPawnFiles = 0;
+
+    uint64_t whitePassedPawns = 0;
+    uint64_t blackPassedPawns = 0;
+
+    int whitePassers[8] = {0};
+    int whitePasserCount = 0;
+    int blackPassers[8] = {0};
+    int blackPasserCount = 0;
+
+    EvaluationContext(Board& b, int p);
+};
+
 class EvaluationLogic
 {
 public:
     static int CalculatePhase(const Board& thisBoard);
     static int Evaluate(Board& thisBoard);
     static EvaluationBreakdown EvaluateDetailed(Board& thisBoard);
-    static int GetPawnStructureValue(Board& thisBoard, int phase);
+    static int GetPawnStructureValue(Board& thisBoard, int phase, const EvaluationContext* ctx = nullptr);
     static int* PieceMoveCount(Board& thisBoard, int phase);
+    static MovementResult PieceMoveCountFast(Board& thisBoard, int phase);
     static std::size_t EvalCacheSize();
     static std::size_t EvalCacheCapacityBytes();
     static std::size_t EvalCacheEntryCapacity();

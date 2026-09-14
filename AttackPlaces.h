@@ -12,6 +12,10 @@ public:
     static long long RookAttack[64][64];
     static long long QueenAttack[64][64];
     static long long LineMask[64][64];
+    static long long BetweenMask[64][64];
+    static long long BishopPseudoAttacks[64];
+    static long long RookPseudoAttacks[64];
+    static long long QueenPseudoAttacks[64];
 
     static void Initialize();
     static void Cleanup();
