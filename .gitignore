@@ -220,3 +220,13 @@ spsa_state/
 
 # Scratch / temporary investigation files
 scratch/
+
+# Diagnostics and benchmark artifacts
+diagnostics/
+
+# CTest outputs
+Testing/
+
+# Tooling and IDE
+.codex/
+

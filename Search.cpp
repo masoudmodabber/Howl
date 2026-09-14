@@ -111,12 +111,12 @@ namespace
         {
             if (failHigh)
             {
-                alpha = beta;
+                // Keep the successful edge. Moving alpha to the old beta
+                // turns a repeated boundary result into an opposite failure.
                 beta = FullSearchBeta;
             }
             else
             {
-                beta = alpha;
                 alpha = FullSearchAlpha;
             }
             retriesUsed = 1;
@@ -256,7 +256,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         return;
     }
 
-    if (!active || (maxDepth > 0 && maxDepth <= 1) || (maxNodes > 0 && moveCount >= maxNodes))
+    if (!active || (maxDepth > 0 && maxDepth <= 1) || (maxNodes > 0 && searchNodeCount >= maxNodes))
     {
         PrintBestMove();
         finiteSearch = false;
@@ -395,6 +395,10 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         }
         int aspirationRetriesUsed = 0;
         bool iterationCompleted = false;
+        // Retry-local, at exactly this depth and root position. Only a proved
+        // fail-low is reusable for a later root scout; PV searches still run.
+        std::vector<MovePrintValue> rootProbeResults(moveList.count);
+        std::vector<bool> rootProbeAvailable(moveList.count, false);
 
         while (active.load(std::memory_order_relaxed))
         {
@@ -413,7 +417,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                         allRootMovesCompleted = false;
                         break;
                     }
-                    if (maxNodes > 0 && moveCount >= maxNodes)
+                    if (maxNodes > 0 && searchNodeCount >= maxNodes)
                     {
                         stopRequested = true;
                         allRootMovesCompleted = false;
@@ -473,6 +477,9 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                         movePrint->value = move->value;
                         movePrint->bound = rootMoveRepetitionResult ? SearchBound::Exact : InvertBound(MPValue->bound);
                         movePrint->selective = MPValue ? MPValue->selective : false;
+                        movePrint->proof = rootMoveRepetitionResult ? NoProof : InvertProof(MPValue->proof);
+                        movePrint->provenance = rootMoveRepetitionResult
+                            ? static_cast<uint16_t>(SearchProvenance::Repetition) : MPValue->provenance;
                         int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
                         int64_t safeNodeCount = searchNodeCount;
                         int64_t nps = (elapsed_ms > 0) ? (safeNodeCount * 1000LL / elapsed_ms) : 0;
@@ -553,6 +560,9 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                             movePrint->value = move->value;
                             movePrint->bound = rootMoveRepetitionResult ? SearchBound::Exact : InvertBound(MPValue->bound);
                             movePrint->selective = MPValue ? MPValue->selective : false;
+                            movePrint->proof = rootMoveRepetitionResult ? NoProof : InvertProof(MPValue->proof);
+                            movePrint->provenance = rootMoveRepetitionResult
+                                ? static_cast<uint16_t>(SearchProvenance::Repetition) : MPValue->provenance;
                             int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
                             int64_t safeNodeCount = searchNodeCount;
                             int64_t nps = (elapsed_ms > 0) ? (safeNodeCount * 1000LL / elapsed_ms) : 0;
@@ -634,7 +644,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     allRootMovesCompleted = false;
                     break;
                 }
-                if (maxNodes > 0 && moveCount >= maxNodes)
+                if (maxNodes > 0 && searchNodeCount >= maxNodes)
                 {
                     stopRequested = true;
                     allRootMovesCompleted = false;
@@ -715,6 +725,9 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     ? SearchBound::Exact
                     : InvertBound(MPValue->bound);
                 movePrint->selective = rootMoveReceivedFullSearch && MPValue->selective;
+                movePrint->proof = rootMoveRepetitionResult ? NoProof : InvertProof(MPValue->proof);
+                movePrint->provenance = rootMoveRepetitionResult
+                    ? static_cast<uint16_t>(SearchProvenance::Repetition) : MPValue->provenance;
                 int64_t elapsed_ms = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count());
                 int64_t safeNodeCount = searchNodeCount;
                 int64_t nps = (elapsed_ms > 0) ? (safeNodeCount * 1000LL / elapsed_ms) : 0;
@@ -766,7 +779,15 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 {
                     bool tempPVNode = false;
                     delete MPValue;
-                    MPValue = PVSSearch::PVS(tempPVNode, -KthBestValue - Option::nullWindowSize, -KthBestValue, recDepth - 1, *move, move2, move3, move4, board4, false, true, 1, false, true);
+                    if (rootProbeAvailable[counter] &&
+                        rootProbeResults[counter].ProvesLower(-KthBestValue))
+                    {
+                        MPValue = new MovePrintValue(rootProbeResults[counter]);
+                    }
+                    else
+                    {
+                        MPValue = PVSSearch::PVS(tempPVNode, -KthBestValue - Option::nullWindowSize, -KthBestValue, recDepth - 1, *move, move2, move3, move4, board4, false, true, 1, false, true);
+                    }
                     rootMoveReceivedFullSearch = true;
                     const int initialRootValue = -MPValue->value;
                     value = initialRootValue;
@@ -794,6 +815,8 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                         value = -MPValue->value;
                         move->value = value;
                     }
+                    rootProbeResults[counter] = *MPValue;
+                    rootProbeAvailable[counter] = !stopRequested.load(std::memory_order_relaxed);
                     rootMoveAuthoritativeResult = true;
                 }
                 GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
@@ -827,6 +850,9 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     ? SearchBound::Exact
                     : InvertBound(MPValue->bound);
                 movePrint->selective = rootMoveReceivedFullSearch && MPValue->selective;
+                movePrint->proof = rootMoveRepetitionResult ? NoProof : InvertProof(MPValue->proof);
+                movePrint->provenance = rootMoveRepetitionResult
+                    ? static_cast<uint16_t>(SearchProvenance::Repetition) : MPValue->provenance;
                 int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
                 int64_t safeNodeCount = searchNodeCount;
                 int64_t nps = (elapsed_ms > 0) ? (safeNodeCount * 1000LL / elapsed_ms) : 0;
@@ -887,7 +913,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 allRootMovesCompleted = false;
                 break;
             }
-            if (maxNodes > 0 && moveCount >= maxNodes)
+            if (maxNodes > 0 && searchNodeCount >= maxNodes)
             {
                 stopRequested = true;
                 allRootMovesCompleted = false;

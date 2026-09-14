@@ -9,6 +9,7 @@
 #ifdef HOWL_CORRECTNESS_TESTING
 struct QSearchTestStatistics {
     int rootGeneratedMoves = 0;
+    int rootStage2NonchecksRejected = 0;
     int rootLegalMoves = 0;
     int rootAvailableMoves = 0;
     int rootIllegalMovesBeforeFirstSearch = 0;

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include "Move.h"
 #include "MoveLogic.h"
+#include "MovePrintValue.h"
 
 enum TTFlag : uint8_t
 {
@@ -16,21 +17,42 @@ enum TTFlag : uint8_t
     TT_UPPER_BOUND = 3, // Fail-low / Alpha bound (rigorous)
     TT_EXACT_HEURISTIC = 5,
     TT_LOWER_HEURISTIC = 6,
-    TT_UPPER_HEURISTIC = 7
+    TT_UPPER_HEURISTIC = 7,
+    // Score certified relative to the search frontier, not an exact mate proof.
+    TT_SELECTIVE_FRONTIER = 8
 };
 
 inline bool TTFlagIsRigorous(uint8_t flag)
 {
-    return flag >= TT_EXACT && flag <= TT_UPPER_BOUND;
+    const uint8_t base = flag & 7;
+    return base >= TT_EXACT && base <= TT_UPPER_BOUND;
 }
 
 inline uint8_t TTBaseFlag(uint8_t flag)
 {
+    flag &= 7;
     if (flag >= TT_EXACT_HEURISTIC)
     {
         return static_cast<uint8_t>(flag - 4);
     }
     return flag;
+}
+
+inline uint8_t TTFlagForResult(const MovePrintValue& result)
+{
+    uint8_t flag;
+    if (result.proof == ExactProof && result.bound == SearchBound::Exact)
+        flag = TT_EXACT;
+    else if (result.HasLowerProof() &&
+             (result.bound != SearchBound::Upper || !result.HasUpperProof()))
+        flag = TT_LOWER_BOUND;
+    else if (result.HasUpperProof())
+        flag = TT_UPPER_BOUND;
+    else
+        flag = result.bound == SearchBound::Lower ? TT_LOWER_HEURISTIC
+            : result.bound == SearchBound::Upper ? TT_UPPER_HEURISTIC
+            : TT_EXACT_HEURISTIC;
+    return static_cast<uint8_t>(flag | (result.selective ? TT_SELECTIVE_FRONTIER : 0));
 }
 
 #pragma pack(push, 1)

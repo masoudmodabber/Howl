@@ -186,9 +186,9 @@ void TranspositionTable::CheckShadowEntryOnProbe(uint64_t key, int depth, int al
         // Check if shadow entry would have produced a cutoff that didn't happen
         if (!actualCutoffOccurred && !isPVNode && shadow.depth >= depth && TTFlagIsRigorous(shadow.flag))
         {
-            if (shadow.flag == TT_EXACT ||
-                (shadow.flag == TT_LOWER_BOUND && shadow.score >= beta) ||
-                (shadow.flag == TT_UPPER_BOUND && shadow.score <= alpha))
+            if (TTBaseFlag(shadow.flag) == TT_EXACT ||
+                (TTBaseFlag(shadow.flag) == TT_LOWER_BOUND && shadow.score >= beta) ||
+                (TTBaseFlag(shadow.flag) == TT_UPPER_BOUND && shadow.score <= alpha))
             {
                 g_shadowEntries[idx].producedCutoff = true;
                 return;
@@ -242,6 +242,17 @@ void TranspositionTable::Store(uint64_t key, int32_t score, int8_t depth, uint8_
     std::size_t idx = key & entryMask;
 #if HOWL_CORRECTNESS_TESTING
     g_ttTelemetryStats.stores++;
+#endif
+    if (entries[idx].key == key && TTFlagIsRigorous(entries[idx].flag) &&
+        !TTFlagIsRigorous(flag))
+    {
+        // Keep a usable score certificate when the new result supplies only
+        // ordering information. The newer move hint can still be useful.
+        if (bestMove != 0)
+            entries[idx].bestMove = bestMove;
+        return;
+    }
+#if HOWL_CORRECTNESS_TESTING
     if (entries[idx].key == 0 || entries[idx].flag == TT_NONE)
     {
         g_ttTelemetryStats.emptySlotStores++;
