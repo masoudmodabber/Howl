@@ -279,15 +279,36 @@ int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKingSq, c
     for (int i = 0; i < ctx.blackPasserCount; ++i)
     {
         int pawnPlace = ctx.blackPassers[i];
-        if (whiteKingSq == pawnPlace - 8)
+        int adv = 7 - (pawnPlace / 8);
+        int blockSq = pawnPlace - 8;
+        if (whiteKingSq == blockSq)
         {
-            int adv = 7 - (pawnPlace / 8);
-            int bonus = 0;
-            if (adv == 3) bonus = 25;
-            else if (adv == 4) bonus = 135;
-            else if (adv == 5) bonus = 175;
-            else if (adv >= 6) bonus = 215;
+            int bonus = (adv == 3) ? 25 : (adv == 4 ? 220 : (adv == 5 ? 175 : 215));
             whiteBlockade += (bonus * (12 - phase)) / 12;
+        }
+        else if (ChebyshevDistance(whiteKingSq, blockSq) <= 1 &&
+                 ChebyshevDistance(whiteKingSq, blockSq) < ChebyshevDistance(blackKingSq, blockSq))
+        {
+            int bonus = (adv == 3) ? 20 : (adv == 4 ? 115 : (adv == 5 ? 150 : 180));
+            whiteBlockade += (bonus * (12 - phase)) / 12;
+        }
+
+        // Isolated blockaded passer containment
+        int pFile = pawnPlace % 8;
+        bool isIsolated = true;
+        for (int pSq : board.pieces[9])
+        {
+            if (pSq != pawnPlace && std::abs((pSq % 8) - pFile) == 1)
+            {
+                isIsolated = false;
+                break;
+            }
+        }
+        if (isIsolated && (whiteKingSq == blockSq ||
+            (ChebyshevDistance(whiteKingSq, blockSq) <= 1 && ChebyshevDistance(whiteKingSq, blockSq) < ChebyshevDistance(blackKingSq, blockSq))))
+        {
+            int isoBonus = (adv == 3 ? 20 : (adv == 4 ? 45 : 65));
+            whiteBlockade += (isoBonus * (12 - phase)) / 12;
         }
     }
 
@@ -295,38 +316,55 @@ int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKingSq, c
     for (int i = 0; i < ctx.whitePasserCount; ++i)
     {
         int pawnPlace = ctx.whitePassers[i];
-        if (blackKingSq == pawnPlace + 8)
+        int adv = pawnPlace / 8;
+        int blockSq = pawnPlace + 8;
+        if (blackKingSq == blockSq)
         {
-            int adv = pawnPlace / 8;
-            int bonus = 0;
-            if (adv == 3) bonus = 25;
-            else if (adv == 4) bonus = 135;
-            else if (adv == 5) bonus = 175;
-            else if (adv >= 6) bonus = 215;
+            int bonus = (adv == 3) ? 25 : (adv == 4 ? 220 : (adv == 5 ? 175 : 215));
             blackBlockade += (bonus * (12 - phase)) / 12;
+        }
+        else if (ChebyshevDistance(blackKingSq, blockSq) <= 1 &&
+                 ChebyshevDistance(blackKingSq, blockSq) < ChebyshevDistance(whiteKingSq, blockSq))
+        {
+            int bonus = (adv == 3) ? 20 : (adv == 4 ? 115 : (adv == 5 ? 150 : 180));
+            blackBlockade += (bonus * (12 - phase)) / 12;
+        }
+
+        int pFile = pawnPlace % 8;
+        bool isIsolated = true;
+        for (int pSq : board.pieces[1])
+        {
+            if (pSq != pawnPlace && std::abs((pSq % 8) - pFile) == 1)
+            {
+                isIsolated = false;
+                break;
+            }
+        }
+        if (isIsolated && (blackKingSq == blockSq ||
+            (ChebyshevDistance(blackKingSq, blockSq) <= 1 && ChebyshevDistance(blackKingSq, blockSq) < ChebyshevDistance(whiteKingSq, blockSq))))
+        {
+            int isoBonus = (adv == 3 ? 20 : (adv == 4 ? 45 : 65));
+            blackBlockade += (isoBonus * (12 - phase)) / 12;
         }
     }
 
     // --- Coherent Endgame Evaluator Dynamics ---
-    int whiteExtra = 0, blackExtra = 0;
+    int whiteExtra = 0;
+    int blackExtra = 0;
 
-    // 1. Advanced passers count (distToPromo <= 2, i.e. White rank >= 5, Black rank <= 2)
     int whiteAdv = 0, blackAdv = 0;
-    int whiteMinDist = 99, blackMinDist = 99;
     for (int i = 0; i < ctx.whitePasserCount; ++i) {
         int sq = ctx.whitePassers[i];
         int d = 7 - (sq / 8);
         if (d <= 2) whiteAdv++;
-        if (d < whiteMinDist) whiteMinDist = d;
     }
     for (int i = 0; i < ctx.blackPasserCount; ++i) {
         int sq = ctx.blackPassers[i];
         int d = sq / 8;
         if (d <= 2) blackAdv++;
-        if (d < blackMinDist) blackMinDist = d;
     }
 
-    // Merged & Cleaned Passer Dynamics:
+    // 1. Decisive Passed Pawn Conversion
     // A. Dual advanced passers: unstoppable split passer threat (EG1) + sparse material conversion dampening
     if (whiteAdv >= 2 && blackAdv < 2) {
         int bonus = (board.pieces[9].size() > board.pieces[1].size()) ? 510 : 350;
@@ -335,12 +373,61 @@ int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKingSq, c
         int bonus = (board.pieces[1].size() > board.pieces[9].size()) ? 510 : 350;
         blackExtra += (bonus * (12 - phase)) / 12;
     }
-    // B. Single advanced passer dominance: merged single advanced passer advantage,
-    // multi-passer leverage, and distant solo outside passer restriction into one unified term.
+    // B. Single advanced passer dominance with king interception (Rule of the Square)
     else if (whiteAdv >= 1 && blackAdv == 0) {
-        whiteExtra += (245 * (12 - phase)) / 12;
+        int bonus = 245;
+        for (int i = 0; i < ctx.whitePasserCount; ++i) {
+            int sq = ctx.whitePassers[i];
+            int d = 7 - (sq / 8);
+            if (d <= 2) {
+                int promoSq = 56 + (sq % 8);
+                int bKingDist = ChebyshevDistance(blackKingSq, promoSq);
+                int wKingDist = ChebyshevDistance(whiteKingSq, promoSq);
+                if (bKingDist <= d && bKingDist < wKingDist) {
+                    bonus = 105;
+                    break;
+                }
+            }
+        }
+        whiteExtra += (bonus * (12 - phase)) / 12;
     } else if (blackAdv >= 1 && whiteAdv == 0) {
-        blackExtra += (245 * (12 - phase)) / 12;
+        int bonus = 245;
+        for (int i = 0; i < ctx.blackPasserCount; ++i) {
+            int sq = ctx.blackPassers[i];
+            int d = sq / 8;
+            if (d <= 2) {
+                int promoSq = sq % 8;
+                int wKingDist = ChebyshevDistance(whiteKingSq, promoSq);
+                int bKingDist = ChebyshevDistance(blackKingSq, promoSq);
+                if (wKingDist <= d && wKingDist < bKingDist) {
+                    bonus = 105;
+                    break;
+                }
+            }
+        }
+        blackExtra += (bonus * (12 - phase)) / 12;
+    }
+
+    // C. Outside passer on 5th rank (d == 3) when opponent has NO advanced passers
+    if (whiteAdv == 0 && blackAdv == 0) {
+        int whiteD3Outside = 0, blackD3Outside = 0;
+        for (int i = 0; i < ctx.whitePasserCount; ++i) {
+            int sq = ctx.whitePassers[i];
+            int d = 7 - (sq / 8);
+            int f = sq % 8;
+            if (d == 3 && (f <= 1 || f >= 5)) whiteD3Outside++;
+        }
+        for (int i = 0; i < ctx.blackPasserCount; ++i) {
+            int sq = ctx.blackPassers[i];
+            int d = sq / 8;
+            int f = sq % 8;
+            if (d == 3 && (f <= 1 || f >= 5)) blackD3Outside++;
+        }
+        if (blackD3Outside >= 1 && whiteD3Outside == 0) {
+            blackExtra += (75 * (12 - phase)) / 12;
+        } else if (whiteD3Outside >= 1 && blackD3Outside == 0) {
+            whiteExtra += (75 * (12 - phase)) / 12;
+        }
     }
 
     // 2. Rook Restraint & Blockade of enemy passers
@@ -380,12 +467,12 @@ int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKingSq, c
         long long occ = board.whitePieces | board.blackPieces;
         for (int rSq : board.pieces[12]) {
             if ((AttackPlaces::RookAttack[rSq][whiteKingSq] & occ) == Option::PowerTwo[whiteKingSq]) {
-                blackExtra += (35 * (12 - phase)) / 12;
+                blackExtra += (85 * (12 - phase)) / 12;
             }
         }
         for (int rSq : board.pieces[4]) {
             if ((AttackPlaces::RookAttack[rSq][blackKingSq] & occ) == Option::PowerTwo[blackKingSq]) {
-                whiteExtra += (35 * (12 - phase)) / 12;
+                whiteExtra += (85 * (12 - phase)) / 12;
             }
         }
     }
@@ -395,8 +482,8 @@ int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKingSq, c
         if (blackAdv >= 1) {
             for (int bSq : board.pieces[11]) {
                 int r = bSq / 8, f = bSq % 8;
-                if ((r == 3 || r == 4) && (f >= 2 && f <= 5)) {
-                    blackExtra += (45 * (12 - phase)) / 12;
+                if ((r == 3 || r == 4) && (f >= 2 && f <= 6)) {
+                    blackExtra += (110 * (12 - phase)) / 12;
                 }
             }
             for (int kSq : board.pieces[10]) {
@@ -409,8 +496,8 @@ int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKingSq, c
         if (whiteAdv >= 1) {
             for (int bSq : board.pieces[3]) {
                 int r = bSq / 8, f = bSq % 8;
-                if ((r == 3 || r == 4) && (f >= 2 && f <= 5)) {
-                    whiteExtra += (45 * (12 - phase)) / 12;
+                if ((r == 3 || r == 4) && (f >= 2 && f <= 6)) {
+                    whiteExtra += (110 * (12 - phase)) / 12;
                 }
             }
             for (int kSq : board.pieces[2]) {
@@ -419,6 +506,18 @@ int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKingSq, c
                     whiteExtra += (45 * (12 - phase)) / 12;
                 }
             }
+        }
+    }
+
+    // 5. Near-endgame king centralization
+    if (phase <= 8) {
+        int wKf = whiteKingSq % 8, wKr = whiteKingSq / 8;
+        if ((wKr == 2 || wKr == 3) && (wKf >= 2 && wKf <= 5)) {
+            whiteExtra += (8 * (8 - phase)) / 8;
+        }
+        int bKf = blackKingSq % 8, bKr = blackKingSq / 8;
+        if ((bKr == 5 || bKr == 4) && (bKf >= 2 && bKf <= 5)) {
+            blackExtra += (8 * (8 - phase)) / 8;
         }
     }
 
@@ -1790,6 +1889,39 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const Evaluati
         }
     }
 
+    bool hasHeavyMatingBattery = false;
+    const int phaseVal = ctx ? ctx->phase : EvaluationLogic::CalculatePhase(board);
+    if (phaseVal >= 12 && attackerCount >= 2)
+    {
+        for (int i = 1; i < zone.count; i++)
+        {
+            if (enemyAttacks[i] >= 2 && friendlyDefenses[i] == 0)
+            {
+                const int target = zone.squares[i];
+                bool hasQ = false, hasR = false;
+                for (int qSq : board.pieces[attackingWhite ? 5 : 13])
+                {
+                    if (AttackPlaces::QueenAttack[qSq][target] != 0 && (AttackPlaces::BetweenMask[qSq][target] & occupiedSquares) == 0)
+                    {
+                        hasQ = true; break;
+                    }
+                }
+                for (int rSq : board.pieces[attackingWhite ? 4 : 12])
+                {
+                    if (AttackPlaces::RookAttack[rSq][target] != 0 && (AttackPlaces::BetweenMask[rSq][target] & occupiedSquares) == 0)
+                    {
+                        hasR = true; break;
+                    }
+                }
+                if (hasQ && hasR)
+                {
+                    hasHeavyMatingBattery = true;
+                    break;
+                }
+            }
+        }
+    }
+
     const int escapeDanger = controlledEscapes * 6 + occupiedEscapes * 2 +
                              edgeDirections * 2 + std::max(0, 3 - safeEscapes) * 8;
     const int balanceDanger = std::max(0, attackerParticipation - defenderParticipation) +
@@ -1799,13 +1931,12 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const Evaluati
     const int defensiveRestriction = __builtin_popcountll(restrictedBetweenSquares) * 6;
     int rawDanger = attackerParticipation * 2 + escapeDanger +
                     lineDanger + shelterDanger + balanceDanger + undefendedKingZoneDanger +
-                    defensiveRestriction;
+                    defensiveRestriction + (hasHeavyMatingBattery ? 140 : 0);
 
     const int queenCount = board.pieces[attackingWhite ? 5 : 13].size();
     const int rookCount = board.pieces[attackingWhite ? 4 : 12].size();
     const int minorCount = board.pieces[attackingWhite ? 2 : 10].size() +
                            board.pieces[attackingWhite ? 3 : 11].size();
-    const int phaseVal = ctx ? ctx->phase : EvaluationLogic::CalculatePhase(board);
     const int base = (queenCount > 0) ? 20 : (20 * phaseVal / 24);
     int attackingMaterialScale = std::min(100, base + queenCount * 45 +
                                                      rookCount * 12 + minorCount * 5);
@@ -1822,10 +1953,22 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const Evaluati
     }
     else if (attackerCount == 1)
     {
+        const int rank = kingSquare / 8;
+        const int file = kingSquare % 8;
+        const bool centralKing = (whiteKing ? rank <= 1 : rank >= 6) && file >= 2 && file <= 5;
         if (attackerParticipation >= 8)
         {
             // Lone major piece creating forcing pressure
-            escalatedDanger = rawDanger / 2;
+            const int attackerRank = loneAttackerSq >= 0 ? loneAttackerSq / 8 : -1;
+            const bool infiltrated = whiteKing ? (attackerRank <= 1) : (attackerRank >= 6);
+            if (infiltrated && (centralKing || shelterDanger >= 10 || undefendedKingZoneDanger > 0))
+            {
+                escalatedDanger = (rawDanger * 7) / 8;
+            }
+            else
+            {
+                escalatedDanger = rawDanger / 2;
+            }
         }
         else if (attackerParticipation >= 4)
         {
@@ -1833,9 +1976,6 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const Evaluati
             const bool attackerContested = (loneAttackerSq >= 0 && BoardLogic::UnderAttack(board, loneAttackerSq, !whiteKing));
             if (!attackerContested)
             {
-                const int rank = kingSquare / 8;
-                const int file = kingSquare % 8;
-                const bool centralKing = (whiteKing ? rank <= 1 : rank >= 6) && file >= 2 && file <= 5;
                 if (centralKing || shelterDanger >= 10 || undefendedKingZoneDanger > 0)
                 {
                     escalatedDanger = (rawDanger * (defensiveRestriction > 0 ? 3 : 2)) / 8;
@@ -2539,7 +2679,7 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int phase, const Ev
             }
         }
     }
-    const int whitePawnSum = doubledPawnValueWhite + singlePastWhite + isolatedPawnValueWhite + goForwardPawnWhite + pawnChainWhite;
+    int whitePawnSum = doubledPawnValueWhite + singlePastWhite + isolatedPawnValueWhite + goForwardPawnWhite + pawnChainWhite;
 
     for (int item : thisBoard.pieces[9])
     {
@@ -2615,7 +2755,43 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int phase, const Ev
             }
         }
     }
-    const int blackPawnSum = doubledPawnValueBlack + singlePastBlack + isolatedPawnValueBlack + goForwardPawnBlack + pawnChainBlack;
+    int blackPawnSum = doubledPawnValueBlack + singlePastBlack + isolatedPawnValueBlack + goForwardPawnBlack + pawnChainBlack;
+
+    if (phase >= 12) {
+        // Space advance for c4 when d4 is present
+        if (thisBoard.mainBoard[26] == 1 && thisBoard.mainBoard[27] == 1 && thisBoard.mainBoard[34] != 9) {
+            whitePawnSum += 20;
+        }
+        if (thisBoard.mainBoard[34] == 9 && thisBoard.mainBoard[35] == 9 && thisBoard.mainBoard[26] != 1) {
+            blackPawnSum += 20;
+        }
+
+        // Flank passer with Rook support
+        for (int sq : thisBoard.pieces[1]) {
+            int f = sq % 8, r = sq / 8;
+            if (r >= 5 && (f <= 1 || f >= 6)) {
+                if ((PassedPawnSetup::WhitePassedMask[sq] & blackPawns) == 0) {
+                    bool rookBehind = false;
+                    for (int rsq : thisBoard.pieces[4]) {
+                        if (rsq % 8 == f && rsq / 8 < r) { rookBehind = true; break; }
+                    }
+                    whitePawnSum += (rookBehind ? 60 : 35);
+                }
+            }
+        }
+        for (int sq : thisBoard.pieces[9]) {
+            int f = sq % 8, r = sq / 8;
+            if (r <= 2 && (f <= 1 || f >= 6)) {
+                if ((PassedPawnSetup::BlackPassedMask[sq] & whitePawns) == 0) {
+                    bool rookBehind = false;
+                    for (int rsq : thisBoard.pieces[12]) {
+                        if (rsq % 8 == f && rsq / 8 > r) { rookBehind = true; break; }
+                    }
+                    blackPawnSum += (rookBehind ? 60 : 35);
+                }
+            }
+        }
+    }
 
     return whitePawnSum - blackPawnSum;
 }
@@ -3399,6 +3575,101 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase)
     }
     for (int sq : thisBoard.pieces[12]) {
         if (sq / 8 == 5 && thisBoard.mainBoard[sq + 8] == 9) movement += 25;
+    }
+
+    if (phase >= 12) {
+        const int wKingSq = thisBoard.pieces[6].front();
+        const int bKingSq = thisBoard.pieces[14].front();
+        const int wKr = wKingSq / 8, wKf = wKingSq % 8;
+        const int bKr = bKingSq / 8, bKf = bKingSq % 8;
+        for (int qSq : thisBoard.pieces[13]) {
+            int qr = qSq / 8;
+            if (qr <= 1 && wKr <= 1 && wKf >= 2 && wKf <= 5) {
+                movement -= 85;
+            }
+        }
+        for (int qSq : thisBoard.pieces[5]) {
+            int qr = qSq / 8;
+            if (qr >= 6 && bKr >= 6 && bKf >= 2 && bKf <= 5) {
+                movement += 85;
+            }
+        }
+    }
+
+    // Hanging central pawn attacked by Queen
+    static const int whiteCentralPawns[4] = {18, 27, 28, 21}; // c3, d4, e4, f3
+    for (int sq : whiteCentralPawns) {
+        if (mainBoard[sq] == 1) {
+            bool attackedByQ = false;
+            for (int qSq : thisBoard.pieces[13]) {
+                if (AttackPlaces::QueenAttack[qSq][sq] && (AttackPlaces::BetweenMask[qSq][sq] & wholeBoard) == 0) {
+                    attackedByQ = true; break;
+                }
+            }
+            if (attackedByQ) {
+                bool defended = BoardLogic::UnderAttack(thisBoard, sq, false);
+                if (!defended) {
+                    movement -= 40;
+                } else {
+                    for (int qSq : thisBoard.pieces[5]) {
+                        if (AttackPlaces::QueenAttack[qSq][sq] && (AttackPlaces::BetweenMask[qSq][sq] & wholeBoard) == 0) {
+                            movement += 15; break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    static const int blackCentralPawns[4] = {42, 35, 36, 45}; // c6, d5, e5, f6
+    for (int sq : blackCentralPawns) {
+        if (mainBoard[sq] == 9) {
+            bool attackedByQ = false;
+            for (int qSq : thisBoard.pieces[5]) {
+                if (AttackPlaces::QueenAttack[qSq][sq] && (AttackPlaces::BetweenMask[qSq][sq] & wholeBoard) == 0) {
+                    attackedByQ = true; break;
+                }
+            }
+            if (attackedByQ) {
+                bool defended = BoardLogic::UnderAttack(thisBoard, sq, true);
+                if (!defended) {
+                    movement += 40;
+                } else {
+                    for (int qSq : thisBoard.pieces[13]) {
+                        if (AttackPlaces::QueenAttack[qSq][sq] && (AttackPlaces::BetweenMask[qSq][sq] & wholeBoard) == 0) {
+                            movement -= 15; break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Uncontested central knight outpost on d5 / d4
+    for (int nSq : thisBoard.pieces[2]) {
+        if (nSq == 35) { // d5
+            bool canChallenge = false;
+            for (int pSq : thisBoard.pieces[9]) {
+                int pf = pSq % 8, pr = pSq / 8;
+                if (pf == 2 && pr > 4) canChallenge = true;
+                if (pf == 4 && pr > 4) {
+                    if (mainBoard[36] != 1) canChallenge = true; // e5 pawn blocks e-file pawns
+                }
+            }
+            if (!canChallenge) movement += 16;
+        }
+    }
+    for (int nSq : thisBoard.pieces[10]) {
+        if (nSq == 27) { // d4
+            bool canChallenge = false;
+            for (int pSq : thisBoard.pieces[1]) {
+                int pf = pSq % 8, pr = pSq / 8;
+                if (pf == 2 && pr < 3) canChallenge = true;
+                if (pf == 4 && pr < 3) {
+                    if (mainBoard[28] != 9) canChallenge = true; // e4 pawn blocks e-file pawns
+                }
+            }
+            if (!canChallenge) movement -= 16;
+        }
     }
 
     
