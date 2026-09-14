@@ -645,7 +645,11 @@ inline int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKi
             int promotionRace = ChebyshevDistance(blackKingSq, promoSq) - ChebyshevDistance(whiteKingSq, promoSq);
 
             int mult = rankWeight[(pawnPlace / 8) + 1];
-            whiteAdjustment += (blockRace + promotionRace + whiteRaceTempo) * mult;
+            int adj = (blockRace + promotionRace + whiteRaceTempo) * mult;
+            if (adj > 0)
+            {
+                whiteAdjustment += adj;
+            }
         }
     }
 
@@ -663,7 +667,11 @@ inline int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKi
             int promotionRace = ChebyshevDistance(whiteKingSq, promoSq) - ChebyshevDistance(blackKingSq, promoSq);
 
             int mult = rankWeight[8 - (pawnPlace / 8)];
-            blackAdjustment += (blockRace + promotionRace + blackRaceTempo) * mult;
+            int adj = (blockRace + promotionRace + blackRaceTempo) * mult;
+            if (adj > 0)
+            {
+                blackAdjustment += adj;
+            }
         }
     }
 
@@ -684,7 +692,7 @@ inline int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKi
                 else if (adv == 4) bonus = 135;
                 else if (adv == 5) bonus = 175;
                 else if (adv >= 6) bonus = 215;
-                whiteBlockade += (bonus * (24 - phase)) / 24;
+                whiteBlockade += (bonus * (12 - phase)) / 12;
             }
         }
     }
@@ -702,7 +710,7 @@ inline int EvaluatePassedPawnKingRace(Board &board, int whiteKingSq, int blackKi
                 else if (adv == 4) bonus = 135;
                 else if (adv == 5) bonus = 175;
                 else if (adv >= 6) bonus = 215;
-                blackBlockade += (bonus * (24 - phase)) / 24;
+                blackBlockade += (bonus * (12 - phase)) / 12;
             }
         }
     }
@@ -1260,6 +1268,7 @@ inline int EvaluatePassedPawnCorridorSafety(Board &board)
                 }
             }
 
+            if (corridorControl < 0) corridorControl = 0;
             int relRank = pRank + 1;
             int scaled = (corridorControl * rankScalePercent[relRank]) / 100;
             if (scaled < -80) scaled = -80;
@@ -1312,6 +1321,7 @@ inline int EvaluatePassedPawnCorridorSafety(Board &board)
                 }
             }
 
+            if (corridorControl < 0) corridorControl = 0;
             int relRank = 8 - pRank;
             int scaled = (corridorControl * rankScalePercent[relRank]) / 100;
             if (scaled < -80) scaled = -80;
