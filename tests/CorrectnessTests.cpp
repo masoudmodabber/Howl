@@ -1053,6 +1053,18 @@ int RunQSearchCheckingMove(bool capture)
             expectedMove + " gives check and must not be rejected solely by the material delta test",
             result);
     }
+    if (!capture) {
+        const char* geometry = "7k/8/8/8/8/8/2K5/R7 w - - 0 1";
+        std::unique_ptr<Board> quietBoard(BoardMaker::MakeInitialBoard(geometry));
+        const int standPat = EvaluationLogic::Evaluate(*quietBoard);
+        const auto wide = RunDirectQSearch(geometry, -200000, 200000, 0, 4);
+        const auto narrow = RunDirectQSearch(geometry, standPat - 1, standPat, 0, 4);
+        if (wide.statistics.rootStage2NonchecksRejected == 0 ||
+            wide.score < standPat || narrow.score != standPat) {
+            return ReportQSearchFailure("deferred check geometry and stand pat", geometry,
+                "reject geometric nonchecks and preserve stand-pat lower bound across windows", wide);
+        }
+    }
     std::cout << "QSearch exempts checking moves from material-only delta rejection\n";
     return 0;
 }
@@ -1772,7 +1784,93 @@ int RunSearch(const std::string& testCase)
             return 1;
         }
 
-        std::cout << "TT 16-byte entry layout, packed move, full int32 score, and flags verified\n";
+        // A completed frontier score is reusable without claiming an exact
+        // mate. A lower witness survives omitted siblings; an upper does not.
+        MovePrintValue frontier;
+        frontier.value = 42;
+        frontier.selective = true;
+        frontier.AddProvenance(SearchProvenance::Quiescence);
+        if (!TTFlagIsRigorous(TTFlagForResult(frontier)) ||
+            TTBaseFlag(TTFlagForResult(frontier)) != TT_EXACT ||
+            (TTFlagForResult(frontier) & TT_SELECTIVE_FRONTIER) == 0 ||
+            InvertProof(LowerProof) != UpperProof ||
+            InvertProof(UpperProof) != LowerProof)
+        {
+            std::cerr << "Frontier certificate or negated proof was lost\n";
+            return 1;
+        }
+        frontier.AddProvenance(SearchProvenance::ForwardPruning);
+        frontier.SetProof(true, false);
+        if (TTBaseFlag(TTFlagForResult(frontier)) != TT_LOWER_BOUND ||
+            !frontier.ProvesLower(42) || frontier.ProvesUpper(42))
+        {
+            std::cerr << "A lower witness was confused with an upper proof\n";
+            return 1;
+        }
+        for (SearchProvenance cause : {SearchProvenance::ReducedSearch,
+                SearchProvenance::Repetition, SearchProvenance::NullMove,
+                SearchProvenance::ProbCut, SearchProvenance::Aborted})
+        {
+            MovePrintValue speculative;
+            speculative.MarkSpeculative(cause);
+            if (TTFlagIsRigorous(TTFlagForResult(speculative)) ||
+                speculative.HasLowerProof() || speculative.HasUpperProof())
+            {
+                std::cerr << "Speculation acquired a reusable score certificate\n";
+                return 1;
+            }
+        }
+
+        // Exercise actual PVS retrieval, including an ordering-only entry with
+        // the same depth and numerically compatible score as a certified one.
+        std::unique_ptr<Board> proofBoard(BoardMaker::MakeInitialBoard(
+            "7k/8/8/8/8/8/8/K7 w - - 0 1"));
+        Move previous{}, m1{}, m2{}, m3{};
+        Search::stopRequested = false;
+        Search::active = false;
+        RepetitionHistory::ResetWithRoot(proofBoard->ZobristHashCode);
+        for (bool certified : {true, false})
+        {
+            TranspositionTable::Clear();
+            PVSSearch::ResetHistory();
+            PVSSearch::ResetKillers();
+            TranspositionTable::Store(proofBoard->ZobristHashCode, 12345, 3,
+                static_cast<uint8_t>((certified ? TT_LOWER_BOUND : TT_LOWER_HEURISTIC) |
+                                     TT_SELECTIVE_FRONTIER), 0);
+            const auto beforeCutoffs = TranspositionTable::Stats().cutoffs;
+            std::unique_ptr<MovePrintValue> result(PVSSearch::PVS(
+                false, -1, 0, 3, previous, m1, m2, m3, *proofBoard,
+                false, true, 0, false, true));
+            if ((certified && (result->value != 12345 || !result->HasLowerProof() ||
+                               !result->selective ||
+                               TranspositionTable::Stats().cutoffs != beforeCutoffs + 1)) ||
+                (!certified && result->value == 12345))
+            {
+                std::cerr << "PVS confused a frontier certificate with an ordering hint\n";
+                return 1;
+            }
+        }
+        TranspositionTable::Clear();
+        const uint64_t proofKey = proofBoard->ZobristHashCode;
+        const auto newHint = TTMoveHelper::PackMove(0, 8, 0);
+        TranspositionTable::Store(proofKey, 42, 5, TT_LOWER_BOUND | TT_SELECTIVE_FRONTIER, 0);
+        TranspositionTable::Store(proofKey, 900, 8, TT_LOWER_HEURISTIC, newHint);
+        TTEntry preserved{};
+        if (!TranspositionTable::Probe(proofKey, preserved) || preserved.score != 42 ||
+            preserved.depth != 5 || !TTFlagIsRigorous(preserved.flag) ||
+            preserved.bestMove != newHint) {
+            std::cerr << "Ordering-only replacement destroyed a certified score\n";
+            return 1;
+        }
+        std::unique_ptr<MovePrintValue> mateTarget(PVSSearch::PVS(
+            false, -1, 0, 3, previous, m1, m2, m3, *proofBoard,
+            true, false, 0, false, true));
+        if (mateTarget->value == 42) {
+            std::cerr << "Mate-target search reused an ordinary frontier score\n";
+            return 1;
+        }
+        TranspositionTable::Clear();
+        std::cout << "TT layout, directional proofs, and certified-only PVS reuse verified\n";
         return 0;
     }
     if (testCase == "interrupted_iteration_bestmove")
@@ -1799,7 +1897,7 @@ int RunSearch(const std::string& testCase)
         Search::MainSearch(move1, move2, move3, move4, *board);
 
         const std::string depth2BestMove = Search::completedBestMove;
-        const int depth2Nodes = Search::moveCount;
+        const int depth2Nodes = Search::searchNodeCount;
         if (depth2BestMove.empty() || depth2Nodes <= 0)
         {
             std::cerr << "Expected non-empty completedBestMove at depth 2\n";
@@ -1807,10 +1905,10 @@ int RunSearch(const std::string& testCase)
         }
 
         // 2. Start a fresh search with maxDepth = 3 and maxNodes set between depth 2 nodes and depth 3 completion
-        // Depth 2 completes at ~4,064 nodes and depth 3 at ~18,577 nodes.
-        // Setting maxNodes = depth2Nodes + 1000 guarantees depth 2 completes and depth 3 is interrupted.
+        // Use counted search nodes, the same unit as the production node limit.
+        // Stop shortly after the completed iteration, while depth 3 is in progress.
         Search::maxDepth = 3;
-        Search::maxNodes = depth2Nodes + 1000;
+        Search::maxNodes = depth2Nodes + 10;
         Search::isMoveTime = false;
         Search::allowedTime = 0.0;
         Search::finiteSearch = true;
@@ -1901,8 +1999,8 @@ int RunSearch(const std::string& testCase)
     {
         using Window = std::pair<int, int>;
         const Window initial{-50, 50};
-        const Window highRetry{50, 200000};
-        const Window lowRetry{-200000, -50};
+        const Window highRetry{-50, 200000};
+        const Window lowRetry{-200000, 50};
         const Window fullWindow{-200000, 200000};
 
         const auto success = Search::AspirationWindowsForTesting(0, {10});
@@ -1914,12 +2012,21 @@ int RunSearch(const std::string& testCase)
             Search::AspirationWindowsForTesting(0, {50, 200000, 200000});
         const auto persistentLow =
             Search::AspirationWindowsForTesting(0, {-50, -200000, -200000});
+        const auto repeatedHighBoundary =
+            Search::AspirationWindowsForTesting(0, {50, 50});
+        const auto repeatedLowBoundary =
+            Search::AspirationWindowsForTesting(0, {-50, -50});
+        const auto reversedBoundary =
+            Search::AspirationWindowsForTesting(0, {50, -50, 0});
 
         if (success != std::vector<Window>{initial} ||
             failHigh != std::vector<Window>{initial, highRetry} ||
             failLow != std::vector<Window>{initial, lowRetry} ||
             persistentHigh != std::vector<Window>{initial, highRetry, fullWindow} ||
             persistentLow != std::vector<Window>{initial, lowRetry, fullWindow} ||
+            repeatedHighBoundary != std::vector<Window>{initial, highRetry} ||
+            repeatedLowBoundary != std::vector<Window>{initial, lowRetry} ||
+            reversedBoundary != std::vector<Window>{initial, highRetry, fullWindow} ||
             failHigh.size() > 2 || failLow.size() > 2 ||
             persistentHigh.size() > 3 || persistentLow.size() > 3)
         {

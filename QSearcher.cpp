@@ -73,12 +73,19 @@ QSearchTestStatistics QSearcher::TestStatistics() {
 
 MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& prevMove, int depthGone, int lastCheck, bool kick, int depth, Move& move1, Move& move2, Move& move3, Board& board4, bool MAtESearch, int depthQuisStarted, bool nullWindowSearch)
 {
+    if (Search::stopRequested.load(std::memory_order_relaxed)) {
+        MovePrintValue* aborted = new MovePrintValue();
+        aborted->bound = SearchBound::Upper;
+        aborted->MarkSpeculative(SearchProvenance::Aborted);
+        return aborted;
+    }
     QSearchMovePoolScope movePoolScope;
     const int origAlpha = alpha;
     const int origBeta = beta;
     const int qsearchDistance = std::max(0, depthGone - depthQuisStarted);
     Search::searchNodeCount++;
-    if ((Search::searchNodeCount & 2047) == 0)
+    if ((Search::searchNodeCount & 2047) == 0 ||
+        (Search::maxNodes > 0 && Search::searchNodeCount >= Search::maxNodes))
     {
         Search::CheckLimits();
     }
@@ -87,7 +94,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         MovePrintValue* abortVal = new MovePrintValue();
         abortVal->value = 0;
         abortVal->bound = SearchBound::Upper;
-        abortVal->selective = true;
+        abortVal->MarkSpeculative(SearchProvenance::Aborted);
         return abortVal;
     }
     MoveList moveList;
@@ -103,6 +110,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
     
     MovePrintValue* retValue = new MovePrintValue();
     retValue->printString = "";
+    retValue->AddProvenance(SearchProvenance::Quiescence);
     
     MovePrintValue* MPValue = nullptr;
     
@@ -120,6 +128,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
 
     if (BoardLogic::UnderAttack(board4, board4.pieces[(1 - turn) * 8 + 6].front(), board4.sideToMove)) {
         retValue->value = 160000;
+        retValue->MarkSpeculative(SearchProvenance::InvalidMove);
         delete MPValue;
         MPValue = nullptr;
         return retValue;
@@ -140,7 +149,12 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         retValue = nullptr;
         delete MPValue;
         MPValue = nullptr;
-        return QSearch(isPVNode, alpha, beta, prevMove, depthGone, 2, false, 2, move1, move2, move3, board4, MAtESearch, depthQuisStarted, nullWindowSearch);
+        MovePrintValue* extended = QSearch(isPVNode, alpha, beta, prevMove, depthGone, 2, false, 2, move1, move2, move3, board4, MAtESearch, depthQuisStarted, nullWindowSearch);
+        // PV-only checking extensions use a different frontier from a scout.
+        // Their scores cannot certify a bound for a non-PV TT probe.
+        if (isPVNode && qsearchDistance >= Option::checkExtensionNonPV)
+            extended->MarkSpeculative(SearchProvenance::ExtendedFrontier);
+        return extended;
     }
 
     if (currentSideInCheck && depth == 0) {
@@ -178,13 +192,20 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         if (valueTemp2 >= beta) {
             retValue->value = valueTemp2;
             retValue->bound = SearchBound::Lower;
+            retValue->proof = LowerProof;
             retValue->selective = true;
             delete MPValue;
             MPValue = nullptr;
             return retValue;
         }
     }
-    int bestMoveValue = -200000;
+    // Stand pat is a legal QSearch alternative outside forced check resolution.
+    // A wider window must preserve the lower bound returned by a stand-pat cutoff.
+    const bool canStandPat = !checkChecked && !currentSideInCheck;
+    int bestMoveValue = canStandPat ? valueTemp2 : -200000;
+    bool allUpperProof = true;
+    bool bestLowerProof = canStandPat;
+    if (canStandPat && valueTemp2 > alpha) alpha = valueTemp2;
     DeferredMove deferredMoves[256];
     int deferredCount = 0;
     bool hasDeferredStage2 = false;
@@ -225,10 +246,11 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                 MPValue = nullptr;
                 retValue->value = 0;
                 retValue->bound = SearchBound::Upper;
-                retValue->selective = true;
+                retValue->MarkSpeculative(SearchProvenance::Aborted);
                 return retValue;
             }
             Move* move = moveList.moves[i];
+            uint8_t moveProof = NoProof;
             boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
             MissingInfoAboutPrevStateFromMove missingInfoAboutPrevStateFromMove(board4, *move);
 
@@ -264,6 +286,23 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                 board4.pieces[(1 - turn) * 8 + 6].front(),
                 !board4.sideToMove);
 
+            // Stage 2 contains geometric checking candidates, not guaranteed
+            // checks. Evasions and promotions never enter this stage.
+            if (currentStage == 2 && !moveGivesCheck &&
+                move->endPiece == 0 && move->promotionPiece <= 0 && !currentSideInCheck) {
+#ifdef HOWL_CORRECTNESS_TESTING
+                if (testRootNode) ++qSearchTestStatistics.rootStage2NonchecksRejected;
+#endif
+                --availMoves;
+                GameLogic::UndoMove(board4, *move, missingInfoAboutPrevStateFromMove);
+                if (UCI::IsTest()) {
+                    Board::AreBoardsEqual(board4, *boardCopy);
+                    delete boardCopy;
+                    boardCopy = nullptr;
+                }
+                continue;
+            }
+
             int pieceValueTemp = pieceValue100[move->endPiece];
             int promotionGain = (move->promotionPiece > 0)
                 ? (pieceValue100[move->promotionPiece] - pieceValue100[1])
@@ -281,9 +320,12 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
             bool isDeltaPruned = deltaRejectsMaterial && !moveGivesCheck;
 
             if (isDeltaPruned) {
+                allUpperProof = false;
+                retValue->AddProvenance(SearchProvenance::ForwardPruning);
                 move->value = Option::SafetyMargin + standPot + pieceValueTemp + promotionGain - 1;
                 if (move->value > bestMoveValue) {
                     bestMoveValue = move->value;
+                    bestLowerProof = false;
                     SelectedMove = move;
                     SelectedPV = "";
                 }
@@ -307,22 +349,29 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                 if (RepetitionHistory::IsRepetition(board4.ZobristHashCode)) {
                     value = 0;
                     move->value = 0;
+                    retValue->AddProvenance(SearchProvenance::Repetition);
                 } else {
                     if (move->endPiece > 0 || move->promotionPiece > 0) {
                         delete MPValue;
                         MPValue = QSearch(isPVNode, -beta, -alpha, *move, depthGone + 1, nextLastCheck, true, depth - 1, move2, move3, prevMove, board4, false, depthQuisStarted, nullWindowSearch);
                         value = -MPValue->value;
+                        moveProof = InvertProof(MPValue->proof);
+                        retValue->provenance |= MPValue->provenance;
                         movePV = MPValue->printString;
                     } else {
                         delete MPValue;
                         MPValue = QSearch(isPVNode, -beta, -alpha, *move, depthGone + 1, nextLastCheck, false, depth - 1, move2, move3, prevMove, board4, false, depthQuisStarted, nullWindowSearch);
                         value = -MPValue->value;
+                        moveProof = InvertProof(MPValue->proof);
+                        retValue->provenance |= MPValue->provenance;
                         movePV = MPValue->printString;
                     }
                     move->value = value;
                 }
+                allUpperProof = allUpperProof && ((moveProof & UpperProof) != 0);
                 if (value > bestMoveValue) {
                     bestMoveValue = value;
+                    bestLowerProof = (moveProof & LowerProof) != 0;
                     SelectedMove = move;
                     SelectedPV = movePV;
                 }
@@ -343,7 +392,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                     MPValue = nullptr;
                     retValue->value = 0;
                     retValue->bound = SearchBound::Upper;
-                    retValue->selective = true;
+                    retValue->MarkSpeculative(SearchProvenance::Aborted);
                     return retValue;
                 }
                 firstMove = false;
@@ -352,6 +401,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                         retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + movePV;
                         retValue->value = value;
                         retValue->bound = SearchBound::Lower;
+                        retValue->SetProof((moveProof & LowerProof) != 0, false);
                         retValue->selective = true;
                         deleteMoveList(moveList);
                         if (hasDeferredStage2 && currentStage == 1) {
@@ -375,22 +425,30 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                     tempRepeat = true;
                     value = 0;
                     move->value = 0;
+                    retValue->AddProvenance(SearchProvenance::Repetition);
                 } else {
                     if (move->endPiece > 0 || move->promotionPiece > 0) {
                         delete MPValue;
                         MPValue = QSearch(false, -alpha - Option::nullWindowSize, -alpha, *move, depthGone + 1, nextLastCheck, true, depth - 1, move2, move3, prevMove, board4, false, depthQuisStarted, nullWindowSearch);
                         value = -MPValue->value;
+                        moveProof = InvertProof(MPValue->proof);
+                        retValue->provenance |= MPValue->provenance;
                         movePV = MPValue->printString;
                     } else {
                         delete MPValue;
                         MPValue = QSearch(false, -alpha - Option::nullWindowSize, -alpha, *move, depthGone + 1, nextLastCheck, false, depth - 1, move2, move3, prevMove, board4, false, depthQuisStarted, nullWindowSearch);
                         value = -MPValue->value;
+                        moveProof = InvertProof(MPValue->proof);
+                        retValue->provenance |= MPValue->provenance;
                         movePV = MPValue->printString;
                     }
                     move->value = value;
                 }
+                const bool scoutProvesCutoff = !isPVNode && !tempRepeat &&
+                    beta - alpha == Option::nullWindowSize &&
+                    MPValue->ProvesUpper(-beta);
                 if (value > alpha /* && value < beta */) {
-                    if (!tempRepeat) {
+                    if (!tempRepeat && !scoutProvesCutoff) {
 #ifdef HOWL_CORRECTNESS_TESTING
                         if (testRootNode) {
                             qSearchTestStatistics.rootFullWindowResearches++;
@@ -400,11 +458,15 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                             delete MPValue; 
                             MPValue = QSearch(isPVNode, -beta, -alpha, *move, depthGone + 1, nextLastCheck, true, depth - 1, move2, move3, prevMove, board4, false, depthQuisStarted, nullWindowSearch);
                             value = -MPValue->value;
+                            moveProof = InvertProof(MPValue->proof);
+                            retValue->provenance |= MPValue->provenance;
                             movePV = MPValue->printString;
                         } else {
                             delete MPValue;
                             MPValue = QSearch(isPVNode, -beta, -alpha, *move, depthGone + 1, nextLastCheck, false, depth - 1, move2, move3, prevMove, board4, false, depthQuisStarted, nullWindowSearch);
                             value = -MPValue->value;
+                            moveProof = InvertProof(MPValue->proof);
+                            retValue->provenance |= MPValue->provenance;
                             movePV = MPValue->printString;
                         }
                         move->value = value;
@@ -430,14 +492,16 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                     MPValue = nullptr;
                     retValue->value = 0;
                     retValue->bound = SearchBound::Upper;
-                    retValue->selective = true;
+                    retValue->MarkSpeculative(SearchProvenance::Aborted);
                     return retValue;
                 }
+                allUpperProof = allUpperProof && ((moveProof & UpperProof) != 0);
                 if (value > bestMoveValue) {
                     if (value >= beta) {
                         retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + movePV;
                         retValue->value = value;
                         retValue->bound = SearchBound::Lower;
+                        retValue->SetProof((moveProof & LowerProof) != 0, false);
                         retValue->selective = true;
                         deleteMoveList(moveList);
                         if (hasDeferredStage2 && currentStage == 1) {
@@ -450,6 +514,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                         return retValue;
                     }
                     bestMoveValue = value;
+                    bestLowerProof = (moveProof & LowerProof) != 0;
                     SelectedMove = move;
                     SelectedPV = movePV;
                 }
@@ -498,6 +563,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         return retValue;
     } else {
         retValue->value = bestMoveValue;
+        retValue->SetProof(bestLowerProof, allUpperProof);
         retValue->bound = bestMoveValue <= origAlpha ? SearchBound::Upper
             : (bestMoveValue >= origBeta ? SearchBound::Lower : SearchBound::Exact);
         retValue->selective = true;

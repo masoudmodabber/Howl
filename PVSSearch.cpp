@@ -770,12 +770,22 @@ int PVSSearch::DiagnosticUnifiedOrderingScore(int turn, const Move &prevMove, in
 
 MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool selectiveSearch)
 {
+    MovePrintValue* result = SearchNode(isPVNode, alpha, beta, depth, prevMove,
+        move1, move2, move3, board4, MAtESearch, isNullMoveAllowed, depthGone,
+        previousMoveWasCheck, nullWindowSearch, selectiveSearch);
+    if (selectiveSearch)
+        result->MarkSpeculative(SearchProvenance::ReducedSearch);
+    return result;
+}
+
+MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool selectiveSearch)
+{
     if (Search::stopRequested.load(std::memory_order_relaxed))
     {
         MovePrintValue *abortRet = new MovePrintValue();
         abortRet->value = 0;
         abortRet->bound = SearchBound::Upper;
-        abortRet->selective = true;
+        abortRet->MarkSpeculative(SearchProvenance::Aborted);
         return abortRet;
     }
 
@@ -812,6 +822,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             mateHorizonResult->printString = "";
             const auto setTargetFailure = [&]()
             {
+                mateHorizonResult->MarkSpeculative(SearchProvenance::ReducedSearch);
                 if (beta < 0)
                 {
                     mateHorizonResult->value = beta;
@@ -869,6 +880,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
         {
             retValue->value = alpha;
             retValue->bound = SearchBound::Lower;
+            retValue->proof = LowerProof;
             delete MPValue;
             return retValue;
         }
@@ -880,13 +892,15 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
         {
             retValue->value = beta;
             retValue->bound = SearchBound::Upper;
+            retValue->proof = UpperProof;
             delete MPValue;
             return retValue;
         }
     }
 
     Search::searchNodeCount++;
-    if ((Search::searchNodeCount & 2047) == 0)
+    if ((Search::searchNodeCount & 2047) == 0 ||
+        (Search::maxNodes > 0 && Search::searchNodeCount >= Search::maxNodes))
     {
         Search::CheckLimits();
     }
@@ -895,7 +909,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
         delete MPValue;
         retValue->value = 0;
         retValue->bound = SearchBound::Upper;
-        retValue->selective = true;
+        retValue->MarkSpeculative(SearchProvenance::Aborted);
         return retValue;
     }
 
@@ -915,6 +929,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
     if (BoardLogic::UnderAttack(board4, board4.pieces[(1 - turn) * 8 + 6].front(), board4.sideToMove))
     {
         retValue->value = 160000;
+        retValue->MarkSpeculative(SearchProvenance::InvalidMove);
         delete MPValue;
         MPValue = nullptr;
         return retValue;
@@ -939,6 +954,93 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
     }
     const bool nodeInCheck = BoardLogic::UnderAttack(
         board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove);
+    TTEntry ttEntry{};
+    bool ttHit = TranspositionTable::Probe(board4.ZobristHashCode, ttEntry);
+    if (ttHit)
+        ttEntry.score = MateScore::FromTranspositionTable(ttEntry.score, depthGone);
+#if HOWL_CORRECTNESS_TESTING
+    TTTelemetryStats &ttStats = TranspositionTable::TelemetryStats();
+    ttStats.eligibleProbes++;
+    TTTelemetryBucket *depthBucket = nullptr;
+    if (depth <= 2) depthBucket = &ttStats.depth1To2;
+    else if (depth <= 5) depthBucket = &ttStats.depth3To5;
+    else if (depth <= 8) depthBucket = &ttStats.depth6To8;
+    else depthBucket = &ttStats.depth9Plus;
+
+    if (depthBucket) depthBucket->probes++;
+
+    if (ttHit)
+    {
+        ttStats.hits++;
+        if (depthBucket) depthBucket->hits++;
+
+        if (ttEntry.depth >= depth) ttStats.hitsSufficientDepth++;
+        else ttStats.hitsInsufficientDepth++;
+
+        uint8_t baseFlag = TTBaseFlag(ttEntry.flag);
+        if (baseFlag == TT_EXACT) ttStats.hitsExact++;
+        else if (baseFlag == TT_LOWER_BOUND) ttStats.hitsLower++;
+        else if (baseFlag == TT_UPPER_BOUND) ttStats.hitsUpper++;
+    }
+    else
+    {
+        ttStats.misses++;
+    }
+#endif
+    if (TranspositionTable::CutoffsEnabled() && !MAtESearch && !isPVNode && ttHit && ttEntry.depth >= depth && TTFlagIsRigorous(ttEntry.flag))
+    {
+        if (TTBaseFlag(ttEntry.flag) == TT_EXACT)
+        {
+            TranspositionTable::RecordCutoff();
+#if HOWL_CORRECTNESS_TESTING
+            ttStats.cutoffsExact++;
+            ttStats.totalCutoffs++;
+            if (depthBucket) depthBucket->cutoffs++;
+#endif
+            retValue->value = ttEntry.score;
+            retValue->selective = (ttEntry.flag & TT_SELECTIVE_FRONTIER) != 0;
+            if (retValue->selective) retValue->AddProvenance(SearchProvenance::Quiescence);
+            retValue->bound = SearchBound::Exact;
+            retValue->proof = ExactProof;
+            delete MPValue;
+            MPValue = nullptr;
+            return retValue;
+        }
+        else if (TTBaseFlag(ttEntry.flag) == TT_LOWER_BOUND && ttEntry.score >= beta)
+        {
+            TranspositionTable::RecordCutoff();
+#if HOWL_CORRECTNESS_TESTING
+            ttStats.cutoffsLower++;
+            ttStats.totalCutoffs++;
+            if (depthBucket) depthBucket->cutoffs++;
+#endif
+            retValue->value = ttEntry.score;
+            retValue->selective = (ttEntry.flag & TT_SELECTIVE_FRONTIER) != 0;
+            if (retValue->selective) retValue->AddProvenance(SearchProvenance::Quiescence);
+            retValue->bound = SearchBound::Lower;
+            retValue->proof = LowerProof;
+            delete MPValue;
+            MPValue = nullptr;
+            return retValue;
+        }
+        else if (TTBaseFlag(ttEntry.flag) == TT_UPPER_BOUND && ttEntry.score <= alpha)
+        {
+            TranspositionTable::RecordCutoff();
+#if HOWL_CORRECTNESS_TESTING
+            ttStats.cutoffsUpper++;
+            ttStats.totalCutoffs++;
+            if (depthBucket) depthBucket->cutoffs++;
+#endif
+            retValue->value = ttEntry.score;
+            retValue->selective = (ttEntry.flag & TT_SELECTIVE_FRONTIER) != 0;
+            if (retValue->selective) retValue->AddProvenance(SearchProvenance::Quiescence);
+            retValue->bound = SearchBound::Upper;
+            retValue->proof = UpperProof;
+            delete MPValue;
+            MPValue = nullptr;
+            return retValue;
+        }
+    }
     if (!isPVNode && !nodeInCheck && !MAtESearch && depth <= 3 &&
         beta < 159800 && alpha > -159800)
     {
@@ -948,7 +1050,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
         {
             retValue->value = staticValue;
             retValue->bound = SearchBound::Lower;
-            retValue->selective = true;
+            retValue->MarkSpeculative(SearchProvenance::ForwardPruning);
             delete MPValue;
             MPValue = nullptr;
             return retValue;
@@ -1003,7 +1105,18 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                 uncertainty += nullMargin < 100 ? 1 : 0;
                 uncertainty += (R * 3 >= depth * 2) ? 1 : 0;
                 if (nullFailedHigh && !sparseMaterialRisk && uncertainty == 3)
+                {
+                    // Certified full-depth TT bounds were resolved before the
+                    // null probe. Without that evidence, verify at the requested
+                    // depth in this node. A reduced
+                    // verification can miss the depth-sensitive false-positive
+                    // tail. Reuse the ensuing ordinary result, on either side
+                    // of beta, rather than accepting the speculative null score
+                    // or starting a duplicate verification/continuation pass.
                     cutoffAccepted = false;
+                    retValue->AddProvenance(SearchProvenance::NullVerification);
+                }
+
                 const bool verificationRequired = nullFailedHigh && sparseMaterialRisk &&
                     (totalPieceCount <= 6 || uncertainty >= 2);
                 if (verificationRequired)
@@ -1029,7 +1142,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                 {
                     retValue->value = nullScore;
                     retValue->bound = SearchBound::Lower;
-                    retValue->selective = true;
+                    retValue->MarkSpeculative(SearchProvenance::NullMove);
                     retValue->printString = "null";
                     delete MPValue;
                     MPValue = nullptr;
@@ -1042,7 +1155,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             delete MPValue;
             retValue->value = 0;
             retValue->bound = SearchBound::Upper;
-            retValue->selective = true;
+            retValue->MarkSpeculative(SearchProvenance::Aborted);
             return retValue;
         }
     }
@@ -1050,87 +1163,6 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
     if constexpr (ProductionIGGEnabled)
     {
         IGG(isPVNode, alpha, beta, depth, prevMove, move1, move2, move3, board4, MAtESearch, isNullMoveAllowed, depthGone, previousMoveWasCheck, nullWindowSearch, moveList);
-    }
-    TTEntry ttEntry{};
-    bool ttHit = TranspositionTable::Probe(board4.ZobristHashCode, ttEntry);
-    if (ttHit)
-        ttEntry.score = MateScore::FromTranspositionTable(ttEntry.score, depthGone);
-#if HOWL_CORRECTNESS_TESTING
-    TTTelemetryStats &ttStats = TranspositionTable::TelemetryStats();
-    ttStats.eligibleProbes++;
-    TTTelemetryBucket *depthBucket = nullptr;
-    if (depth <= 2) depthBucket = &ttStats.depth1To2;
-    else if (depth <= 5) depthBucket = &ttStats.depth3To5;
-    else if (depth <= 8) depthBucket = &ttStats.depth6To8;
-    else depthBucket = &ttStats.depth9Plus;
-
-    if (depthBucket) depthBucket->probes++;
-
-    if (ttHit)
-    {
-        ttStats.hits++;
-        if (depthBucket) depthBucket->hits++;
-
-        if (ttEntry.depth >= depth) ttStats.hitsSufficientDepth++;
-        else ttStats.hitsInsufficientDepth++;
-
-        uint8_t baseFlag = TTBaseFlag(ttEntry.flag);
-        if (baseFlag == TT_EXACT) ttStats.hitsExact++;
-        else if (baseFlag == TT_LOWER_BOUND) ttStats.hitsLower++;
-        else if (baseFlag == TT_UPPER_BOUND) ttStats.hitsUpper++;
-    }
-    else
-    {
-        ttStats.misses++;
-    }
-#endif
-    if (TranspositionTable::CutoffsEnabled() && !isPVNode && ttHit && ttEntry.depth >= depth && TTFlagIsRigorous(ttEntry.flag))
-    {
-        if (ttEntry.flag == TT_EXACT)
-        {
-            TranspositionTable::RecordCutoff();
-#if HOWL_CORRECTNESS_TESTING
-            ttStats.cutoffsExact++;
-            ttStats.totalCutoffs++;
-            if (depthBucket) depthBucket->cutoffs++;
-#endif
-            retValue->value = ttEntry.score;
-            retValue->bound = SearchBound::Exact;
-            deleteMoveList(moveList);
-            delete MPValue;
-            MPValue = nullptr;
-            return retValue;
-        }
-        else if (ttEntry.flag == TT_LOWER_BOUND && ttEntry.score >= beta)
-        {
-            TranspositionTable::RecordCutoff();
-#if HOWL_CORRECTNESS_TESTING
-            ttStats.cutoffsLower++;
-            ttStats.totalCutoffs++;
-            if (depthBucket) depthBucket->cutoffs++;
-#endif
-            retValue->value = ttEntry.score;
-            retValue->bound = SearchBound::Lower;
-            deleteMoveList(moveList);
-            delete MPValue;
-            MPValue = nullptr;
-            return retValue;
-        }
-        else if (ttEntry.flag == TT_UPPER_BOUND && ttEntry.score <= alpha)
-        {
-            TranspositionTable::RecordCutoff();
-#if HOWL_CORRECTNESS_TESTING
-            ttStats.cutoffsUpper++;
-            ttStats.totalCutoffs++;
-            if (depthBucket) depthBucket->cutoffs++;
-#endif
-            retValue->value = ttEntry.score;
-            retValue->bound = SearchBound::Upper;
-            deleteMoveList(moveList);
-            delete MPValue;
-            MPValue = nullptr;
-            return retValue;
-        }
     }
 #if HOWL_CORRECTNESS_TESTING
     TranspositionTable::CheckShadowEntryOnProbe(board4.ZobristHashCode, depth, alpha, beta, isPVNode, moveList, false);
@@ -1200,6 +1232,8 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
     int staticEval = -200000;
     int bestMoveValue = -200000;
     bool bestMoveSelective = false;
+    bool bestLowerProof = false;
+    bool allUpperProof = true;
     std::string SelectedPV = "";
     int availMoves = 0;
     int quietMovesSearched = 0;
@@ -1245,7 +1279,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                         GameLogic::UndoMove(board4, probMove, probUndo);
                         retValue->value = beta;
                         retValue->bound = SearchBound::Lower;
-                        retValue->selective = true;
+                        retValue->MarkSpeculative(SearchProvenance::ProbCut);
                         deleteMoveList(moveList);
                         delete MPValue;
                         MPValue = nullptr;
@@ -1260,7 +1294,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     MPValue = nullptr;
                     retValue->value = 0;
                     retValue->bound = SearchBound::Upper;
-                    retValue->selective = true;
+                    retValue->MarkSpeculative(SearchProvenance::Aborted);
                     return retValue;
                 }
             }
@@ -1275,12 +1309,13 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                 MPValue = nullptr;
                 retValue->value = 0;
                 retValue->bound = SearchBound::Upper;
-                retValue->selective = true;
+                retValue->MarkSpeculative(SearchProvenance::Aborted);
                 return retValue;
             }
             Move *move = moveList.moves[i];
             const int alphaBeforeMove = alpha;
             int LMRDepth = 0;
+            uint8_t moveProof = NoProof;
             if (firstMove)
             {
                 bool firstMoveWasRepetition = false;
@@ -1290,6 +1325,9 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                 if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                 {
                     firstMoveWasRepetition = true;
+                    availMoves++;
+                    allUpperProof = false;
+                    retValue->AddProvenance(SearchProvenance::Repetition);
                     bestMoveValue = 0;
                     bestMoveSelective = false;
                     SelectedMove = move;
@@ -1308,6 +1346,11 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                                   depthGone + 1, previousMoveWasCheck, nullWindowSearch,
                                   selectiveSearch);
                     bestMoveValue = -MPValue->value;
+                    moveProof = InvertProof(MPValue->proof);
+                    bestLowerProof = (moveProof & LowerProof) != 0;
+                    retValue->provenance |= MPValue->provenance;
+                    if (bestMoveValue != -160000)
+                        allUpperProof = allUpperProof && ((moveProof & UpperProof) != 0);
                     bestMoveSelective = MPValue->selective || selectiveSearch;
                     SelectedMove = move;
                     SelectedPV = MPValue->printString;
@@ -1335,7 +1378,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     MPValue = nullptr;
                     retValue->value = 0;
                     retValue->bound = SearchBound::Upper;
-                    retValue->selective = true;
+                    retValue->MarkSpeculative(SearchProvenance::Aborted);
                     return retValue;
                 }
                 firstMove = false;
@@ -1363,13 +1406,11 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                             if (bestMoveValue != 0)
                             {
                                 uint16_t packed = TTMoveHelper::PackMove(*move);
-                                const SearchBound cutoffBound = ClassifyBound(
-                                    bestMoveValue, origAlpha, origBeta);
-                                uint8_t cutoffFlag = cutoffBound == SearchBound::Exact
-                                    ? TT_EXACT
-                                    : TT_LOWER_BOUND;
-                                if (bestMoveSelective)
-                                    cutoffFlag = static_cast<uint8_t>(cutoffFlag + 4);
+                                MovePrintValue cutoffResult;
+                                cutoffResult.bound = ClassifyBound(bestMoveValue, origAlpha, origBeta);
+                                cutoffResult.SetProof(bestLowerProof, false);
+                                cutoffResult.selective = bestMoveSelective;
+                                const uint8_t cutoffFlag = TTFlagForResult(cutoffResult);
                                 TranspositionTable::Store(board4.ZobristHashCode,
                                     MateScore::ToTranspositionTable(move->value, depthGone),
                                     depth, cutoffFlag, packed);
@@ -1379,6 +1420,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                         retValue->bound = ClassifyBound(
                             bestMoveValue, origAlpha, origBeta);
                         retValue->selective = bestMoveSelective;
+                        retValue->SetProof(bestLowerProof, false);
                         retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + MPValue->printString;
                         deleteMoveList(moveList);
                         delete MPValue;
@@ -1530,6 +1572,8 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                 if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                 {
                     tempRepeat = true;
+                    availMoves++;
+                    retValue->AddProvenance(SearchProvenance::Repetition);
                     value = 0;
                     move->value = 0;
                     trustedValue = true;
@@ -1543,6 +1587,8 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                                        valueFutilityCandidate ||
                                        seePruningCandidate))
                     {
+                        allUpperProof = false;
+                        retValue->AddProvenance(SearchProvenance::ForwardPruning);
                         GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
                         delete missingInfoAboutPrevStateFromMove;
                         missingInfoAboutPrevStateFromMove = nullptr;
@@ -1573,6 +1619,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                                   depthGone + 1, previousMoveWasCheck, true,
                                   selectiveSearch || reducedSearch);
                     value = -MPValue->value;
+                    moveProof = InvertProof(MPValue->proof);
                     if (value != -160000)
                     {
                         availMoves++;
@@ -1599,10 +1646,18 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                                       prevMove, board4, MAtESearch, true, depthGone + 1,
                                       previousMoveWasCheck, true, true);
                         value = -MPValue->value;
+                        moveProof = InvertProof(MPValue->proof);
                         valueSelective = true;
                     }
 
-                    if (value > alpha)
+                    // A certified unreduced scout already proves the same
+                    // one-cp non-PV cutoff. PV/refutation and LMR recovery
+                    // searches retain their distinct confirmation semantics.
+                    const bool scoutProvesCutoff = !reducedSearch && !isPVNode &&
+                        !tempPVNode && !move->isRefuteWithoutNullMove &&
+                        beta - alpha == Option::nullWindowSize &&
+                        MPValue->ProvesUpper(-beta);
+                    if (value > alpha && !scoutProvesCutoff)
                     {
                         bool confirmationPVNode = isPVNode || move->isRefuteWithoutNullMove;
 #if HOWL_CORRECTNESS_TESTING
@@ -1615,6 +1670,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                                       true, depthGone + 1, previousMoveWasCheck,
                                       nullWindowSearch, selectiveSearch);
                         value = -MPValue->value;
+                        moveProof = InvertProof(MPValue->proof);
                         valueSelective = MPValue->selective || selectiveSearch;
                         trustedValue = true;
 #if HOWL_CORRECTNESS_TESTING
@@ -1625,9 +1681,12 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
 #endif
                     }
 
+                    retValue->provenance |= MPValue->provenance;
                     if (trustedValue)
                         move->value = value;
                 }
+                if (value != -160000)
+                    allUpperProof = allUpperProof && ((moveProof & UpperProof) != 0);
                 if (trustedValue && value > alpha)
                 {
                     if (!tempRepeat && !selectiveSearch && IsQuietMove(*move) &&
@@ -1662,7 +1721,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     MPValue = nullptr;
                     retValue->value = 0;
                     retValue->bound = SearchBound::Upper;
-                    retValue->selective = true;
+                    retValue->MarkSpeculative(SearchProvenance::Aborted);
                     return retValue;
                 }
                 if (trustedValue && value > bestMoveValue)
@@ -1683,13 +1742,11 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                             if (value != 0)
                             {
                                 uint16_t packed = TTMoveHelper::PackMove(*move);
-                                const SearchBound cutoffBound = ClassifyBound(
-                                    value, origAlpha, origBeta);
-                                uint8_t cutoffFlag = cutoffBound == SearchBound::Exact
-                                    ? TT_EXACT
-                                    : TT_LOWER_BOUND;
-                                if (valueSelective)
-                                    cutoffFlag = static_cast<uint8_t>(cutoffFlag + 4);
+                                MovePrintValue cutoffResult;
+                                cutoffResult.bound = ClassifyBound(value, origAlpha, origBeta);
+                                cutoffResult.SetProof((moveProof & LowerProof) != 0, false);
+                                cutoffResult.selective = valueSelective;
+                                const uint8_t cutoffFlag = TTFlagForResult(cutoffResult);
                                 TranspositionTable::Store(board4.ZobristHashCode,
                                     MateScore::ToTranspositionTable(move->value, depthGone),
                                     depth, cutoffFlag, packed);
@@ -1699,6 +1756,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                         retValue->bound = ClassifyBound(
                             value, origAlpha, origBeta);
                         retValue->selective = valueSelective;
+                        retValue->SetProof((moveProof & LowerProof) != 0, false);
                         retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + MPValue->printString;
                         deleteMoveList(moveList);
                         delete MPValue;
@@ -1707,6 +1765,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                     }
                     move->isRefuteWithoutNullMove = false;
                     bestMoveValue = value;
+                    bestLowerProof = (moveProof & LowerProof) != 0;
                     bestMoveSelective = valueSelective;
                     SelectedMove = move;
                     SelectedPV = MPValue->printString;
@@ -1720,6 +1779,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             stalemateMove.value = 0;
             stalemateMove.promotionPiece = -2;
             retValue->value = 0;
+            retValue->SetProof(allUpperProof, allUpperProof);
             deleteMoveList(moveList);
             delete MPValue;
             MPValue = nullptr;
@@ -1730,6 +1790,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             Move mateMove;
             mateMove.value = MateScore::MatedAtPly(depthGone);
             retValue->value = MateScore::MatedAtPly(depthGone);
+            retValue->SetProof(allUpperProof, allUpperProof);
             deleteMoveList(moveList);
             delete MPValue;
             MPValue = nullptr;
@@ -1760,13 +1821,11 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
                 bestMoveValue, origAlpha, origBeta);
             if (!selectiveSearch && SelectedMove != nullptr && bestMoveValue != 0)
             {
-                uint8_t flag = resultBound == SearchBound::Exact
-                    ? TT_EXACT
-                    : TT_UPPER_BOUND;
-                if (resultSelective)
-                {
-                    flag = static_cast<uint8_t>(flag + 4);
-                }
+                MovePrintValue storedResult;
+                storedResult.bound = resultBound;
+                storedResult.SetProof(bestLowerProof, allUpperProof);
+                storedResult.selective = resultSelective;
+                const uint8_t flag = TTFlagForResult(storedResult);
                 uint16_t packed = TTMoveHelper::PackMove(*SelectedMove);
                 TranspositionTable::Store(board4.ZobristHashCode,
                     MateScore::ToTranspositionTable(bestMoveValue, depthGone),
@@ -1775,6 +1834,7 @@ MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Mo
             retValue->value = bestMoveValue;
             retValue->bound = resultBound;
             retValue->selective = resultSelective;
+            retValue->SetProof(bestLowerProof, allUpperProof);
             retValue->printString = ChessStringManipulation::PVToString(*SelectedMove, 0, false, board4) + ' ' + SelectedPV;
             deleteMoveList(moveList);
             delete MPValue;
