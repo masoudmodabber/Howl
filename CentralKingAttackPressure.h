@@ -317,11 +317,19 @@ inline Result Evaluate(Board& board, bool whiteKing, uint8_t whitePawnFiles, uin
         const int pieceIndex = pieceType + (enemyWhite ? 0 : 8);
         for (int square : board.pieces[pieceIndex])
         {
+            const bool contested = BoardLogic::UnderAttack(board, square, whiteKing);
             if (MinorAttacksLayerFast(occupancy, pieceType, square, innerLayer))
-                result.innerAttackers++;
+            {
+                if (!contested)
+                    result.innerAttackers++;
+                else
+                    result.outerAttackers++;
+            }
             else if ((outerLayer & Option::PowerTwo[square]) != 0 ||
                      MinorAttacksLayerFast(occupancy, pieceType, square, outerLayer))
+            {
                 result.outerAttackers++;
+            }
         }
     }
     result.innerAttackContribution = result.innerAttackers * 12;

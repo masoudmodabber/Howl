@@ -152,7 +152,15 @@ int TestParityRegression()
     const int tunerScore = Tuner::TunerEvaluator::Evaluate(*board, state);
     if (tunerScore != productionScore)
         std::cerr << "Parity mismatch: production=" << productionScore << " tuner=" << tunerScore << '\n';
-    return productionScore == 80 && tunerScore == productionScore ? 0 : 1;
+    const auto verifierResult = Tuner::TunerEvaluationVerifier::RunVerification();
+    if (!verifierResult.allMatched)
+    {
+        std::cerr << "Multi-position parity mismatch on: " << verifierResult.firstMismatchFen
+                  << " prod=" << verifierResult.productionScore
+                  << " tuner=" << verifierResult.tunerScore << '\n';
+        return 1;
+    }
+    return productionScore == 84 && tunerScore == productionScore ? 0 : 1;
 }
 
 template <std::size_t N>

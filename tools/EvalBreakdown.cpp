@@ -3,6 +3,9 @@
 #include <string>
 #include <memory>
 #include <sstream>
+#include <chrono>
+#include <fstream>
+#include <vector>
 #include "BoardMaker.h"
 #include "EvaluationLogic.h"
 #include "BoardInitializer.h"
@@ -33,8 +36,76 @@ int main(int argc, char* argv[])
 {
     if (argc < 2)
     {
-        std::cerr << "Usage: howl_eval_breakdown \"<FEN>\"\n";
+        std::cerr << "Usage: howl_eval_breakdown \"<FEN>\" or howl_eval_breakdown --throughput [file.json]\n";
         return 1;
+    }
+
+    if (std::string(argv[1]) == "--throughput")
+    {
+        InitializeEngine();
+        std::string jsonPath = "tools/static_eval_calibration.json";
+        if (argc >= 3) jsonPath = argv[2];
+        std::ifstream f(jsonPath);
+        if (!f.is_open())
+        {
+            std::cerr << "Failed to open " << jsonPath << '\n';
+            return 1;
+        }
+        std::string line;
+        std::vector<std::string> fens;
+        while (std::getline(f, line))
+        {
+            auto pos = line.find("\"resulting_fen\": \"");
+            if (pos != std::string::npos)
+            {
+                auto start = pos + 18;
+                auto end = line.find("\"", start);
+                if (end != std::string::npos)
+                {
+                    fens.push_back(line.substr(start, end - start));
+                }
+            }
+        }
+        std::vector<std::unique_ptr<Board>> boards;
+        for (const auto& fenStr : fens)
+        {
+            std::unique_ptr<Board> b(BoardMaker::MakeInitialBoard(fenStr));
+            if (b) boards.push_back(std::move(b));
+        }
+        std::cout << "Benchmarking uncached eval on " << boards.size() << " positions...\n";
+
+        // Warmup
+        for (auto& b : boards)
+        {
+            volatile int s = EvaluationLogic::Evaluate(*b);
+            (void)s;
+        }
+
+        constexpr int iterations = 1000;
+        const auto startTime = std::chrono::high_resolution_clock::now();
+        long long totalEvals = 0;
+        uint64_t keyCounter = 1;
+        for (int it = 0; it < iterations; ++it)
+        {
+            for (auto& b : boards)
+            {
+                // Unique key forces cache miss on every eval (pure uncached evaluation throughput)
+                b->ZobristHashCode = static_cast<long long>(keyCounter++);
+                volatile int s = EvaluationLogic::Evaluate(*b);
+                (void)s;
+                totalEvals++;
+            }
+        }
+        const auto endTime = std::chrono::high_resolution_clock::now();
+        const auto elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+        double usPerEval = static_cast<double>(elapsedUs) / totalEvals;
+        double evalsPerSec = (totalEvals * 1e6) / elapsedUs;
+
+        std::cout << "Total evaluations: " << totalEvals << "\n";
+        std::cout << "Elapsed time: " << elapsedUs / 1000.0 << " ms\n";
+        std::cout << "Throughput: " << std::fixed << std::setprecision(3) << usPerEval << " us/eval ("
+                  << std::setprecision(0) << evalsPerSec << " evals/sec)\n";
+        return 0;
     }
 
     std::string fen;

@@ -499,6 +499,7 @@ inline KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
     int attackerParticipation = 0;
     int defenderParticipation = 0;
     int attackerCount = 0;
+    int loneAttackerSq = -1;
     int defenderCount = 0;
 
     const long long attackingPawnAttacks = attackingWhite
@@ -515,6 +516,7 @@ inline KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
             {
                 attackerParticipation += attackerWeight[pieceType];
                 attackerCount++;
+                loneAttackerSq = square;
                 if (pieceType >= 3 && pieceType <= 5)
                 {
                     for (int i = 1; i < zone.count; i++)
@@ -645,13 +647,17 @@ inline KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
         }
         else if (attackerParticipation >= 4)
         {
-            // Single minor piece creating latent pressure against an exposed/central king, weak shelter, or clamped line
-            const int rank = kingSquare / 8;
-            const int file = kingSquare % 8;
-            const bool centralKing = (whiteKing ? rank <= 1 : rank >= 6) && file >= 2 && file <= 5;
-            if (centralKing || shelterDanger >= 10 || undefendedKingZoneDanger > 0 || defensiveRestriction > 0)
+            // Single minor piece creating latent pressure against an exposed/central king, weak shelter, or undefended zone
+            const bool attackerContested = (loneAttackerSq >= 0 && BoardLogic::UnderAttack(board, loneAttackerSq, !whiteKing));
+            if (!attackerContested)
             {
-                escalatedDanger = (rawDanger * (defensiveRestriction > 0 ? 3 : 2)) / 8;
+                const int rank = kingSquare / 8;
+                const int file = kingSquare % 8;
+                const bool centralKing = (whiteKing ? rank <= 1 : rank >= 6) && file >= 2 && file <= 5;
+                if (centralKing || shelterDanger >= 10 || undefendedKingZoneDanger > 0)
+                {
+                    escalatedDanger = (rawDanger * (defensiveRestriction > 0 ? 3 : 2)) / 8;
+                }
             }
         }
     }
@@ -1501,6 +1507,12 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
                             whiteAttackValue += taperedGroup1Table(state.KnightAttackValue, mainBoard[endPlace]);
+                            if (mainBoard[endPlace] == 9 && !BoardLogic::UnderAttack(thisBoard, endPlace, true))
+                            {
+                                int f = endPlace % 8, r = endPlace / 8;
+                                bool isCentral = (f >= 2 && f <= 5 && r >= 2 && r <= 5);
+                                whiteAttackValue += isCentral ? 32 : 16;
+                            }
                         }
                     }
                 }
@@ -1529,6 +1541,12 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                         else if ((Option::PowerTwo[endPos] & blackPieces) != 0)
                         {
                             whiteAttackValue += taperedGroup1Table(state.BishopAttackValue, endPiece);
+                            if (endPiece == 9 && !BoardLogic::UnderAttack(thisBoard, endPos, true))
+                            {
+                                int f = endPos % 8, r = endPos / 8;
+                                bool isCentral = (f >= 2 && f <= 5 && r >= 2 && r <= 5);
+                                whiteAttackValue += isCentral ? 32 : 16;
+                            }
                             break;
                         }
                         else
@@ -1776,6 +1794,12 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
                             blackAttackValue += taperedGroup1Table(state.KnightAttackValue, mainBoard[endPlace]);
+                            if (mainBoard[endPlace] == 1 && !BoardLogic::UnderAttack(thisBoard, endPlace, false))
+                            {
+                                int f = endPlace % 8, r = endPlace / 8;
+                                bool isCentral = (f >= 2 && f <= 5 && r >= 2 && r <= 5);
+                                blackAttackValue += isCentral ? 32 : 16;
+                            }
                         }
                     }
                 }
@@ -1805,6 +1829,12 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                         else if ((Option::PowerTwo[endPos] & whitePieces) != 0)
                         {
                             blackAttackValue += taperedGroup1Table(state.BishopAttackValue, endPiece);
+                            if (endPiece == 1 && !BoardLogic::UnderAttack(thisBoard, endPos, false))
+                            {
+                                int f = endPos % 8, r = endPos / 8;
+                                bool isCentral = (f >= 2 && f <= 5 && r >= 2 && r <= 5);
+                                blackAttackValue += isCentral ? 32 : 16;
+                            }
                             break;
                         }
                         else
@@ -2016,11 +2046,13 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
         }
     }
 
-    // Pinned vulnerable pawn (modest generic static penalty)
+    // Pinned vulnerable pawn (chess-rational vulnerability model)
+    const int whiteKingSq = thisBoard.pieces[6].front();
+    const int whiteKingR = whiteKingSq / 8, whiteKingC = whiteKingSq % 8;
+    const bool whiteCentralKing = (whiteKingR <= 1 && whiteKingC >= 2 && whiteKingC <= 5);
     for (int psq : thisBoard.pieces[1]) {
         int r = psq / 8, c = psq % 8;
-        int ksq = thisBoard.pieces[6].front();
-        int kr = ksq / 8, kc = ksq % 8;
+        int kr = whiteKingR, kc = whiteKingC;
         int dr = kr - r, dc = kc - c;
         if (dr == 0 || dc == 0 || std::abs(dr) == std::abs(dc)) {
             int stepR = (dr == 0) ? 0 : (dr > 0 ? 1 : -1);
@@ -2035,8 +2067,54 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                     if (p != 0) {
                         bool isSlider = (stepR == 0 || stepC == 0) ? (p == 12 || p == 13) : (p == 11 || p == 13);
                         if (isSlider) {
-                            if ((AttackPlaces::BlackPawnAttackPlaces[psq] & thisBoard.whitePawns) == 0) {
+                            int sliderSq = cr * 8 + cc;
+                            bool pawnDefended = (AttackPlaces::BlackPawnAttackPlaces[psq] & thisBoard.whitePawns) != 0;
+                            bool kingDefended = (AttackPlaces::KingAttackPlaces[whiteKingSq] & (1ULL << psq)) != 0;
+                            bool pieceDefended = false;
+                            for (int rsq : thisBoard.pieces[4]) {
+                                if (AttackPlaces::RookAttack[rsq][psq] && (AttackPlaces::BetweenMask[rsq][psq] & wholeBoard) == 0) {
+                                    pieceDefended = true; break;
+                                }
+                            }
+                            if (!pieceDefended) {
+                                for (int nsq : thisBoard.pieces[2]) {
+                                    if (AttackPlaces::KnightAttackPlaces[nsq] & (1ULL << psq)) { pieceDefended = true; break; }
+                                }
+                            }
+                            if (!pieceDefended) {
+                                for (int bsq : thisBoard.pieces[3]) {
+                                    if (AttackPlaces::BishopAttack[bsq][psq] && (AttackPlaces::BetweenMask[bsq][psq] & wholeBoard) == 0) {
+                                        pieceDefended = true; break;
+                                    }
+                                }
+                            }
+                            if (!pieceDefended) {
+                                for (int qsq : thisBoard.pieces[5]) {
+                                    if (AttackPlaces::QueenAttack[qsq][psq] && (AttackPlaces::BetweenMask[qsq][psq] & wholeBoard) == 0) {
+                                        pieceDefended = true; break;
+                                    }
+                                }
+                            }
+
+                            int defenders = (pawnDefended ? 1 : 0) + (kingDefended ? 1 : 0) + (pieceDefended ? 1 : 0);
+                            int attackers = 1; // pinning slider
+                            attackers += __builtin_popcountll(AttackPlaces::WhitePawnAttackPlaces[psq] & thisBoard.blackPawns);
+                            for (int nsq : thisBoard.pieces[10]) {
+                                if (AttackPlaces::KnightAttackPlaces[nsq] & (1ULL << psq)) attackers++;
+                            }
+                            for (int bsq : thisBoard.pieces[11]) {
+                                if (bsq != sliderSq && AttackPlaces::BishopAttack[bsq][psq] && (AttackPlaces::BetweenMask[bsq][psq] & wholeBoard) == 0) attackers++;
+                            }
+                            for (int rsq : thisBoard.pieces[12]) {
+                                if (rsq != sliderSq && AttackPlaces::RookAttack[rsq][psq] && (AttackPlaces::BetweenMask[rsq][psq] & wholeBoard) == 0) attackers++;
+                            }
+
+                            if (defenders == 0) {
                                 movement -= 40;
+                            } else if (attackers > defenders) {
+                                movement -= 24;
+                            } else if (whiteCentralKing && (c == 3 || c == 4) && !pawnDefended) {
+                                movement -= 12;
                             }
                         }
                         break;
@@ -2045,10 +2123,12 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
             }
         }
     }
+    const int blackKingSq = thisBoard.pieces[14].front();
+    const int blackKingR = blackKingSq / 8, blackKingC = blackKingSq % 8;
+    const bool blackCentralKing = (blackKingR >= 6 && blackKingC >= 2 && blackKingC <= 5);
     for (int psq : thisBoard.pieces[9]) {
         int r = psq / 8, c = psq % 8;
-        int ksq = thisBoard.pieces[14].front();
-        int kr = ksq / 8, kc = ksq % 8;
+        int kr = blackKingR, kc = blackKingC;
         int dr = kr - r, dc = kc - c;
         if (dr == 0 || dc == 0 || std::abs(dr) == std::abs(dc)) {
             int stepR = (dr == 0) ? 0 : (dr > 0 ? 1 : -1);
@@ -2063,8 +2143,54 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                     if (p != 0) {
                         bool isSlider = (stepR == 0 || stepC == 0) ? (p == 4 || p == 5) : (p == 3 || p == 5);
                         if (isSlider) {
-                            if ((AttackPlaces::WhitePawnAttackPlaces[psq] & thisBoard.blackPawns) == 0) {
+                            int sliderSq = cr * 8 + cc;
+                            bool pawnDefended = (AttackPlaces::WhitePawnAttackPlaces[psq] & thisBoard.blackPawns) != 0;
+                            bool kingDefended = (AttackPlaces::KingAttackPlaces[blackKingSq] & (1ULL << psq)) != 0;
+                            bool pieceDefended = false;
+                            for (int rsq : thisBoard.pieces[12]) {
+                                if (AttackPlaces::RookAttack[rsq][psq] && (AttackPlaces::BetweenMask[rsq][psq] & wholeBoard) == 0) {
+                                    pieceDefended = true; break;
+                                }
+                            }
+                            if (!pieceDefended) {
+                                for (int nsq : thisBoard.pieces[10]) {
+                                    if (AttackPlaces::KnightAttackPlaces[nsq] & (1ULL << psq)) { pieceDefended = true; break; }
+                                }
+                            }
+                            if (!pieceDefended) {
+                                for (int bsq : thisBoard.pieces[11]) {
+                                    if (AttackPlaces::BishopAttack[bsq][psq] && (AttackPlaces::BetweenMask[bsq][psq] & wholeBoard) == 0) {
+                                        pieceDefended = true; break;
+                                    }
+                                }
+                            }
+                            if (!pieceDefended) {
+                                for (int qsq : thisBoard.pieces[13]) {
+                                    if (AttackPlaces::QueenAttack[qsq][psq] && (AttackPlaces::BetweenMask[qsq][psq] & wholeBoard) == 0) {
+                                        pieceDefended = true; break;
+                                    }
+                                }
+                            }
+
+                            int defenders = (pawnDefended ? 1 : 0) + (kingDefended ? 1 : 0) + (pieceDefended ? 1 : 0);
+                            int attackers = 1; // pinning slider
+                            attackers += __builtin_popcountll(AttackPlaces::BlackPawnAttackPlaces[psq] & thisBoard.whitePawns);
+                            for (int nsq : thisBoard.pieces[2]) {
+                                if (AttackPlaces::KnightAttackPlaces[nsq] & (1ULL << psq)) attackers++;
+                            }
+                            for (int bsq : thisBoard.pieces[3]) {
+                                if (bsq != sliderSq && AttackPlaces::BishopAttack[bsq][psq] && (AttackPlaces::BetweenMask[bsq][psq] & wholeBoard) == 0) attackers++;
+                            }
+                            for (int rsq : thisBoard.pieces[4]) {
+                                if (rsq != sliderSq && AttackPlaces::RookAttack[rsq][psq] && (AttackPlaces::BetweenMask[rsq][psq] & wholeBoard) == 0) attackers++;
+                            }
+
+                            if (defenders == 0) {
                                 movement += 40;
+                            } else if (attackers > defenders) {
+                                movement += 24;
+                            } else if (blackCentralKing && (c == 3 || c == 4) && !pawnDefended) {
+                                movement += 12;
                             }
                         }
                         break;
@@ -2107,7 +2233,7 @@ inline int GetPawnStructureValue(Board& thisBoard, int phase, const TunerEvaluat
                 if ((AttackPlaces::WhitePawnAttackPlaces[psq] & whitePawns) != 0 ||
                     (AttackPlaces::BlackPawnAttackPlaces[psq] & whitePawns) != 0)
                 {
-                    penalty = 0;
+                    penalty = penalty / 2;
                     break;
                 }
             }
@@ -2175,7 +2301,7 @@ inline int GetPawnStructureValue(Board& thisBoard, int phase, const TunerEvaluat
                 if ((AttackPlaces::BlackPawnAttackPlaces[psq] & blackPawns) != 0 ||
                     (AttackPlaces::WhitePawnAttackPlaces[psq] & blackPawns) != 0)
                 {
-                    penalty = 0;
+                    penalty = penalty / 2;
                     break;
                 }
             }
@@ -2326,8 +2452,55 @@ public:
             CentralKingAttackPressure::Evaluate(thisBoard, true);
         const CentralKingAttackPressure::Result blackCentralPressure =
             CentralKingAttackPressure::Evaluate(thisBoard, false);
+        const bool whiteCastled = (!thisBoard.whiteSmallCastle && !thisBoard.whiteBigCastle && (whiteKingSq == 6 || whiteKingSq == 2));
+        const bool blackCastled = (!thisBoard.blackSmallCastle && !thisBoard.blackBigCastle && (blackKingSq == 62 || blackKingSq == 58));
+        const int whiteKingR = whiteKingSq / 8, whiteKingC = whiteKingSq % 8;
+        const int blackKingR = blackKingSq / 8, blackKingC = blackKingSq % 8;
+        const bool whiteCentralKing = (!whiteCastled && whiteKingR <= 1 && whiteKingC >= 2 && whiteKingC <= 5);
+        const bool blackCentralKing = (!blackCastled && blackKingR >= 6 && blackKingC >= 2 && blackKingC <= 5);
+
+        int whitePawnShield = 0;
+        int blackPawnShield = 0;
+        if (phase >= 12)
+        {
+            if (whiteCastled)
+            {
+                if (whiteKingDanger.pawnShelter <= 8)
+                    whitePawnShield = (15 * phase) / 24;
+                else
+                    whitePawnShield = - ((whiteKingDanger.pawnShelter - 8) * phase) / 24;
+            }
+            else if (whiteCentralKing && whiteKingDanger.pawnShelter > 8)
+            {
+                whitePawnShield = - ((whiteKingDanger.pawnShelter - 8) * phase) / 48;
+            }
+
+            if (blackCastled)
+            {
+                if (blackKingDanger.pawnShelter <= 8)
+                    blackPawnShield = (15 * phase) / 24;
+                else
+                    blackPawnShield = - ((blackKingDanger.pawnShelter - 8) * phase) / 24;
+            }
+            else if (blackCentralKing && blackKingDanger.pawnShelter > 8)
+            {
+                blackPawnShield = - ((blackKingDanger.pawnShelter - 8) * phase) / 48;
+            }
+        }
+        int pawnShieldNet = whitePawnShield - blackPawnShield;
+
+        int castledSecurityNet = 0;
+        if (phase >= 14)
+        {
+            if (whiteCastled && blackCentralKing)
+                castledSecurityNet += (45 * phase) / 24;
+            else if (blackCastled && whiteCentralKing)
+                castledSecurityNet -= (45 * phase) / 24;
+        }
+
         int kingSafety = kingDangerNet + kingPlacementNet +
-                         whiteCentralPressure.contribution - blackCentralPressure.contribution;
+                         whiteCentralPressure.contribution - blackCentralPressure.contribution +
+                         pawnShieldNet + castledSecurityNet;
 
         // Pawn Structure
         int pawnStructure = Detail::GetPawnStructureValue(thisBoard, phase, state);
