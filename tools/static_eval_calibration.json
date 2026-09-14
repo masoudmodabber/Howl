@@ -1,0 +1,472 @@
+{
+  "description": "Canonical Howl static evaluation calibration dataset with trusted absolute scores and relative ordering constraints.",
+  "acceptance_criteria": {
+    "tolerance_bands": [
+      {
+        "max_abs_score": 100,
+        "min_cp": 20,
+        "pct": 0.25
+      },
+      {
+        "max_abs_score": 250,
+        "min_cp": 25,
+        "pct": 0.25
+      },
+      {
+        "max_abs_score": 400,
+        "min_cp": 62,
+        "pct": 0.3
+      },
+      {
+        "max_abs_score": 600,
+        "min_cp": 120,
+        "pct": 0.35
+      },
+      {
+        "max_abs_score": 99999,
+        "min_cp": 210,
+        "pct": 0.4
+      }
+    ]
+  },
+  "positions": [
+    {
+      "id": "Pos 1",
+      "category": "middlegame",
+      "source_fen": "1n1qkb1r/rb1n1ppp/p3p3/2ppP3/N2P4/1R2BP2/1PP3PP/3QKBNR b Kk - 1 11",
+      "candidate_move": null,
+      "resulting_fen": "1n1qkb1r/rb1n1ppp/p3p3/2ppP3/N2P4/1R2BP2/1PP3PP/3QKBNR b Kk - 1 11",
+      "trusted_white_pov_cp": 0,
+      "notes": "Pos 1 static baseline evaluation"
+    },
+    {
+      "id": "Pos 2",
+      "category": "middlegame",
+      "source_fen": "1n1qkb1r/1r1n1ppp/p3p3/3NP3/3Q4/5P2/1PP3PP/2B1KBNR w Kk - 0 13",
+      "candidate_move": null,
+      "resulting_fen": "1n1qkb1r/1r1n1ppp/p3p3/3NP3/3Q4/5P2/1PP3PP/2B1KBNR w Kk - 0 13",
+      "trusted_white_pov_cp": -20,
+      "notes": "Pos 2 static baseline evaluation"
+    },
+    {
+      "id": "Pos 3",
+      "category": "middlegame",
+      "source_fen": "1n1qkb1r/1r1nppp1/p6p/3NP3/3Q4/5P2/1PP3PP/2B1KBNR w Kk - 0 13",
+      "candidate_move": null,
+      "resulting_fen": "1n1qkb1r/1r1nppp1/p6p/3NP3/3Q4/5P2/1PP3PP/2B1KBNR w Kk - 0 13",
+      "trusted_white_pov_cp": 85,
+      "notes": "Pos 3 static baseline evaluation"
+    },
+    {
+      "id": "Pos 4",
+      "category": "middlegame",
+      "source_fen": "2r2rk1/6pp/5p2/RN1pP3/1p3P2/1P2K3/2P3PP/8 w - - 0 29",
+      "candidate_move": null,
+      "resulting_fen": "2r2rk1/6pp/5p2/RN1pP3/1p3P2/1P2K3/2P3PP/8 w - - 0 29",
+      "trusted_white_pov_cp": -70,
+      "notes": "Pos 4 static baseline evaluation"
+    },
+    {
+      "id": "Pos 5",
+      "category": "middlegame",
+      "source_fen": "rn1qkb1r/1bpppppp/p4n2/3P4/R3P3/5P2/1PP3PP/1NBQKBNR b Kkq - 0 6",
+      "candidate_move": null,
+      "resulting_fen": "rn1qkb1r/1bpppppp/p4n2/3P4/R3P3/5P2/1PP3PP/1NBQKBNR b Kkq - 0 6",
+      "trusted_white_pov_cp": 200,
+      "notes": "Pos 5 static baseline evaluation"
+    },
+    {
+      "id": "Pos 6 Qd2",
+      "category": "middlegame",
+      "source_fen": "rnb1k2r/pp2nppp/4p3/q1ppP3/3P4/P1P2N2/2P2PPP/R1BQKB1R w KQkq - 2 8",
+      "candidate_move": "Qd2",
+      "resulting_fen": "rnb1k2r/pp2nppp/4p3/q1ppP3/3P4/P1P2N2/2PQ1PPP/R1B1KB1R b KQkq - 3 8",
+      "trusted_white_pov_cp": 73,
+      "notes": "Pos 6 after Qd2"
+    },
+    {
+      "id": "Pos 6 h4",
+      "category": "middlegame",
+      "source_fen": "rnb1k2r/pp2nppp/4p3/q1ppP3/3P4/P1P2N2/2P2PPP/R1BQKB1R w KQkq - 2 8",
+      "candidate_move": "h4",
+      "resulting_fen": "rnb1k2r/pp2nppp/4p3/q1ppP3/3P3P/P1P2N2/2P2PP1/R1BQKB1R b KQkq - 0 8",
+      "trusted_white_pov_cp": -9,
+      "notes": "Pos 6 after h4"
+    },
+    {
+      "id": "Pos 7 Bb7",
+      "category": "middlegame",
+      "source_fen": "r1b2rk1/p1q2pp1/1pn1p1np/2ppP3/3P4/P1P1B3/2P1BPPP/R2QNRK1 b - - 1 14",
+      "candidate_move": "Bb7",
+      "resulting_fen": "r4rk1/pbq2pp1/1pn1p1np/2ppP3/3P4/P1P1B3/2P1BPPP/R2QNRK1 w - - 2 15",
+      "trusted_white_pov_cp": -79,
+      "notes": "Pos 7 after Bb7"
+    },
+    {
+      "id": "Pos 7 Nge7",
+      "category": "middlegame",
+      "source_fen": "r1b2rk1/p1q2pp1/1pn1p1np/2ppP3/3P4/P1P1B3/2P1BPPP/R2QNRK1 b - - 1 14",
+      "candidate_move": "Nge7",
+      "resulting_fen": "r1b2rk1/p1q1npp1/1pn1p2p/2ppP3/3P4/P1P1B3/2P1BPPP/R2QNRK1 w - - 2 15",
+      "trusted_white_pov_cp": -49,
+      "notes": "Pos 7 after Nge7"
+    },
+    {
+      "id": "Pos 8 Rd1",
+      "category": "middlegame",
+      "source_fen": "r4rk1/p1qb1pp1/1p2p1np/2ppP3/3P1P2/P1P1Q3/2P1B1PP/R3NRK1 w - - 1 18",
+      "candidate_move": "Rd1",
+      "resulting_fen": "r4rk1/p1qb1pp1/1p2p1np/2ppP3/3P1P2/P1P1Q3/2P1B1PP/3RNRK1 b - - 2 18",
+      "trusted_white_pov_cp": -61,
+      "notes": "Pos 8 after Rd1"
+    },
+    {
+      "id": "Pos 9 Nf5",
+      "category": "middlegame",
+      "source_fen": "2r2rk1/p1qbnpp1/1p2p2p/3pP2B/3P1P2/P2NQ3/2P3PP/R1R3K1 b - - 2 21",
+      "candidate_move": "Nf5",
+      "resulting_fen": "2r2rk1/p1qb1pp1/1p2p2p/3pPn1B/3P1P2/P2NQ3/2P3PP/R1R3K1 w - - 3 22",
+      "trusted_white_pov_cp": -88,
+      "notes": "Pos 9 after Nf5"
+    },
+    {
+      "id": "Pos 9 Bc6",
+      "category": "middlegame",
+      "source_fen": "2r2rk1/p1qbnpp1/1p2p2p/3pP2B/3P1P2/P2NQ3/2P3PP/R1R3K1 b - - 2 21",
+      "candidate_move": "Bc6",
+      "resulting_fen": "2r2rk1/p1q1npp1/1pb1p2p/3pP2B/3P1P2/P2NQ3/2P3PP/R1R3K1 w - - 3 22",
+      "trusted_white_pov_cp": -19,
+      "notes": "Pos 9 after Bc6"
+    },
+    {
+      "id": "Pos 10 Qb1",
+      "category": "middlegame",
+      "source_fen": "1q6/r1pnk1p1/2QppbB1/8/p2PR2P/2P2PB1/2P1KP2/8 b - - 1 40",
+      "candidate_move": "Qb1",
+      "resulting_fen": "8/r1pnk1p1/2QppbB1/8/p2PR2P/2P2PB1/2P1KP2/1q6 w - - 2 41",
+      "trusted_white_pov_cp": 160,
+      "notes": "Pos 10 after Qb1"
+    },
+    {
+      "id": "Pos 10 a3",
+      "category": "middlegame",
+      "source_fen": "1q6/r1pnk1p1/2QppbB1/8/p2PR2P/2P2PB1/2P1KP2/8 b - - 1 40",
+      "candidate_move": "a3",
+      "resulting_fen": "1q6/r1pnk1p1/2QppbB1/8/3PR2P/p1P2PB1/2P1KP2/8 w - - 0 41",
+      "trusted_white_pov_cp": 207,
+      "notes": "Pos 10 after a3"
+    },
+    {
+      "id": "Pos 11 Qc4",
+      "category": "middlegame",
+      "source_fen": "1q6/r1pnk1p1/2QppbB1/8/3PR2P/p1P2PB1/2P1KP2/8 w - - 0 41",
+      "candidate_move": "Qc4",
+      "resulting_fen": "1q6/r1pnk1p1/3ppbB1/8/2QPR2P/p1P2PB1/2P1KP2/8 b - - 1 41",
+      "trusted_white_pov_cp": 400,
+      "notes": "Pos 11 after Qc4"
+    },
+    {
+      "id": "Pos 11 c4",
+      "category": "middlegame",
+      "source_fen": "1q6/r1pnk1p1/2QppbB1/8/3PR2P/p1P2PB1/2P1KP2/8 w - - 0 41",
+      "candidate_move": "c4",
+      "resulting_fen": "1q6/r1pnk1p1/2QppbB1/8/2PPR2P/p4PB1/2P1KP2/8 b - - 0 41",
+      "trusted_white_pov_cp": 300,
+      "notes": "Pos 11 after c4"
+    },
+    {
+      "id": "Pos 12 Qb6",
+      "category": "middlegame",
+      "source_fen": "r2qkb1r/1p5p/p1n2np1/3b1p2/3p4/P2Q1NN1/1P2PPPP/R1B1KB1R b KQkq - 3 15",
+      "candidate_move": "Qb6",
+      "resulting_fen": "r3kb1r/1p5p/pqn2np1/3b1p2/3p4/P2Q1NN1/1P2PPPP/R1B1KB1R w KQkq - 4 16",
+      "trusted_white_pov_cp": -152,
+      "notes": "Pos 12 after Qb6"
+    },
+    {
+      "id": "Pos 12 Ne4",
+      "category": "middlegame",
+      "source_fen": "r2qkb1r/1p5p/p1n2np1/3b1p2/3p4/P2Q1NN1/1P2PPPP/R1B1KB1R b KQkq - 3 15",
+      "candidate_move": "Ne4",
+      "resulting_fen": "r2qkb1r/1p5p/p1n3p1/3b1p2/3pn3/P2Q1NN1/1P2PPPP/R1B1KB1R w KQkq - 4 16",
+      "trusted_white_pov_cp": -77,
+      "notes": "Pos 12 after Ne4"
+    },
+    {
+      "id": "Pos 13 O-O",
+      "category": "middlegame",
+      "source_fen": "r3k2r/1p5p/pq4p1/3b1p2/1b1p4/3Q2N1/3NPPPP/R3KB1R b KQkq - 0 20",
+      "candidate_move": "O-O",
+      "resulting_fen": "r4rk1/1p5p/pq4p1/3b1p2/1b1p4/3Q2N1/3NPPPP/R3KB1R w KQ - 1 21",
+      "trusted_white_pov_cp": -110,
+      "notes": "Pos 13 after O-O"
+    },
+    {
+      "id": "Pos 13 O-O-O",
+      "category": "middlegame",
+      "source_fen": "r3k2r/1p5p/pq4p1/3b1p2/1b1p4/3Q2N1/3NPPPP/R3KB1R b KQkq - 0 20",
+      "candidate_move": "O-O-O",
+      "resulting_fen": "2kr3r/1p5p/pq4p1/3b1p2/1b1p4/3Q2N1/3NPPPP/R3KB1R w KQ - 1 21",
+      "trusted_white_pov_cp": -43,
+      "notes": "Pos 13 after O-O-O"
+    },
+    {
+      "id": "EG1 Rd2",
+      "category": "endgame",
+      "source_fen": "5R2/4P3/3K4/P3P3/4k3/8/1r3p1p/8 b - - 0 49",
+      "candidate_move": "Rd2",
+      "resulting_fen": "5R2/4P3/3K4/P3P3/4k3/8/3r1p1p/8 w - - 1 50",
+      "trusted_white_pov_cp": -135,
+      "notes": "Endgame 1 after Rd2"
+    },
+    {
+      "id": "EG1 Kd4",
+      "category": "endgame",
+      "source_fen": "5R2/4P3/3K4/P3P3/4k3/8/1r3p1p/8 b - - 0 49",
+      "candidate_move": "Kd4",
+      "resulting_fen": "5R2/4P3/3K4/P3P3/3k4/8/1r3p1p/8 w - - 1 50",
+      "trusted_white_pov_cp": -25,
+      "notes": "Endgame 1 after Kd4"
+    },
+    {
+      "id": "EG2 Ra2",
+      "category": "endgame",
+      "source_fen": "5R2/8/2K1p3/P3P3/3Pk2p/5p2/7r/8 b - - 1 45",
+      "candidate_move": "Ra2",
+      "resulting_fen": "5R2/8/2K1p3/P3P3/3Pk2p/5p2/r7/8 w - - 2 46",
+      "trusted_white_pov_cp": -244,
+      "notes": "Endgame 2 after Ra2"
+    },
+    {
+      "id": "EG2 Rg2",
+      "category": "endgame",
+      "source_fen": "5R2/8/2K1p3/P3P3/3Pk2p/5p2/7r/8 b - - 1 45",
+      "candidate_move": "Rg2",
+      "resulting_fen": "5R2/8/2K1p3/P3P3/3Pk2p/5p2/6r1/8 w - - 2 46",
+      "trusted_white_pov_cp": -179,
+      "notes": "Endgame 2 after Rg2"
+    },
+    {
+      "id": "EG3 Bf4",
+      "category": "endgame",
+      "source_fen": "5B2/5R2/4p2b/PK2P2p/3Pk3/5p2/7r/8 b - - 8 43",
+      "candidate_move": "Bf4",
+      "resulting_fen": "5B2/5R2/4p3/PK2P2p/3Pkb2/5p2/7r/8 w - - 9 44",
+      "trusted_white_pov_cp": -193,
+      "notes": "Endgame 3 after Bf4"
+    },
+    {
+      "id": "EG3 Bg5",
+      "category": "endgame",
+      "source_fen": "5B2/5R2/4p2b/PK2P2p/3Pk3/5p2/7r/8 b - - 8 43",
+      "candidate_move": "Bg5",
+      "resulting_fen": "5B2/5R2/4p3/PK2P1bp/3Pk3/5p2/7r/8 w - - 9 44",
+      "trusted_white_pov_cp": -119,
+      "notes": "Endgame 3 after Bg5"
+    },
+    {
+      "id": "EG4 Kd3",
+      "category": "endgame",
+      "source_fen": "8/2R3b1/4p1k1/4P2p/P1KP4/2B2p2/2r5/8 w - - 0 39",
+      "candidate_move": "Kd3",
+      "resulting_fen": "8/2R3b1/4p1k1/4P2p/P2P4/2BK1p2/2r5/8 b - - 1 39",
+      "trusted_white_pov_cp": -85,
+      "notes": "Endgame 4 after Kd3"
+    },
+    {
+      "id": "EG4 Kb4",
+      "category": "endgame",
+      "source_fen": "8/2R3b1/4p1k1/4P2p/P1KP4/2B2p2/2r5/8 w - - 0 39",
+      "candidate_move": "Kb4",
+      "resulting_fen": "8/2R3b1/4p1k1/4P2p/PK1P4/2B2p2/2r5/8 b - - 1 39",
+      "trusted_white_pov_cp": -185,
+      "notes": "Endgame 4 after Kb4"
+    },
+    {
+      "id": "EG5 Bh4",
+      "category": "endgame",
+      "source_fen": "8/p3r1b1/4p1k1/4P2p/2RP1p2/2K4P/P4B2/8 w - - 1 31",
+      "candidate_move": "Bh4",
+      "resulting_fen": "8/p3r1b1/4p1k1/4P2p/2RP1p1B/2K4P/P7/8 b - - 2 31",
+      "trusted_white_pov_cp": 14,
+      "notes": "Endgame 5 after Bh4"
+    },
+    {
+      "id": "EG5 Rb4",
+      "category": "endgame",
+      "source_fen": "8/p3r1b1/4p1k1/4P2p/2RP1p2/2K4P/P4B2/8 w - - 1 31",
+      "candidate_move": "Rb4",
+      "resulting_fen": "8/p3r1b1/4p1k1/4P2p/1R1P1p2/2K4P/P4B2/8 b - - 2 31",
+      "trusted_white_pov_cp": -43,
+      "notes": "Endgame 5 after Rb4"
+    },
+    {
+      "id": "EG6 Kc3",
+      "category": "endgame",
+      "source_fen": "6k1/p1r3b1/4p1pp/5p2/2pPP3/4BP1P/P1K2P2/1R6 w - f6 0 24",
+      "candidate_move": "Kc3",
+      "resulting_fen": "6k1/p1r3b1/4p1pp/5p2/2pPP3/2K1BP1P/P4P2/1R6 b - - 1 24",
+      "trusted_white_pov_cp": 143,
+      "notes": "Endgame 6 after Kc3"
+    },
+    {
+      "id": "EG6 e5",
+      "category": "endgame",
+      "source_fen": "6k1/p1r3b1/4p1pp/5p2/2pPP3/4BP1P/P1K2P2/1R6 w - f6 0 24",
+      "candidate_move": "e5",
+      "resulting_fen": "6k1/p1r3b1/4p1pp/4Pp2/2pP4/4BP1P/P1K2P2/1R6 b - - 0 24",
+      "trusted_white_pov_cp": 61,
+      "notes": "Endgame 6 after e5"
+    },
+    {
+      "id": "EG6 d5",
+      "category": "endgame",
+      "source_fen": "6k1/p1r3b1/4p1pp/5p2/2pPP3/4BP1P/P1K2P2/1R6 w - f6 0 24",
+      "candidate_move": "d5",
+      "resulting_fen": "6k1/p1r3b1/4p1pp/3P1p2/2p1P3/4BP1P/P1K2P2/1R6 b - - 0 24",
+      "trusted_white_pov_cp": 89,
+      "notes": "Endgame 6 after d5"
+    },
+    {
+      "id": "Castling Anchor Nxe5",
+      "category": "castling_anchor",
+      "source_fen": "r2qk2r/1pp2ppp/p1p1bn2/2b1p3/4P3/3P1N1P/PPPB1PP1/RN1QK2R w KQkq - 3 8",
+      "candidate_move": "Nxe5",
+      "resulting_fen": "r2qk2r/1pp2ppp/p1p1bn2/2b1N3/4P3/3P3P/PPPB1PP1/RN1QK2R b KQkq - 0 8",
+      "trusted_white_pov_cp": 89,
+      "notes": "Castling anchor child after 8.Nxe5"
+    },
+    {
+      "id": "Castling Anchor O-O",
+      "category": "castling_anchor",
+      "source_fen": "r2qk2r/1pp2ppp/p1p1bn2/2b1p3/4P3/3P1N1P/PPPB1PP1/RN1QK2R w KQkq - 3 8",
+      "candidate_move": "O-O",
+      "resulting_fen": "r2qk2r/1pp2ppp/p1p1bn2/2b1p3/4P3/3P1N1P/PPPB1PP1/RN1Q1RK1 b kq - 4 8",
+      "trusted_white_pov_cp": 47,
+      "notes": "Castling anchor child after 8.O-O"
+    },
+    {
+      "id": "Castling Anchor b4",
+      "category": "castling_anchor",
+      "source_fen": "r2qk2r/1pp2ppp/p1p1bn2/2b1p3/4P3/3P1N1P/PPPB1PP1/RN1QK2R w KQkq - 3 8",
+      "candidate_move": "b4",
+      "resulting_fen": "r2qk2r/1pp2ppp/p1p1bn2/2b1p3/1P2P3/3P1N1P/P1PB1PP1/RN1QK2R b KQkq - 0 8",
+      "trusted_white_pov_cp": 14,
+      "notes": "Castling anchor child after 8.b4"
+    }
+  ],
+  "ordering_constraints": [
+    {
+      "id": "Pos 6",
+      "higher_id": "Pos 6 Qd2",
+      "lower_id": "Pos 6 h4",
+      "relation": ">",
+      "notes": "Qd2 > h4 (White POV)"
+    },
+    {
+      "id": "Pos 7",
+      "higher_id": "Pos 7 Nge7",
+      "lower_id": "Pos 7 Bb7",
+      "relation": ">",
+      "notes": "Bb7 < Nge7 (White POV)"
+    },
+    {
+      "id": "Pos 9",
+      "higher_id": "Pos 9 Bc6",
+      "lower_id": "Pos 9 Nf5",
+      "relation": ">",
+      "notes": "Nf5 < Bc6 (White POV)"
+    },
+    {
+      "id": "Pos 10",
+      "higher_id": "Pos 10 a3",
+      "lower_id": "Pos 10 Qb1",
+      "relation": ">",
+      "notes": "Qb1 < a3 (White POV)"
+    },
+    {
+      "id": "Pos 11",
+      "higher_id": "Pos 11 Qc4",
+      "lower_id": "Pos 11 c4",
+      "relation": ">",
+      "notes": "Qc4 > c4 (White POV)"
+    },
+    {
+      "id": "Pos 12",
+      "higher_id": "Pos 12 Ne4",
+      "lower_id": "Pos 12 Qb6",
+      "relation": ">",
+      "notes": "Qb6 < Ne4 (White POV)"
+    },
+    {
+      "id": "Pos 13",
+      "higher_id": "Pos 13 O-O-O",
+      "lower_id": "Pos 13 O-O",
+      "relation": ">",
+      "notes": "O-O < O-O-O (White POV)"
+    },
+    {
+      "id": "EG1",
+      "higher_id": "EG1 Kd4",
+      "lower_id": "EG1 Rd2",
+      "relation": ">",
+      "notes": "Rd2 < Kd4 (White POV)"
+    },
+    {
+      "id": "EG2",
+      "higher_id": "EG2 Rg2",
+      "lower_id": "EG2 Ra2",
+      "relation": ">",
+      "notes": "Ra2 < Rg2 (White POV)"
+    },
+    {
+      "id": "EG3",
+      "higher_id": "EG3 Bg5",
+      "lower_id": "EG3 Bf4",
+      "relation": ">",
+      "notes": "Bf4 < Bg5 (White POV)"
+    },
+    {
+      "id": "EG4",
+      "higher_id": "EG4 Kd3",
+      "lower_id": "EG4 Kb4",
+      "relation": ">",
+      "notes": "Kb4 < Kd3 (White POV)"
+    },
+    {
+      "id": "EG5",
+      "higher_id": "EG5 Bh4",
+      "lower_id": "EG5 Rb4",
+      "relation": ">",
+      "notes": "Bh4 > Rb4 (White POV)"
+    },
+    {
+      "id": "EG6",
+      "higher_id": "EG6 Kc3",
+      "lower_id": "EG6 d5",
+      "relation": ">",
+      "notes": "Kc3 > d5 > e5 (White POV)"
+    },
+    {
+      "id": "EG6_sub",
+      "higher_id": "EG6 d5",
+      "lower_id": "EG6 e5",
+      "relation": ">",
+      "notes": "d5 > e5 (White POV)"
+    },
+    {
+      "id": "Castling Anchor 1",
+      "higher_id": "Castling Anchor Nxe5",
+      "lower_id": "Castling Anchor O-O",
+      "relation": ">",
+      "notes": "Nxe5 (+89) > O-O (+47)"
+    },
+    {
+      "id": "Castling Anchor 2",
+      "higher_id": "Castling Anchor O-O",
+      "lower_id": "Castling Anchor b4",
+      "relation": ">",
+      "notes": "O-O (+47) > b4 (+14)"
+    }
+  ]
+}
