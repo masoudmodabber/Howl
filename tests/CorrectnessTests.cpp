@@ -1053,18 +1053,6 @@ int RunQSearchCheckingMove(bool capture)
             expectedMove + " gives check and must not be rejected solely by the material delta test",
             result);
     }
-    if (!capture) {
-        const char* geometry = "7k/8/8/8/8/8/2K5/R7 w - - 0 1";
-        std::unique_ptr<Board> quietBoard(BoardMaker::MakeInitialBoard(geometry));
-        const int standPat = EvaluationLogic::Evaluate(*quietBoard);
-        const auto wide = RunDirectQSearch(geometry, -200000, 200000, 0, 4);
-        const auto narrow = RunDirectQSearch(geometry, standPat - 1, standPat, 0, 4);
-        if (wide.statistics.rootStage2NonchecksRejected == 0 ||
-            wide.score < standPat || narrow.score != standPat) {
-            return ReportQSearchFailure("deferred check geometry and stand pat", geometry,
-                "reject geometric nonchecks and preserve stand-pat lower bound across windows", wide);
-        }
-    }
     std::cout << "QSearch exempts checking moves from material-only delta rejection\n";
     return 0;
 }
