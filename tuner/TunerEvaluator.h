@@ -69,6 +69,29 @@ inline int KnightOutpostValue(const Board& board, int square, bool white, int ph
     return value * fileScale[file] / 100;
 }
 
+inline bool IsKnightOutpostHole(int square, bool white, long long friendlyPawns, long long enemyPawns)
+{
+    const int rank = square / 8;
+    const bool advanced = white ? (rank >= 3 && rank <= 5) : (rank >= 2 && rank <= 4);
+    if (!advanced)
+        return false;
+
+    const int file = square % 8;
+    const long long ownFile = static_cast<long long>(0x0101010101010101ULL << file);
+    const long long challengeMask =
+        (white ? PassedPawnSetup::WhitePassedMask[square]
+               : PassedPawnSetup::BlackPassedMask[square]) & ~ownFile;
+    if ((challengeMask & enemyPawns) != 0)
+        return false;
+
+    const long long supportMask = white
+        ? AttackPlaces::BlackPawnAttackPlaces[square]
+        : AttackPlaces::WhitePawnAttackPlaces[square];
+    return (supportMask & friendlyPawns) != 0;
+}
+
+static const int KnightOutpostHoleFileScale[8] = {25, 60, 90, 100, 100, 90, 60, 25};
+
 inline int TaperGroup1Value(int middleGameValue, int endGameValue, int phase)
 {
     static const int weights[25] = {
@@ -478,6 +501,11 @@ inline KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
     int attackerCount = 0;
     int defenderCount = 0;
 
+    const long long attackingPawnAttacks = attackingWhite
+        ? (((board.whitePawns & ~0x8080808080808080ULL) << 9) | ((board.whitePawns & ~0x0101010101010101ULL) << 7))
+        : (((board.blackPawns & ~0x0101010101010101ULL) >> 9) | ((board.blackPawns & ~0x8080808080808080ULL) >> 7));
+    long long restrictedBetweenSquares = 0;
+
     for (int boardPiece = attackerFirst; boardPiece < attackerFirst + 5; boardPiece++)
     {
         const int pieceType = attackingWhite ? boardPiece : boardPiece - 8;
@@ -487,6 +515,17 @@ inline KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
             {
                 attackerParticipation += attackerWeight[pieceType];
                 attackerCount++;
+                if (pieceType >= 3 && pieceType <= 5)
+                {
+                    for (int i = 1; i < zone.count; i++)
+                    {
+                        const int target = zone.squares[i];
+                        if (PieceAttacksSquareFast(occupiedSquares, pieceType, attackingWhite, square, target))
+                        {
+                            restrictedBetweenSquares |= (AttackPlaces::BetweenMask[square][target] & attackingPawnAttacks);
+                        }
+                    }
+                }
             }
         }
     }
@@ -573,8 +612,10 @@ inline KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
     const int shelterDanger = ShelterDanger(board, whiteKing, kingSquare);
     const int lineDanger = filePressure + diagonalPressure;
     const int undefendedKingZoneDanger = UndefendedKingZoneDanger(board, whiteKing, kingSquare);
+    const int defensiveRestriction = __builtin_popcountll(restrictedBetweenSquares) * 6;
     int rawDanger = attackerParticipation * 2 + escapeDanger +
-                    lineDanger + shelterDanger + balanceDanger + undefendedKingZoneDanger;
+                    lineDanger + shelterDanger + balanceDanger + undefendedKingZoneDanger +
+                    defensiveRestriction;
 
     const int queenCount = board.pieces[attackingWhite ? 5 : 13].size();
     const int rookCount = board.pieces[attackingWhite ? 4 : 12].size();
@@ -595,10 +636,24 @@ inline KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
         const int divisor = 180 + defenderParticipation * 4;
         escalatedDanger = rawDanger + (rawDanger * rawDanger) / divisor;
     }
-    else if (attackerCount == 1 && attackerParticipation >= 8)
+    else if (attackerCount == 1)
     {
-        // Lone major piece creating forcing pressure
-        escalatedDanger = rawDanger / 2;
+        if (attackerParticipation >= 8)
+        {
+            // Lone major piece creating forcing pressure
+            escalatedDanger = rawDanger / 2;
+        }
+        else if (attackerParticipation >= 4)
+        {
+            // Single minor piece creating latent pressure against an exposed/central king, weak shelter, or clamped line
+            const int rank = kingSquare / 8;
+            const int file = kingSquare % 8;
+            const bool centralKing = (whiteKing ? rank <= 1 : rank >= 6) && file >= 2 && file <= 5;
+            if (centralKing || shelterDanger >= 10 || undefendedKingZoneDanger > 0 || defensiveRestriction > 0)
+            {
+                escalatedDanger = (rawDanger * (defensiveRestriction > 0 ? 3 : 2)) / 8;
+            }
+        }
     }
     KingDangerResult result{std::min(escalatedDanger, 450), attackerParticipation,
             defenderParticipation, escapeDanger, filePressure,
@@ -1414,8 +1469,10 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
             }
             break;
         case 2:
+        {
             static const int knightOffsets[8] = {17, 10, 15, 6, -10, -17, -15, -6};
             static const int knightDirs[8] = {0, 2, 4, 6, 8, 10, 12, 14};
+            uint64_t whiteOutpostHolesAwarded = 0;
             for (int piecePoisiion : thisBoard.pieces[piece])
             {
                 moveCount = 0;
@@ -1434,6 +1491,12 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                         {
                             if ((Option::PowerTwo[endPlace] & bpa) == 0)
                                 moveCount++;
+                            if ((whiteOutpostHolesAwarded & Option::PowerTwo[endPlace]) == 0 &&
+                                IsKnightOutpostHole(endPlace, true, thisBoard.whitePawns, thisBoard.blackPawns))
+                            {
+                                whiteOutpostHolesAwarded |= Option::PowerTwo[endPlace];
+                                movement += TaperGroup1Value(10, 2, phase) * KnightOutpostHoleFileScale[endPlace % 8] / 100;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -1444,6 +1507,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                 movement += taperedGroup1Table(state.KnightMoveCountValue, moveCount);
             }
             break;
+        }
         case 3:
             for (int piecePoisiion : thisBoard.pieces[piece])
             {
@@ -1680,8 +1744,10 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
             }
             break;
         case 10:
+        {
             static const int knightOffsets[8] = {17, 10, 15, 6, -10, -17, -15, -6};
             static const int knightDirs[8] = {0, 2, 4, 6, 8, 10, 12, 14};
+            uint64_t blackOutpostHolesAwarded = 0;
             for (int piecePoisiion : thisBoard.pieces[piece])
             {
                 moveCount = 0;
@@ -1700,6 +1766,12 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                         {
                             if ((Option::PowerTwo[endPlace] & wpa) == 0)
                                 moveCount++;
+                            if ((blackOutpostHolesAwarded & Option::PowerTwo[endPlace]) == 0 &&
+                                IsKnightOutpostHole(endPlace, false, thisBoard.blackPawns, thisBoard.whitePawns))
+                            {
+                                blackOutpostHolesAwarded |= Option::PowerTwo[endPlace];
+                                movement -= TaperGroup1Value(10, 2, phase) * KnightOutpostHoleFileScale[endPlace % 8] / 100;
+                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -1710,6 +1782,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                 movement -= taperedGroup1Table(state.KnightMoveCountValue, moveCount);
             }
             break;
+        }
         case 11:
             for (int piecePoisiion : thisBoard.pieces[piece])
             {
@@ -2066,6 +2139,8 @@ inline int GetPawnStructureValue(Board& thisBoard, int phase, const TunerEvaluat
         goForwardPawnWhite += TaperGroup3Value(0, endGameValue, phase);
     }
     int pawnChainWhite = 0;
+    const int whiteKingSq = thisBoard.pieces[6].front();
+    const int blackKingSq = thisBoard.pieces[14].front();
     for (int pawnPlace : thisBoard.pieces[1])
     {
         if ((AttackPlaces::BlackPawnAttackPlaces[pawnPlace] & whitePawns) != 0)
@@ -2076,6 +2151,10 @@ inline int GetPawnStructureValue(Board& thisBoard, int phase, const TunerEvaluat
             {
                 if (r >= 3) pawnChainWhite += 6;
                 if (r >= 4) pawnChainWhite += 6;
+                if ((r == 4 || r == 5) && Detail::ChebyshevDistance(pawnPlace, blackKingSq) <= 3)
+                {
+                    pawnChainWhite += TaperGroup1Value(14, 2, phase);
+                }
             }
         }
     }
@@ -2136,6 +2215,10 @@ inline int GetPawnStructureValue(Board& thisBoard, int phase, const TunerEvaluat
             {
                 if (r <= 4) pawnChainBlack += 6;
                 if (r <= 3) pawnChainBlack += 6;
+                if ((r == 3 || r == 2) && Detail::ChebyshevDistance(pawnPlace, whiteKingSq) <= 3)
+                {
+                    pawnChainBlack += TaperGroup1Value(14, 2, phase);
+                }
             }
         }
     }
