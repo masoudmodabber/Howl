@@ -286,22 +286,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                 board4.pieces[(1 - turn) * 8 + 6].front(),
                 !board4.sideToMove);
 
-            // Stage 2 contains geometric checking candidates, not guaranteed
-            // checks. Evasions and promotions never enter this stage.
-            if (currentStage == 2 && !moveGivesCheck &&
-                move->endPiece == 0 && move->promotionPiece <= 0 && !currentSideInCheck) {
-#ifdef HOWL_CORRECTNESS_TESTING
-                if (testRootNode) ++qSearchTestStatistics.rootStage2NonchecksRejected;
-#endif
-                --availMoves;
-                GameLogic::UndoMove(board4, *move, missingInfoAboutPrevStateFromMove);
-                if (UCI::IsTest()) {
-                    Board::AreBoardsEqual(board4, *boardCopy);
-                    delete boardCopy;
-                    boardCopy = nullptr;
-                }
-                continue;
-            }
+
 
             int pieceValueTemp = pieceValue100[move->endPiece];
             int promotionGain = (move->promotionPiece > 0)
