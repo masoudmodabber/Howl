@@ -63,6 +63,9 @@ public:
     }
     int* begin() { return data; }
     int* end() { return data + count; }
+    const int* begin() const { return data; }
+    const int* end() const { return data + count; }
+    bool empty() const { return count == 0; }
     int front() const { return count > 0 ? data[0] : -1; }
     int size() const {
         assert(this != nullptr);

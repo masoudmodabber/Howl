@@ -14,6 +14,7 @@ std::vector<Move *> PieceMoves::BishopMoves[64][8] = {};
 std::vector<Move *> PieceMoves::RookMoves[64][8] = {};
 std::vector<Move *> PieceMoves::QueenMoves[64][16] = {};
 long long PieceMoves::pawnTwoMove[64] = {};
+int PieceMoves::SliderRaySquares[3][64][8][8] = {{{{0}}}};
 bool PieceMoves::initialized = false;
 
 void PieceMoves::Initialize()
@@ -1151,6 +1152,42 @@ void PieceMoves::Initialize()
                     QueenMoves[counter][15].push_back(newMove);
                 }
                 endPos += increment;
+            }
+        }
+
+        // Initialize SliderRaySquares for fast evaluator ray traversal:
+        // [0] = Bishop (4 rays: dir/2 = 0..3), [1] = Rook (4 rays: dir/2 = 0..3), [2] = Queen (8 rays: dir/2 = 0..7)
+        for (int sq = 0; sq < 64; sq++)
+        {
+            for (int d = 0; d < 4; d++)
+            {
+                int rayIdx = d * 2;
+                int count = static_cast<int>(BishopMoves[sq][rayIdx].size());
+                for (int k = 0; k < count; k++)
+                {
+                    SliderRaySquares[0][sq][d][k] = BishopMoves[sq][rayIdx][k]->endPlace;
+                }
+                SliderRaySquares[0][sq][d][count] = -1;
+            }
+            for (int d = 0; d < 4; d++)
+            {
+                int rayIdx = d * 2;
+                int count = static_cast<int>(RookMoves[sq][rayIdx].size());
+                for (int k = 0; k < count; k++)
+                {
+                    SliderRaySquares[1][sq][d][k] = RookMoves[sq][rayIdx][k]->endPlace;
+                }
+                SliderRaySquares[1][sq][d][count] = -1;
+            }
+            for (int d = 0; d < 8; d++)
+            {
+                int rayIdx = d * 2;
+                int count = static_cast<int>(QueenMoves[sq][rayIdx].size());
+                for (int k = 0; k < count; k++)
+                {
+                    SliderRaySquares[2][sq][d][k] = QueenMoves[sq][rayIdx][k]->endPlace;
+                }
+                SliderRaySquares[2][sq][d][count] = -1;
             }
         }
 

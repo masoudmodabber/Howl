@@ -15,6 +15,10 @@ long long AttackPlaces::BishopAttack[64][64] = {{0}};
 long long AttackPlaces::RookAttack[64][64] = {{0}};
 long long AttackPlaces::QueenAttack[64][64] = {{0}};
 long long AttackPlaces::LineMask[64][64] = {{0}};
+long long AttackPlaces::BetweenMask[64][64] = {{0}};
+long long AttackPlaces::BishopPseudoAttacks[64] = {0};
+long long AttackPlaces::RookPseudoAttacks[64] = {0};
+long long AttackPlaces::QueenPseudoAttacks[64] = {0};
 
 void AttackPlaces::Initialize()
 {
@@ -28,6 +32,17 @@ void AttackPlaces::Initialize()
         SetRookAttackPlaces();
         SetQueenAttackPlaces();
         SetLineMasks();
+        for (int i = 0; i < 64; ++i)
+        {
+            BishopPseudoAttacks[i] = 0;
+            RookPseudoAttacks[i] = 0;
+            for (int j = 0; j < 64; ++j)
+            {
+                if (BishopAttack[i][j] != 0) BishopPseudoAttacks[i] |= Option::PowerTwo[j];
+                if (RookAttack[i][j] != 0) RookPseudoAttacks[i] |= Option::PowerTwo[j];
+            }
+            QueenPseudoAttacks[i] = BishopPseudoAttacks[i] | RookPseudoAttacks[i];
+        }
         initialized = true;
     }
 }
@@ -337,10 +352,22 @@ void AttackPlaces::SetLineMasks()
                 }
                 mask |= Option::PowerTwo[sq1];
                 LineMask[sq1][sq2] = mask;
+
+                // Compute BetweenMask: strictly between sq1 and sq2 (exclusive of both)
+                long long between = 0;
+                int bR = r1 + stepR, bC = c1 + stepC;
+                while (bR != r2 || bC != c2)
+                {
+                    between |= Option::PowerTwo[bR * 8 + bC];
+                    bR += stepR;
+                    bC += stepC;
+                }
+                BetweenMask[sq1][sq2] = between;
             }
             else
             {
                 LineMask[sq1][sq2] = 0;
+                BetweenMask[sq1][sq2] = 0;
             }
         }
     }
@@ -355,12 +382,16 @@ void AttackPlaces::Cleanup()
         BlackPawnAttackPlaces[i] = 0;
         KnightAttackPlaces[i] = 0;
         KingAttackPlaces[i] = 0;
+        BishopPseudoAttacks[i] = 0;
+        RookPseudoAttacks[i] = 0;
+        QueenPseudoAttacks[i] = 0;
         for (int j = 0; j < 64; j++)
         {
             BishopAttack[i][j] = 0;
             RookAttack[i][j] = 0;
             QueenAttack[i][j] = 0;
             LineMask[i][j] = 0;
+            BetweenMask[i][j] = 0;
         }
     }
 }

@@ -18,6 +18,7 @@ public:
     static std::vector<Move *> RookMoves[64][8];
     static std::vector<Move *> QueenMoves[64][16];
     static long long pawnTwoMove[64];
+    static int SliderRaySquares[3][64][8][8];
 
 private:
     static bool initialized;

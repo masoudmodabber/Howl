@@ -40,19 +40,24 @@ struct Result
     bool immediateCastling = false;
 };
 
-inline int MissingPawnPresences(Board& board, int firstFile, int lastFile)
+inline int MissingPawnPresences(uint8_t whitePawnFiles, uint8_t blackPawnFiles, int firstFile, int lastFile)
 {
     int missing = 0;
     for (int file = firstFile; file <= lastFile; ++file)
     {
-        bool whitePawn = false;
-        bool blackPawn = false;
-        for (int square : board.pieces[1]) whitePawn |= square % 8 == file;
-        for (int square : board.pieces[9]) blackPawn |= square % 8 == file;
-        missing += whitePawn ? 0 : 1;
-        missing += blackPawn ? 0 : 1;
+        missing += (whitePawnFiles & (1 << file)) ? 0 : 1;
+        missing += (blackPawnFiles & (1 << file)) ? 0 : 1;
     }
     return missing;
+}
+
+inline int MissingPawnPresences(Board& board, int firstFile, int lastFile)
+{
+    uint8_t whitePawnFiles = 0;
+    uint8_t blackPawnFiles = 0;
+    for (int square : board.pieces[1]) whitePawnFiles |= static_cast<uint8_t>(1 << (square % 8));
+    for (int square : board.pieces[9]) blackPawnFiles |= static_cast<uint8_t>(1 << (square % 8));
+    return MissingPawnPresences(whitePawnFiles, blackPawnFiles, firstFile, lastFile);
 }
 
 inline bool IsImmediatelyLegalCastle(Board& board, bool whiteKing, bool kingSide)
@@ -125,12 +130,48 @@ inline bool MinorAttacksLayer(long long occupancy, int pieceType, int from,
     return false;
 }
 
-inline Result Evaluate(Board& board, bool whiteKing)
+struct CentralKingLayers {
+    long long inner[64]{};
+    long long outer[64]{};
+    constexpr CentralKingLayers() {
+        for (int ksq = 0; ksq < 64; ++ksq) {
+            int kr = ksq / 8, kf = ksq % 8;
+            for (int sq = 0; sq < 64; ++sq) {
+                int r = sq / 8, f = sq % 8;
+                int dr = r - kr; if (dr < 0) dr = -dr;
+                int df = f - kf; if (df < 0) df = -df;
+                int dist = dr > df ? dr : df;
+                if (dist <= 1) inner[ksq] |= (1ULL << sq);
+                if (dist == 2) outer[ksq] |= (1ULL << sq);
+            }
+        }
+    }
+};
+static constexpr CentralKingLayers KingLayers{};
+
+inline bool MinorAttacksLayerFast(long long occupancy, int pieceType, int from, long long layerMask)
+{
+    if (pieceType == 2)
+    {
+        return (AttackPlaces::KnightAttackPlaces[from] & layerMask) != 0;
+    }
+    long long targets = AttackPlaces::BishopPseudoAttacks[from] & layerMask;
+    while (targets)
+    {
+        int target = __builtin_ctzll(targets);
+        targets &= targets - 1;
+        if ((AttackPlaces::BetweenMask[from][target] & occupancy) == 0)
+            return true;
+    }
+    return false;
+}
+
+inline Result Evaluate(Board& board, bool whiteKing, uint8_t whitePawnFiles, uint8_t blackPawnFiles)
 {
     Result result;
-    result.generalCentreOpenness = MissingPawnPresences(board, 2, 5);
-    result.dFileExposure = MissingPawnPresences(board, 3, 3);
-    result.eFileExposure = MissingPawnPresences(board, 4, 4);
+    result.generalCentreOpenness = MissingPawnPresences(whitePawnFiles, blackPawnFiles, 2, 5);
+    result.dFileExposure = MissingPawnPresences(whitePawnFiles, blackPawnFiles, 3, 3);
+    result.eFileExposure = MissingPawnPresences(whitePawnFiles, blackPawnFiles, 4, 4);
     result.centreLocked = IsLockedCore(board);
     result.centreOpen = !result.centreLocked &&
         (result.generalCentreOpenness >= 4 ||
@@ -156,6 +197,7 @@ inline Result Evaluate(Board& board, bool whiteKing)
 
     const bool enemyWhite = !whiteKing;
     const long long occupancy = board.whitePieces | board.blackPieces;
+    const bool kingOnCentralFile = (file == 3 || file == 4);
     for (int pieceType : {4, 5})
     {
         const int pieceIndex = pieceType + (enemyWhite ? 0 : 8);
@@ -164,9 +206,9 @@ inline Result Evaluate(Board& board, bool whiteKing)
             const long long ray = AttackPlaces::RookAttack[square][kingSquare];
             if (ray == 0)
                 continue;
-            const int blockers = BlockersBetween(ray, occupancy, kingSquare);
-            const bool centralFile = square % 8 == kingSquare % 8 &&
-                                     (kingSquare % 8 == 3 || kingSquare % 8 == 4);
+            const int blockers = __builtin_popcountll(static_cast<unsigned long long>(
+                AttackPlaces::BetweenMask[square][kingSquare] & occupancy));
+            const bool centralFile = kingOnCentralFile && (square % 8 == file);
             if (blockers == 0)
             {
                 result.directHeavyLines++;
@@ -191,7 +233,8 @@ inline Result Evaluate(Board& board, bool whiteKing)
         const long long ray = AttackPlaces::BishopAttack[square][kingSquare];
         if (ray == 0)
             continue;
-        const int blockers = BlockersBetween(ray, occupancy, kingSquare);
+        const int blockers = __builtin_popcountll(static_cast<unsigned long long>(
+            AttackPlaces::BetweenMask[square][kingSquare] & occupancy));
         if (blockers == 0)
         {
             result.directBishopLines++;
@@ -209,17 +252,17 @@ inline Result Evaluate(Board& board, bool whiteKing)
         }
     }
 
+    const long long innerLayer = KingLayers.inner[kingSquare];
+    const long long outerLayer = KingLayers.outer[kingSquare];
     for (int pieceType : {2, 3})
     {
         const int pieceIndex = pieceType + (enemyWhite ? 0 : 8);
         for (int square : board.pieces[pieceIndex])
         {
-            if (MinorAttacksLayer(occupancy, pieceType, square,
-                                  kingSquare, -1, 1))
+            if (MinorAttacksLayerFast(occupancy, pieceType, square, innerLayer))
                 result.innerAttackers++;
-            else if (IsInKingLayer(square, kingSquare, 1, 2) ||
-                     MinorAttacksLayer(occupancy, pieceType, square,
-                                       kingSquare, 1, 2))
+            else if ((outerLayer & Option::PowerTwo[square]) != 0 ||
+                     MinorAttacksLayerFast(occupancy, pieceType, square, outerLayer))
                 result.outerAttackers++;
         }
     }
@@ -245,6 +288,15 @@ inline Result Evaluate(Board& board, bool whiteKing)
     }
     result.contribution = -pressure * FinalMultiplier;
     return result;
+}
+
+inline Result Evaluate(Board& board, bool whiteKing)
+{
+    uint8_t whitePawnFiles = 0;
+    uint8_t blackPawnFiles = 0;
+    for (int square : board.pieces[1]) whitePawnFiles |= static_cast<uint8_t>(1 << (square % 8));
+    for (int square : board.pieces[9]) blackPawnFiles |= static_cast<uint8_t>(1 << (square % 8));
+    return Evaluate(board, whiteKing, whitePawnFiles, blackPawnFiles);
 }
 }
 
