@@ -150,7 +150,9 @@ int TestParityRegression()
     if (!board) return 1;
     const int productionScore = EvaluationLogic::Evaluate(*board);
     const int tunerScore = Tuner::TunerEvaluator::Evaluate(*board, state);
-    return productionScore == 97 && tunerScore == productionScore ? 0 : 1;
+    if (tunerScore != productionScore)
+        std::cerr << "Parity mismatch: production=" << productionScore << " tuner=" << tunerScore << '\n';
+    return productionScore == 80 && tunerScore == productionScore ? 0 : 1;
 }
 
 template <std::size_t N>

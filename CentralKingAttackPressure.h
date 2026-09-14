@@ -33,6 +33,7 @@ struct Result
     int innerAttackContribution = 0;
     int outerAttackContribution = 0;
     int nonlinearEscalation = 0;
+    int readinessPressure = 0;
     int castlingMitigation = 0;
     bool centralKingActive = false;
     bool centreLocked = false;
@@ -90,10 +91,64 @@ inline bool IsImmediatelyLegalCastle(Board& board, bool whiteKing, bool kingSide
     return true;
 }
 
+inline bool HasCentralPawnBreak(const Board& board, bool white)
+{
+    if (white)
+    {
+        // White d-break: d3-d4 or d2-d4
+        if (board.mainBoard[19] == 1 && board.mainBoard[27] == 0)
+        {
+            if (board.mainBoard[34] == 9 || board.mainBoard[36] == 9) return true;
+        }
+        if (board.mainBoard[11] == 1 && board.mainBoard[19] == 0 && board.mainBoard[27] == 0)
+        {
+            if (board.mainBoard[34] == 9 || board.mainBoard[36] == 9) return true;
+        }
+        // White e-break: e3-e4 or e2-e4
+        if (board.mainBoard[20] == 1 && board.mainBoard[28] == 0)
+        {
+            if (board.mainBoard[35] == 9 || board.mainBoard[37] == 9) return true;
+        }
+        if (board.mainBoard[12] == 1 && board.mainBoard[20] == 0 && board.mainBoard[28] == 0)
+        {
+            if (board.mainBoard[35] == 9 || board.mainBoard[37] == 9) return true;
+        }
+    }
+    else
+    {
+        // Black d-break: d6-d5 or d7-d5
+        if (board.mainBoard[43] == 9 && board.mainBoard[35] == 0)
+        {
+            if (board.mainBoard[26] == 1 || board.mainBoard[28] == 1) return true;
+        }
+        if (board.mainBoard[51] == 9 && board.mainBoard[43] == 0 && board.mainBoard[35] == 0)
+        {
+            if (board.mainBoard[26] == 1 || board.mainBoard[28] == 1) return true;
+        }
+        // Black e-break: e6-e5 or e7-e5
+        if (board.mainBoard[44] == 9 && board.mainBoard[36] == 0)
+        {
+            if (board.mainBoard[27] == 1 || board.mainBoard[29] == 1) return true;
+        }
+        if (board.mainBoard[52] == 9 && board.mainBoard[44] == 0 && board.mainBoard[36] == 0)
+        {
+            if (board.mainBoard[27] == 1 || board.mainBoard[29] == 1) return true;
+        }
+    }
+    return false;
+}
+
 inline bool IsLockedCore(Board& board)
 {
-    return (board.mainBoard[27] == 1 && board.mainBoard[35] == 9) ||
-           (board.mainBoard[28] == 1 && board.mainBoard[36] == 9);
+    const bool dBlocked = (board.mainBoard[27] == 1 && board.mainBoard[35] == 9);
+    const bool eBlocked = (board.mainBoard[28] == 1 && board.mainBoard[36] == 9);
+    if (dBlocked && eBlocked)
+        return true;
+    if (dBlocked)
+        return !HasCentralPawnBreak(board, true) && !HasCentralPawnBreak(board, false);
+    if (eBlocked)
+        return !HasCentralPawnBreak(board, true) && !HasCentralPawnBreak(board, false);
+    return false;
 }
 
 inline int BlockersBetween(long long ray, long long occupancy, int target)
@@ -176,13 +231,6 @@ inline Result Evaluate(Board& board, bool whiteKing, uint8_t whitePawnFiles, uin
     result.centreOpen = !result.centreLocked &&
         (result.generalCentreOpenness >= 4 ||
          result.dFileExposure + result.eFileExposure >= 2);
-    result.effectiveOpenness = std::min(
-        16,
-        result.generalCentreOpenness +
-        2 * (result.dFileExposure + result.eFileExposure));
-    if (result.centreLocked)
-        result.effectiveOpenness /= 2;
-
     const int kingSquare = board.pieces[whiteKing ? 6 : 14].front();
     const int rank = kingSquare / 8;
     const int file = kingSquare % 8;
@@ -190,6 +238,16 @@ inline Result Evaluate(Board& board, bool whiteKing, uint8_t whitePawnFiles, uin
     result.centralKingActive = nearHomeRank && file >= 3 && file <= 5;
     if (!result.centralKingActive)
         return result;
+
+    const bool attackerHasBreak = HasCentralPawnBreak(board, !whiteKing);
+    const int breakPotential = attackerHasBreak ? 3 : 0;
+    result.effectiveOpenness = std::min(
+        16,
+        result.generalCentreOpenness +
+        2 * (result.dFileExposure + result.eFileExposure) +
+        breakPotential);
+    if (result.centreLocked)
+        result.effectiveOpenness /= 2;
 
     result.immediateCastling =
         IsImmediatelyLegalCastle(board, whiteKing, true) ||
@@ -274,11 +332,53 @@ inline Result Evaluate(Board& board, bool whiteKing, uint8_t whitePawnFiles, uin
         result.dFileExposure + result.eFileExposure >= 2 && attackerCount >= 2)
         result.nonlinearEscalation = std::min(12, 3 * (attackerCount - 1));
 
+    if (attackerHasBreak && !result.centreLocked && !result.immediateCastling)
+    {
+        const bool canCastleK = whiteKing ? board.whiteSmallCastle : board.blackSmallCastle;
+        const bool canCastleQ = whiteKing ? board.whiteBigCastle : board.blackBigCastle;
+        int kObstructions = 0;
+        int qObstructions = 0;
+        if (canCastleK)
+        {
+            if (whiteKing)
+                kObstructions = (board.mainBoard[5] != 0 ? 1 : 0) + (board.mainBoard[6] != 0 ? 1 : 0);
+            else
+                kObstructions = (board.mainBoard[61] != 0 ? 1 : 0) + (board.mainBoard[62] != 0 ? 1 : 0);
+        }
+        if (canCastleQ)
+        {
+            if (whiteKing)
+                qObstructions = (board.mainBoard[1] != 0 ? 1 : 0) + (board.mainBoard[2] != 0 ? 1 : 0) + (board.mainBoard[3] != 0 ? 1 : 0);
+            else
+                qObstructions = (board.mainBoard[57] != 0 ? 1 : 0) + (board.mainBoard[58] != 0 ? 1 : 0) + (board.mainBoard[59] != 0 ? 1 : 0);
+        }
+        int evacuationObstruction = 3;
+        if (canCastleK && canCastleQ)
+            evacuationObstruction = std::min(kObstructions, qObstructions);
+        else if (canCastleK)
+            evacuationObstruction = kObstructions;
+        else if (canCastleQ)
+            evacuationObstruction = qObstructions;
+
+        const int defHomeMinors = whiteKing
+            ? ((board.mainBoard[1] == 2) + (board.mainBoard[2] == 3) + (board.mainBoard[5] == 3) + (board.mainBoard[6] == 2))
+            : ((board.mainBoard[57] == 10) + (board.mainBoard[58] == 11) + (board.mainBoard[61] == 11) + (board.mainBoard[62] == 10));
+        const int attHomeMinors = whiteKing
+            ? ((board.mainBoard[57] == 10) + (board.mainBoard[58] == 11) + (board.mainBoard[61] == 11) + (board.mainBoard[62] == 10))
+            : ((board.mainBoard[1] == 2) + (board.mainBoard[2] == 3) + (board.mainBoard[5] == 3) + (board.mainBoard[6] == 2));
+        const int minorLag = std::max(0, defHomeMinors - attHomeMinors);
+        const bool queenInCorridor = (board.mainBoard[whiteKing ? 3 : 59] == (whiteKing ? 5 : 13));
+
+        const int readinessLag = evacuationObstruction + minorLag + (queenInCorridor && evacuationObstruction > 0 ? 1 : 0);
+        result.readinessPressure = readinessLag * 6;
+    }
+
     const int rawPressure = result.heavyLinePressure +
                             result.bishopDiagonalPressure +
                             result.innerAttackContribution +
                             result.outerAttackContribution +
-                            result.nonlinearEscalation;
+                            result.nonlinearEscalation +
+                            result.readinessPressure;
     int pressure = (rawPressure * result.effectiveOpenness + 8) / 16;
     if (result.immediateCastling)
     {
