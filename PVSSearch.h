@@ -112,14 +112,10 @@ public:
         uint64_t reSearchFailLow = 0;
         uint64_t reSearchPV = 0;
         uint64_t reSearchBetaCutoff = 0;
+        uint64_t fullDepthConfirmations = 0;
 
-        uint64_t reduction1Attempts = 0;
-        uint64_t reduction1FailLow = 0;
-        uint64_t reduction1ReSearch = 0;
-
-        uint64_t reduction2Attempts = 0;
-        uint64_t reduction2FailLow = 0;
-        uint64_t reduction2ReSearch = 0;
+        uint64_t reductionAttempts[5] = {};
+        uint64_t reductionReSearches[5] = {};
 
         LMRBucket idx1;
         LMRBucket idx2;

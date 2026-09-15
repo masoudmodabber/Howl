@@ -583,22 +583,10 @@ void RecordLMRSearch(int moveIndex, int depth, int ply, const Move &move, int re
     else
         g_lmrStats.reducedFailLow++;
 
-    if (reductionAmount == 2)
-    {
-        g_lmrStats.reduction2Attempts++;
-        if (triggeredReSearch)
-            g_lmrStats.reduction2ReSearch++;
-        else
-            g_lmrStats.reduction2FailLow++;
-    }
-    else
-    {
-        g_lmrStats.reduction1Attempts++;
-        if (triggeredReSearch)
-            g_lmrStats.reduction1ReSearch++;
-        else
-            g_lmrStats.reduction1FailLow++;
-    }
+    const int reductionBucket = std::clamp(reductionAmount, 1, 5) - 1;
+    g_lmrStats.reductionAttempts[reductionBucket]++;
+    if (triggeredReSearch)
+        g_lmrStats.reductionReSearches[reductionBucket]++;
 
     if (moveIndex == 1) g_lmrStats.idx1.record(triggeredReSearch);
     else if (moveIndex == 2) g_lmrStats.idx2.record(triggeredReSearch);
@@ -693,23 +681,26 @@ void PVSSearch::PrintLMRStatsForTesting()
     double totalReSearchPct = (g_lmrStats.totalReducedSearches > 0) ? (100.0 * g_lmrStats.reducedTriggeredReSearch / static_cast<double>(g_lmrStats.totalReducedSearches)) : 0.0;
 
     std::cout << "  Immediate fail-low (no re-search): " << g_lmrStats.reducedFailLow << " (" << totalFailLowPct << "%)\n";
-    std::cout << "  Triggered full-depth re-search:    " << g_lmrStats.reducedTriggeredReSearch << " (" << totalReSearchPct << "%)\n";
+    std::cout << "  Triggered greater-depth re-search: " << g_lmrStats.reducedTriggeredReSearch << " (" << totalReSearchPct << "%)\n";
+    std::cout << "  Full-depth confirmations:          " << g_lmrStats.fullDepthConfirmations << "\n";
 
     std::cout << "\n[Reduction Depth Breakdown]\n";
-    auto printRed = [](const char *label, uint64_t attempts, uint64_t failLow, uint64_t reSearch) {
-        double flPct = (attempts > 0) ? (100.0 * failLow / static_cast<double>(attempts)) : 0.0;
+    auto printRed = [](const char *label, uint64_t attempts, uint64_t reSearch) {
         double rsPct = (attempts > 0) ? (100.0 * reSearch / static_cast<double>(attempts)) : 0.0;
         char buf[256];
-        snprintf(buf, sizeof(buf), "  %-16s Attempts: %7lu | Fail-low: %7lu (%6.2f%%) | Re-search: %7lu (%6.2f%%)\n",
-                 label, (unsigned long)attempts, (unsigned long)failLow, flPct, (unsigned long)reSearch, rsPct);
+        snprintf(buf, sizeof(buf), "  %-8s Attempts: %7lu | Re-search: %7lu (%6.2f%%)\n",
+                 label, (unsigned long)attempts, (unsigned long)reSearch, rsPct);
         std::cout << buf;
     };
-    printRed("Reduction = 1:", g_lmrStats.reduction1Attempts, g_lmrStats.reduction1FailLow, g_lmrStats.reduction1ReSearch);
-    printRed("Reduction = 2:", g_lmrStats.reduction2Attempts, g_lmrStats.reduction2FailLow, g_lmrStats.reduction2ReSearch);
+    printRed("R1:", g_lmrStats.reductionAttempts[0], g_lmrStats.reductionReSearches[0]);
+    printRed("R2:", g_lmrStats.reductionAttempts[1], g_lmrStats.reductionReSearches[1]);
+    printRed("R3:", g_lmrStats.reductionAttempts[2], g_lmrStats.reductionReSearches[2]);
+    printRed("R4:", g_lmrStats.reductionAttempts[3], g_lmrStats.reductionReSearches[3]);
+    printRed("R5+:", g_lmrStats.reductionAttempts[4], g_lmrStats.reductionReSearches[4]);
 
     std::cout << "\n[Full-Depth Re-Search Outcome Breakdown]\n";
-    std::cout << "  Total full-depth re-searches: " << g_lmrStats.reducedTriggeredReSearch << "\n";
-    auto printOutcome = [total = g_lmrStats.reducedTriggeredReSearch](const char *label, uint64_t count) {
+    std::cout << "  Total full-depth confirmations: " << g_lmrStats.fullDepthConfirmations << "\n";
+    auto printOutcome = [total = g_lmrStats.fullDepthConfirmations](const char *label, uint64_t count) {
         double pct = (total > 0) ? (100.0 * count / static_cast<double>(total)) : 0.0;
         char buf[128];
         snprintf(buf, sizeof(buf), "  %-32s %7lu  (%6.2f%%)\n", label, (unsigned long)count, pct);
@@ -1709,15 +1700,24 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
 
                 bool tempRepeat = false;
                 bool trustedValue = false;
-                const int normalDepthMoveCount = isPVNode ? 3 : 2;
-                if (depth >= 2 && availMoves >= normalDepthMoveCount)
+                const int newDepth = depth - 1;
+                if (newDepth >= 1)
                 {
-                    const int lateness = availMoves - normalDepthMoveCount + 1;
-                    LMRDepth = 1 + lateness / 2 + std::max(0, depth - 3) / 2;
+                    const int moveNumber = i + 1;
+                    LMRDepth = static_cast<int>(std::lround(
+                        0.60 * std::log(static_cast<double>(depth)) *
+                        std::log(static_cast<double>(moveNumber))));
                     if (IsQuietMove(*move))
                         LMRDepth -= HistoryReductionAdjustment(turn, prevMove, *move);
-                    const int maxReduction = isPVNode ? std::min(3, depth - 2) : std::min(depth / 2, depth - 2);
-                    LMRDepth = std::clamp(LMRDepth, 0, maxReduction);
+                    if (move->givesCheck)
+                        LMRDepth--;
+                    if (move->promotionPiece > 0)
+                        LMRDepth--;
+                    if (move->endPiece > 0)
+                        LMRDepth--;
+                    LMRDepth = std::max(0, LMRDepth);
+                    const int reducedChildDepth = std::clamp(newDepth - LMRDepth, 1, newDepth);
+                    LMRDepth = newDepth - reducedChildDepth;
                 }
                 if (MAtESearch)
                     LMRDepth = 0;
@@ -1865,6 +1865,8 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     {
                         bool confirmationPVNode = isPVNode || move->isRefuteWithoutNullMove;
 #if HOWL_CORRECTNESS_TESTING
+                        if (reducedSearch)
+                            g_lmrStats.fullDepthConfirmations++;
                         int origAlphaForLMR = alpha;
                         int origBetaForLMR = beta;
 #endif
