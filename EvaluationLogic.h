@@ -153,6 +153,7 @@ public:
     static int CalculatePhase(const Board& thisBoard);
     static int Evaluate(Board& thisBoard);
     static EvaluationBreakdown EvaluateDetailed(Board& thisBoard);
+    static int CentralKingReadinessPenalty(Board& board, bool whiteKing, int phase);
     static int GetPawnStructureValue(Board& thisBoard, int phase, const EvaluationContext* ctx = nullptr);
     static int* PieceMoveCount(Board& thisBoard, int phase);
     static MovementResult PieceMoveCountFast(Board& thisBoard, int phase);
