@@ -3396,36 +3396,34 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase)
 
     // Premature Queen activity with undeveloped sleeping minor pieces
     if (phase >= 16) {
-        if (!whiteCastled) {
-            int sleep = 0;
-            for (int sq : thisBoard.pieces[2]) if (sq == 1 || sq == 6) sleep++;
-            for (int sq : thisBoard.pieces[3]) if (sq == 2 || sq == 5) sleep++;
-            if (sleep > 0) {
-                for (int sq : thisBoard.pieces[5]) {
-                    int rank = sq / 8;
-                    if (rank >= 2) {
-                        int advance = rank - 1;
-                        int pen = 14 * advance * sleep;
-                        if (advance >= 2 && sleep >= 2) pen += 15;
-                        movement -= pen;
-                    }
+        int sleepWhite = 0;
+        for (int sq : thisBoard.pieces[2]) if (sq == 1 || sq == 6) sleepWhite++;
+        for (int sq : thisBoard.pieces[3]) if (sq == 2 || sq == 5) sleepWhite++;
+        if (sleepWhite > 0) {
+            for (int sq : thisBoard.pieces[5]) {
+                int rank = sq / 8;
+                if (rank >= 2) {
+                    int advance = rank - 1;
+                    int pen = 14 * advance * sleepWhite;
+                    if (advance >= 2 && sleepWhite >= 2) pen += 15;
+                    if (whiteCastled) pen /= 2;
+                    movement -= pen;
                 }
             }
         }
 
-        if (!blackCastled) {
-            int sleep = 0;
-            for (int sq : thisBoard.pieces[10]) if (sq == 57 || sq == 62) sleep++;
-            for (int sq : thisBoard.pieces[11]) if (sq == 58 || sq == 61) sleep++;
-            if (sleep > 0) {
-                for (int sq : thisBoard.pieces[13]) {
-                    int rank = sq / 8;
-                    if (rank <= 5) {
-                        int advance = 6 - rank;
-                        int pen = 14 * advance * sleep;
-                        if (advance >= 2 && sleep >= 2) pen += 15;
-                        movement += pen;
-                    }
+        int sleepBlack = 0;
+        for (int sq : thisBoard.pieces[10]) if (sq == 57 || sq == 62) sleepBlack++;
+        for (int sq : thisBoard.pieces[11]) if (sq == 58 || sq == 61) sleepBlack++;
+        if (sleepBlack > 0) {
+            for (int sq : thisBoard.pieces[13]) {
+                int rank = sq / 8;
+                if (rank <= 5) {
+                    int advance = 6 - rank;
+                    int pen = 14 * advance * sleepBlack;
+                    if (advance >= 2 && sleepBlack >= 2) pen += 15;
+                    if (blackCastled) pen /= 2;
+                    movement += pen;
                 }
             }
         }
