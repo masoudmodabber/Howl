@@ -18,6 +18,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 
 namespace
 {
@@ -253,6 +254,203 @@ std::uint64_t MakeExchangeKey(std::uint32_t attacker, std::uint32_t defender,
         | (static_cast<std::uint64_t>(NormalizeExchangePiece(endPiece)) << 37)
         | (static_cast<std::uint64_t>(promotionPiece % 8) << 40);
 }
+
+bool SquareAttackedBy(const Board& board, int targetSquare, bool byWhite,
+                      long long occupancy, int capturedSquare = -1)
+{
+    const int offset = byWhite ? 0 : 8;
+    for (int pieceType = 1; pieceType <= 6; ++pieceType)
+    {
+        const auto& pieces = board.pieces[pieceType + offset];
+        for (int i = 0; i < pieces.count; ++i)
+        {
+            const int square = pieces.data[i];
+            if (square == capturedSquare)
+                continue;
+            if (PieceAttacksKing(pieceType, byWhite, square, targetSquare, occupancy))
+                return true;
+        }
+    }
+    return false;
+}
+}
+
+MoveGenContext::MoveGenContext(Board& boardValue)
+    : board(boardValue),
+      occupancy(boardValue.whitePieces | boardValue.blackPieces),
+      movingWhite(!boardValue.sideToMove),
+      kingSquare(-1)
+{
+    const int kingIndex = movingWhite ? 6 : 14;
+    if (board.pieces[kingIndex].count > 0)
+        kingSquare = board.pieces[kingIndex].front();
+}
+
+const AttackerState& MoveGenContext::WhiteAttacker()
+{
+    if (!attackersReady)
+    {
+        whiteAttacker = MoveLogic::SetWhiteAttacker(board);
+        blackAttacker = MoveLogic::SetBlackAttacker(board);
+        attackersReady = true;
+    }
+    return whiteAttacker;
+}
+
+const AttackerState& MoveGenContext::BlackAttacker()
+{
+    if (!attackersReady)
+        WhiteAttacker();
+    return blackAttacker;
+}
+
+bool MoveGenContext::GivesCheck(const Move& move) const
+{
+    return MoveWouldGiveCheck(board, move);
+}
+
+bool MoveGenContext::IsLegal(const Move& move) const
+{
+    if (kingSquare < 0)
+        return false;
+
+    int capturedSquare = -1;
+    if ((move.PublicFlag & 64) != 0)
+        capturedSquare = move.endPlace + (movingWhite ? -8 : 8);
+    else if (move.endPiece > 0)
+        capturedSquare = move.endPlace;
+
+    long long after = occupancy;
+    after &= ~Option::PowerTwo[move.beginPlace];
+    if (capturedSquare >= 0 && capturedSquare != move.endPlace)
+        after &= ~Option::PowerTwo[capturedSquare];
+    after |= Option::PowerTwo[move.endPlace];
+
+    int resultingKingSquare = kingSquare;
+    const int movingPiece = board.mainBoard[move.beginPlace];
+    if ((movingPiece % 8) == 6)
+        resultingKingSquare = move.endPlace;
+
+    int rookFrom = -1;
+    int rookTo = -1;
+    if ((move.CastleFlag & 8) != 0) { rookFrom = 7; rookTo = 5; }
+    else if ((move.CastleFlag & 4) != 0) { rookFrom = 0; rookTo = 3; }
+    else if ((move.CastleFlag & 2) != 0) { rookFrom = 63; rookTo = 61; }
+    else if ((move.CastleFlag & 1) != 0) { rookFrom = 56; rookTo = 59; }
+    if (rookFrom >= 0)
+    {
+        if (SquareAttackedBy(board, kingSquare, !movingWhite, occupancy))
+            return false;
+        const int middle = (move.beginPlace + move.endPlace) / 2;
+        long long middleOccupancy = occupancy;
+        middleOccupancy &= ~Option::PowerTwo[move.beginPlace];
+        middleOccupancy |= Option::PowerTwo[middle];
+        if (SquareAttackedBy(board, middle, !movingWhite, middleOccupancy))
+            return false;
+        after &= ~Option::PowerTwo[rookFrom];
+        after |= Option::PowerTwo[rookTo];
+    }
+
+    return !SquareAttackedBy(board, resultingKingSquare, !movingWhite, after,
+                             capturedSquare);
+}
+
+bool MoveGenContext::BuildMove(int from, int to, int promotionPiece, Move& move) const
+{
+    if (from < 0 || from >= 64 || to < 0 || to >= 64 || from == to)
+        return false;
+    const int piece = board.mainBoard[from];
+    if (piece == 0 || ((piece > 8) == movingWhite))
+        return false;
+    const int destinationPiece = board.mainBoard[to];
+    if (destinationPiece != 0 && ((destinationPiece > 8) != movingWhite))
+        return false;
+    if (destinationPiece != 0 && destinationPiece % 8 == 6)
+        return false;
+
+    const int type = piece % 8;
+    const int delta = to - from;
+    const int fileDelta = (to % 8) - (from % 8);
+    bool pseudoLegal = false;
+    bool enPassant = false;
+    bool castle = false;
+
+    if (type == 1)
+    {
+        const int step = movingWhite ? 8 : -8;
+        const int startRank = movingWhite ? 1 : 6;
+        const int promotionRank = movingWhite ? 7 : 0;
+        if (delta == step && destinationPiece == 0)
+            pseudoLegal = true;
+        else if (delta == 2 * step && from / 8 == startRank && destinationPiece == 0 &&
+                 board.mainBoard[from + step] == 0)
+            pseudoLegal = true;
+        else if ((delta == step - 1 || delta == step + 1) && std::abs(fileDelta) == 1)
+        {
+            if (destinationPiece != 0)
+                pseudoLegal = true;
+            else if (to == board.unpassentPlace)
+            {
+                const int pawnSquare = to - step;
+                if (board.mainBoard[pawnSquare] == (movingWhite ? 9 : 1))
+                {
+                    pseudoLegal = true;
+                    enPassant = true;
+                }
+            }
+        }
+        const bool reachesPromotion = to / 8 == promotionRank;
+        const bool validPromotion = promotionPiece >= (movingWhite ? 2 : 10) &&
+                                    promotionPiece <= (movingWhite ? 5 : 13);
+        if (reachesPromotion != validPromotion)
+            return false;
+    }
+    else if (promotionPiece > 0)
+        return false;
+    else if (type == 2)
+        pseudoLegal = (AttackPlaces::KnightAttackPlaces[from] & Option::PowerTwo[to]) != 0;
+    else if (type >= 3 && type <= 5)
+        pseudoLegal = PieceAttacksKing(type, movingWhite, from, to, occupancy);
+    else if (type == 6)
+    {
+        pseudoLegal = (AttackPlaces::KingAttackPlaces[from] & Option::PowerTwo[to]) != 0;
+        if (!pseudoLegal && movingWhite && from == 4 && to == 6 && board.whiteSmallCastle &&
+            board.mainBoard[5] == 0 && board.mainBoard[6] == 0 && board.mainBoard[7] == 4)
+            pseudoLegal = castle = true;
+        else if (!pseudoLegal && movingWhite && from == 4 && to == 2 && board.whiteBigCastle &&
+                 board.mainBoard[1] == 0 && board.mainBoard[2] == 0 && board.mainBoard[3] == 0 && board.mainBoard[0] == 4)
+            pseudoLegal = castle = true;
+        else if (!pseudoLegal && !movingWhite && from == 60 && to == 62 && board.blackSmallCastle &&
+                 board.mainBoard[61] == 0 && board.mainBoard[62] == 0 && board.mainBoard[63] == 12)
+            pseudoLegal = castle = true;
+        else if (!pseudoLegal && !movingWhite && from == 60 && to == 58 && board.blackBigCastle &&
+                 board.mainBoard[57] == 0 && board.mainBoard[58] == 0 && board.mainBoard[59] == 0 && board.mainBoard[56] == 12)
+            pseudoLegal = castle = true;
+    }
+    if (!pseudoLegal)
+        return false;
+
+    move = Move{};
+    move.beginPlace = from;
+    move.endPlace = to;
+    move.endPiece = enPassant ? (movingWhite ? 9 : 1) : destinationPiece;
+    move.promotionPiece = promotionPiece;
+    move.PublicFlag = enPassant ? 64 : (destinationPiece != 0 ? static_cast<char>(128) : 0);
+    move.unpassentPlace = (type == 1 && std::abs(delta) == 16) ? (from + to) / 2 : 0;
+    move.CastleFlag = 0;
+    if (type == 6)
+    {
+        move.CastleFlag = movingWhite ? static_cast<char>(128 + 64) : static_cast<char>(32 + 16);
+        if (castle)
+            move.CastleFlag += movingWhite ? (to == 6 ? 8 : 4) : (to == 62 ? 2 : 1);
+    }
+    if (from == 0 || to == 0) move.CastleFlag |= 64;
+    if (from == 7 || to == 7) move.CastleFlag |= static_cast<char>(128);
+    if (from == 56 || to == 56) move.CastleFlag |= 16;
+    if (from == 63 || to == 63) move.CastleFlag |= 32;
+
+    move.givesCheck = GivesCheck(move);
+    return IsLegal(move);
 }
 
 double MoveLogic::pieceValue[15];
@@ -2172,7 +2370,7 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone, bo
     }
     // --- END REPLACEMENT OF VECTOR USAGE ---
 
-    if (!onlyCapturesAndChecks)
+    if (!onlyCapturesAndChecks && scoreAndSort)
     {
         for (int i = 0; i < moveList.count; ++i)
             moveList.moves[i]->givesCheck = MoveWouldGiveCheck(thisBoard, *moveList.moves[i]);
@@ -2187,39 +2385,36 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone, bo
 
 void MoveLogic::ScoreAndSortMoves(Board& thisBoard, MoveList& moveList, int depth, int depthGone, const AttackerState& whiteAttacker, const AttackerState& blackAttacker)
 {
-    int state = 0;
-    int* mainBoard = thisBoard.mainBoard;
-    if (thisBoard.sideToMove)
-    {
-        for (int i = 0; i < moveList.count; ++i)
-        {
-            Move* move = moveList.moves[i];
-            int beginPiece = mainBoard[move->beginPlace] % 8;
-            move->value = MoveLogic::Exchange(blackAttacker.pieceCounts[move->endPlace], whiteAttacker.pieceCounts[move->endPlace], move->endPlace, beginPiece, move->endPiece, move->promotionPiece);
-            move->value += whiteAttacker.orderingScores[move->beginPlace] + whiteAttacker.orderingScores[move->endPlace];
-            move->value += Option::MoveOrderingValueBlack[state][beginPiece][move->endPlace];
-        }
-    }
-    else
-    {
-        for (int i = 0; i < moveList.count; ++i)
-        {
-            Move* move = moveList.moves[i];
-            int beginPiece = mainBoard[move->beginPlace];
-            move->value = MoveLogic::Exchange(whiteAttacker.pieceCounts[move->endPlace], blackAttacker.pieceCounts[move->endPlace], move->endPlace, beginPiece, move->endPiece % 8, move->promotionPiece);
-            move->value += blackAttacker.orderingScores[move->beginPlace] + blackAttacker.orderingScores[move->endPlace];
-            move->value += Option::MoveOrderingValueWhite[state][beginPiece][move->endPlace];
-        }
-    }
     for (int i = 0; i < moveList.count; ++i)
     {
         Move* move = moveList.moves[i];
+        ScoreMove(thisBoard, *move, whiteAttacker, blackAttacker);
         move->depth = depth;
         move->depthGone = depthGone;
         move->moveCount = Search::moveCount;
     }
     std::sort(moveList.moves, moveList.moves + moveList.count, [](const Move *a, const Move *b)
               { return b->value < a->value; });
+}
+
+void MoveLogic::ScoreMove(Board& thisBoard, Move& move, const AttackerState& whiteAttacker, const AttackerState& blackAttacker)
+{
+    constexpr int state = 0;
+    int* mainBoard = thisBoard.mainBoard;
+    if (thisBoard.sideToMove)
+    {
+        int beginPiece = mainBoard[move.beginPlace] % 8;
+        move.value = MoveLogic::Exchange(blackAttacker.pieceCounts[move.endPlace], whiteAttacker.pieceCounts[move.endPlace], move.endPlace, beginPiece, move.endPiece, move.promotionPiece);
+        move.value += whiteAttacker.orderingScores[move.beginPlace] + whiteAttacker.orderingScores[move.endPlace];
+        move.value += Option::MoveOrderingValueBlack[state][beginPiece][move.endPlace];
+    }
+    else
+    {
+        int beginPiece = mainBoard[move.beginPlace];
+        move.value = MoveLogic::Exchange(whiteAttacker.pieceCounts[move.endPlace], blackAttacker.pieceCounts[move.endPlace], move.endPlace, beginPiece, move.endPiece % 8, move.promotionPiece);
+        move.value += blackAttacker.orderingScores[move.beginPlace] + blackAttacker.orderingScores[move.endPlace];
+        move.value += Option::MoveOrderingValueWhite[state][beginPiece][move.endPlace];
+    }
 }
 
 MoveList MoveLogic::QSearchStage1Generator(Board &thisBoard, int depth, int depthGone, DeferredMove* deferredMoves, int& deferredCount, const Move& prevMove, bool includeQuietChecks, bool deepResolution)

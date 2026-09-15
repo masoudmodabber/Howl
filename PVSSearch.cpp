@@ -19,6 +19,8 @@
 #include "Option.h"
 #include <iostream>
 #include <algorithm>
+#include <array>
+#include <cstdint>
 #include <vector>
 
 int PVSSearch::moveOrderingDepth[20] = {
@@ -155,6 +157,249 @@ namespace
             return SearchBound::Lower;
         return SearchBound::Exact;
     }
+
+    class MovePicker
+    {
+    public:
+        MovePicker(Board& boardValue, int depthValue, int depthGoneValue,
+                   int turnValue, const Move& previousMoveValue,
+                   uint16_t ttMoveValue)
+            : board(boardValue), context(boardValue), depth(depthValue),
+              depthGone(depthGoneValue), turn(turnValue),
+              previousMove(previousMoveValue)
+        {
+            if (ttMoveValue != 0)
+            {
+                Move move{};
+                if (context.BuildMove(TTMoveHelper::UnpackFrom(ttMoveValue),
+                                      TTMoveHelper::UnpackTo(ttMoveValue),
+                                      TTMoveHelper::UnpackPromotion(ttMoveValue), move))
+                {
+                    ttEntry = Add(move, 0);
+                    hasTTMove = true;
+                }
+            }
+        }
+
+        Move* Next()
+        {
+            while (true)
+            {
+                switch (stage)
+                {
+                case Stage::TT:
+                    stage = Stage::GoodTactical;
+                    if (ttEntry >= 0)
+                        return MarkReturned(ttEntry);
+                    break;
+                case Stage::GoodTactical:
+                    GenerateTactical();
+                    if (Move* move = Select(goodTactical, goodCount, goodCursor))
+                        return move;
+                    stage = Stage::KillerOne;
+                    break;
+                case Stage::KillerOne:
+                    stage = Stage::KillerTwo;
+                    if (Move* move = BuildKiller(0))
+                        return move;
+                    break;
+                case Stage::KillerTwo:
+                    stage = Stage::Quiets;
+                    if (Move* move = BuildKiller(1))
+                        return move;
+                    break;
+                case Stage::Quiets:
+                    GenerateQuiets();
+                    if (Move* move = Select(quiets, quietCount, quietCursor))
+                        return move;
+                    stage = Stage::BadTactical;
+                    break;
+                case Stage::BadTactical:
+                    GenerateTactical();
+                    if (Move* move = Select(badTactical, badCount, badCursor))
+                        return move;
+                    stage = Stage::Done;
+                    break;
+                case Stage::Done:
+                    return nullptr;
+                }
+            }
+        }
+
+        bool HasTTMove() const { return hasTTMove; }
+        int GeneratedCount() const { return entryCount; }
+
+    private:
+        struct Entry
+        {
+            Move move{};
+            int key = 0;
+            bool returned = false;
+        };
+
+        enum class Stage : uint8_t
+        {
+            TT,
+            GoodTactical,
+            KillerOne,
+            KillerTwo,
+            Quiets,
+            BadTactical,
+            Done
+        };
+
+        static bool SameMove(const Move& a, const Move& b)
+        {
+            return a.beginPlace == b.beginPlace && a.endPlace == b.endPlace &&
+                   (a.promotionPiece > 0 ? a.promotionPiece : 0) ==
+                   (b.promotionPiece > 0 ? b.promotionPiece : 0);
+        }
+
+        bool AlreadyReturned(const Move& move) const
+        {
+            for (int i = 0; i < entryCount; ++i)
+                if (entries[i].returned && SameMove(entries[i].move, move))
+                    return true;
+            return false;
+        }
+
+        int Add(const Move& source, int key)
+        {
+            if (entryCount >= static_cast<int>(entries.size()))
+                return -1;
+            Entry& entry = entries[entryCount];
+            entry.move = source;
+            entry.move.depth = depth;
+            entry.move.depthGone = depthGone;
+            entry.move.moveCount = Search::moveCount;
+            entry.key = key;
+            entry.returned = false;
+            return entryCount++;
+        }
+
+        Move* MarkReturned(int index)
+        {
+            entries[index].returned = true;
+            return &entries[index].move;
+        }
+
+        Move* Select(std::array<int, 256>& indices, int count, int& cursor)
+        {
+            if (cursor >= count)
+                return nullptr;
+            int best = cursor;
+            for (int i = cursor + 1; i < count; ++i)
+            {
+                if (entries[indices[i]].key > entries[indices[best]].key)
+                    best = i;
+            }
+            std::swap(indices[cursor], indices[best]);
+            return MarkReturned(indices[cursor++]);
+        }
+
+        void GenerateTactical()
+        {
+            if (tacticalGenerated)
+                return;
+            tacticalGenerated = true;
+            AttackerState emptyWhite{};
+            AttackerState emptyBlack{};
+            MoveList generated = MoveLogic::MoveGenerator(
+                board, depth, depthGone, true, false, emptyWhite, emptyBlack, false);
+            const AttackerState& whiteAttacker = context.WhiteAttacker();
+            const AttackerState& blackAttacker = context.BlackAttacker();
+            for (int i = 0; i < generated.count; ++i)
+            {
+                Move* candidate = generated.moves[i];
+                if (!AlreadyReturned(*candidate) && context.IsLegal(*candidate))
+                {
+                    candidate->givesCheck = context.GivesCheck(*candidate);
+                    MoveLogic::ScoreMove(board, *candidate, whiteAttacker, blackAttacker);
+                    const int key = candidate->value +
+                        (candidate->givesCheck ? CheckOrderingBonus : 0);
+                    const int index = Add(*candidate, key);
+                    if (index >= 0)
+                    {
+                        if (candidate->value >= 0)
+                            goodTactical[goodCount++] = index;
+                        else
+                            badTactical[badCount++] = index;
+                    }
+                }
+                delete candidate;
+            }
+        }
+
+        Move* BuildKiller(int killerIndex)
+        {
+            if (depthGone < 0 || depthGone >= PVSSearch::MaxKillerPly)
+                return nullptr;
+            const PVSSearch::KillerMove& killer = PVSSearch::killers[depthGone][killerIndex];
+            if (!killer.isValid())
+                return nullptr;
+            Move move{};
+            if (!context.BuildMove(killer.beginPlace, killer.endPlace,
+                                   killer.promotionPiece, move) || !IsQuietMove(move) ||
+                AlreadyReturned(move))
+                return nullptr;
+            const int key = (killerIndex == 0 ? 500000 : 400000) +
+                (move.givesCheck ? CheckOrderingBonus : 0);
+            const int index = Add(move, key);
+            return index >= 0 ? MarkReturned(index) : nullptr;
+        }
+
+        void GenerateQuiets()
+        {
+            if (quietsGenerated)
+                return;
+            quietsGenerated = true;
+            AttackerState emptyWhite{};
+            AttackerState emptyBlack{};
+            MoveList generated = MoveLogic::MoveGenerator(
+                board, depth, depthGone, false, false, emptyWhite, emptyBlack, true);
+            const AttackerState& whiteAttacker = context.WhiteAttacker();
+            const AttackerState& blackAttacker = context.BlackAttacker();
+            for (int i = 0; i < generated.count; ++i)
+            {
+                Move* candidate = generated.moves[i];
+                if (IsQuietMove(*candidate) && !AlreadyReturned(*candidate) &&
+                    context.IsLegal(*candidate))
+                {
+                    candidate->givesCheck = context.GivesCheck(*candidate);
+                    MoveLogic::ScoreMove(board, *candidate, whiteAttacker, blackAttacker);
+                    const int key = 100000 + CombinedHistoryScore(turn, previousMove, *candidate) +
+                        BasePvsOrderingScore(candidate);
+                    const int index = Add(*candidate, key);
+                    if (index >= 0)
+                        quiets[quietCount++] = index;
+                }
+                delete candidate;
+            }
+        }
+
+        Board& board;
+        MoveGenContext context;
+        int depth;
+        int depthGone;
+        int turn;
+        const Move& previousMove;
+        std::array<Entry, 256> entries{};
+        std::array<int, 256> goodTactical{};
+        std::array<int, 256> badTactical{};
+        std::array<int, 256> quiets{};
+        int entryCount = 0;
+        int goodCount = 0;
+        int badCount = 0;
+        int quietCount = 0;
+        int goodCursor = 0;
+        int badCursor = 0;
+        int quietCursor = 0;
+        int ttEntry = -1;
+        bool tacticalGenerated = false;
+        bool quietsGenerated = false;
+        bool hasTTMove = false;
+        Stage stage = Stage::TT;
+    };
 
     bool NullMoveMaterialEligible(const Board &board, int turn)
     {
@@ -1159,75 +1404,31 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             return retValue;
         }
     }
-    MoveList moveList = MoveLogic::MoveGenerator(board4, depth, depthGone);
     if constexpr (ProductionIGGEnabled)
     {
+        MoveList moveList = MoveLogic::MoveGenerator(board4, depth, depthGone);
         IGG(isPVNode, alpha, beta, depth, prevMove, move1, move2, move3, board4, MAtESearch, isNullMoveAllowed, depthGone, previousMoveWasCheck, nullWindowSearch, moveList);
+        deleteMoveList(moveList);
     }
 #if HOWL_CORRECTNESS_TESTING
-    TranspositionTable::CheckShadowEntryOnProbe(board4.ZobristHashCode, depth, alpha, beta, isPVNode, moveList, false);
-#endif
-    const auto calculateUnifiedOrderingScore = [turn, &prevMove, depthGone](const Move *m) -> int
     {
-        const bool isQuiet = IsQuietMove(*m);
-        if (!isQuiet)
-        {
-            if (m->value >= 0)
-                return 1000000 + BasePvsOrderingScore(m);
-            else
-                return BasePvsOrderingScore(m);
-        }
-
-        if (depthGone >= 0 && depthGone < PVSSearch::MaxKillerPly)
-        {
-            if (PVSSearch::killers[depthGone][0] == *m)
-                return 500000 + (m->givesCheck ? CheckOrderingBonus : 0);
-            if (PVSSearch::killers[depthGone][1] == *m)
-                return 400000 + (m->givesCheck ? CheckOrderingBonus : 0);
-        }
-
-        return 100000 + CombinedHistoryScore(turn, prevMove, *m) + BasePvsOrderingScore(m);
-    };
-
-    std::stable_sort(moveList.moves, moveList.moves + moveList.count,
-                     [&calculateUnifiedOrderingScore](const Move *a, const Move *b)
-                     {
-                         return calculateUnifiedOrderingScore(a) >
-                                calculateUnifiedOrderingScore(b);
-                     });
-    bool hasTTMove = false;
+        MoveList shadowMoveList = MoveLogic::MoveGenerator(board4, depth, depthGone);
+        TranspositionTable::CheckShadowEntryOnProbe(board4.ZobristHashCode, depth, alpha, beta, isPVNode, shadowMoveList, false);
+        deleteMoveList(shadowMoveList);
+    }
+#endif
+    MovePicker movePicker(board4, depth, depthGone, turn, prevMove,
+                          ttHit ? ttEntry.bestMove : 0);
+    const bool hasTTMove = movePicker.HasTTMove();
+#if HOWL_CORRECTNESS_TESTING
     if (ttHit && ttEntry.bestMove != 0)
     {
-        int ttFrom = TTMoveHelper::UnpackFrom(ttEntry.bestMove);
-        int ttTo = TTMoveHelper::UnpackTo(ttEntry.bestMove);
-        int ttPromo = TTMoveHelper::UnpackPromotion(ttEntry.bestMove);
-#if HOWL_CORRECTNESS_TESTING
         ttStats.ttMoveFoundNoCutoff++;
-        bool matchedGenerated = false;
-#endif
-        for (int i = 0; i < moveList.count; ++i)
-        {
-            Move *m = moveList.moves[i];
-            if (m->beginPlace == ttFrom && m->endPlace == ttTo &&
-                (ttPromo == 0 ? (m->promotionPiece <= 0) : (m->promotionPiece == ttPromo)))
-            {
-                hasTTMove = true;
-#if HOWL_CORRECTNESS_TESTING
-                matchedGenerated = true;
-#endif
-                TranspositionTable::RecordHitStats(true, i == 0);
-                if (i != 0)
-                {
-                    std::swap(moveList.moves[0], moveList.moves[i]);
-                }
-                break;
-            }
-        }
-#if HOWL_CORRECTNESS_TESTING
-        if (matchedGenerated) ttStats.ttMoveMatchedLegal++;
+        if (hasTTMove) ttStats.ttMoveMatchedLegal++;
         else ttStats.ttMoveMissingFromGenerated++;
-#endif
+        if (hasTTMove) TranspositionTable::RecordHitStats(true, true);
     }
+#endif
     int inCheck = -1;
     int staticEval = -200000;
     int bestMoveValue = -200000;
@@ -1237,6 +1438,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
     std::string SelectedPV = "";
     int availMoves = 0;
     int quietMovesSearched = 0;
+    int selectedMoveRank = 0;
     {
         bool firstMove = true;
         if (!isPVNode && !nodeInCheck && !MAtESearch && depth >= 5 &&
@@ -1244,10 +1446,13 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
         {
             const int probBeta = beta + 120;
             int forcingMovesTried = 0;
-            const int rankedMovesToInspect = std::min(moveList.count, 6);
-            for (int i = 0; i < rankedMovesToInspect && forcingMovesTried < 2; ++i)
+            MovePicker probPicker = movePicker;
+            for (int i = 0; i < 6 && forcingMovesTried < 2; ++i)
             {
-                Move &probMove = *moveList.moves[i];
+                Move* nextProbMove = probPicker.Next();
+                if (nextProbMove == nullptr)
+                    break;
+                Move &probMove = *nextProbMove;
                 MissingInfoAboutPrevStateFromMove probUndo(board4, probMove);
                 GameLogic::DoMove(board4, probMove, prevMove, depthGone, depthGone, &probUndo);
                 const bool givesCheck = BoardLogic::UnderAttack(
@@ -1280,7 +1485,6 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                         retValue->value = beta;
                         retValue->bound = SearchBound::Lower;
                         retValue->MarkSpeculative(SearchProvenance::ProbCut);
-                        deleteMoveList(moveList);
                         delete MPValue;
                         MPValue = nullptr;
                         return retValue;
@@ -1289,7 +1493,6 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 GameLogic::UndoMove(board4, probMove, probUndo);
                 if (Search::stopRequested.load(std::memory_order_relaxed))
                 {
-                    deleteMoveList(moveList);
                     delete MPValue;
                     MPValue = nullptr;
                     retValue->value = 0;
@@ -1300,11 +1503,13 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             }
         }
 
-        for (int i = 0; i < moveList.count; ++i)
+        for (int i = 0; ; ++i)
         {
+            Move *move = movePicker.Next();
+            if (move == nullptr)
+                break;
             if (Search::stopRequested.load(std::memory_order_relaxed))
             {
-                deleteMoveList(moveList);
                 delete MPValue;
                 MPValue = nullptr;
                 retValue->value = 0;
@@ -1312,7 +1517,6 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 retValue->MarkSpeculative(SearchProvenance::Aborted);
                 return retValue;
             }
-            Move *move = moveList.moves[i];
             const int alphaBeforeMove = alpha;
             int LMRDepth = 0;
             uint8_t moveProof = NoProof;
@@ -1331,6 +1535,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     bestMoveValue = 0;
                     bestMoveSelective = false;
                     SelectedMove = move;
+                    selectedMoveRank = i + 1;
                     move->value = 0;
                 }
                 else
@@ -1353,6 +1558,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                         allUpperProof = allUpperProof && ((moveProof & UpperProof) != 0);
                     bestMoveSelective = MPValue->selective || selectiveSearch;
                     SelectedMove = move;
+                    selectedMoveRank = i + 1;
                     SelectedPV = MPValue->printString;
                     if (bestMoveValue != -160000)
                     {
@@ -1373,7 +1579,6 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 }
                 if (Search::stopRequested.load(std::memory_order_relaxed))
                 {
-                    deleteMoveList(moveList);
                     delete MPValue;
                     MPValue = nullptr;
                     retValue->value = 0;
@@ -1422,7 +1627,6 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                         retValue->selective = bestMoveSelective;
                         retValue->SetProof(bestLowerProof, false);
                         retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + MPValue->printString;
-                        deleteMoveList(moveList);
                         delete MPValue;
                         MPValue = nullptr;
                         return retValue;
@@ -1716,7 +1920,6 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 }
                 if (Search::stopRequested.load(std::memory_order_relaxed))
                 {
-                    deleteMoveList(moveList);
                     delete MPValue;
                     MPValue = nullptr;
                     retValue->value = 0;
@@ -1758,7 +1961,6 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                         retValue->selective = valueSelective;
                         retValue->SetProof((moveProof & LowerProof) != 0, false);
                         retValue->printString = ChessStringManipulation::PVToString(*move, 0, false, board4) + ' ' + MPValue->printString;
-                        deleteMoveList(moveList);
                         delete MPValue;
                         MPValue = nullptr;
                         return retValue;
@@ -1768,6 +1970,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     bestLowerProof = (moveProof & LowerProof) != 0;
                     bestMoveSelective = valueSelective;
                     SelectedMove = move;
+                    selectedMoveRank = i + 1;
                     SelectedPV = MPValue->printString;
                 }
             }
@@ -1780,7 +1983,6 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             stalemateMove.promotionPiece = -2;
             retValue->value = 0;
             retValue->SetProof(allUpperProof, allUpperProof);
-            deleteMoveList(moveList);
             delete MPValue;
             MPValue = nullptr;
             return retValue;
@@ -1791,7 +1993,6 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             mateMove.value = MateScore::MatedAtPly(depthGone);
             retValue->value = MateScore::MatedAtPly(depthGone);
             retValue->SetProof(allUpperProof, allUpperProof);
-            deleteMoveList(moveList);
             delete MPValue;
             MPValue = nullptr;
             return retValue;
@@ -1801,19 +2002,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
 #if HOWL_CORRECTNESS_TESTING
             if (SelectedMove != nullptr)
             {
-                int rank = 0;
-                for (int k = 0; k < moveList.count; ++k)
-                {
-                    if (moveList.moves[k] == SelectedMove)
-                    {
-                        rank = k + 1;
-                        break;
-                    }
-                }
-                if (rank > 0)
-                {
-                    g_orderingQualityStats.recordBestMove(rank, isPVNode, IsQuietMove(*SelectedMove));
-                }
+                g_orderingQualityStats.recordBestMove(selectedMoveRank, isPVNode, IsQuietMove(*SelectedMove));
             }
 #endif
             const bool resultSelective = bestMoveSelective || selectiveSearch;
@@ -1836,7 +2025,6 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             retValue->selective = resultSelective;
             retValue->SetProof(bestLowerProof, allUpperProof);
             retValue->printString = ChessStringManipulation::PVToString(*SelectedMove, 0, false, board4) + ' ' + SelectedPV;
-            deleteMoveList(moveList);
             delete MPValue;
             MPValue = nullptr;
             return retValue;

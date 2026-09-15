@@ -184,6 +184,7 @@ public:
 
     static int PawnInCenterValueWhite[64];
     static int PawnMoveCenterValueWhite[64];
+    static unsigned long long MoveCenterNonzero[2][7];
     static int KnightInCenterValueWhite[64];
     static int KnightMoveCenterValueWhite[64];
     static int BishopInCenterValueWhite[64];

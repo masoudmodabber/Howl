@@ -61,7 +61,8 @@ inline int MissingPawnPresences(Board& board, int firstFile, int lastFile)
     return MissingPawnPresences(whitePawnFiles, blackPawnFiles, firstFile, lastFile);
 }
 
-inline bool IsImmediatelyLegalCastle(Board& board, bool whiteKing, bool kingSide)
+inline bool IsImmediatelyLegalCastle(Board& board, bool whiteKing, bool kingSide,
+                                     const uint64_t* legacyAttacks = nullptr)
 {
     const int home = whiteKing ? 0 : 56;
     const int kingSquare = home + 4;
@@ -86,7 +87,8 @@ inline bool IsImmediatelyLegalCastle(Board& board, bool whiteKing, bool kingSide
 
     const int kingPath[3] = {kingSquare, path[0], path[1]};
     for (int square : kingPath)
-        if (BoardLogic::UnderAttack(board, square, whiteKing))
+        if (legacyAttacks ? (legacyAttacks[whiteKing ? 1 : 0] & Option::PowerTwo[square]) != 0
+                          : BoardLogic::UnderAttack(board, square, whiteKing))
             return false;
     return true;
 }
@@ -221,7 +223,8 @@ inline bool MinorAttacksLayerFast(long long occupancy, int pieceType, int from, 
     return false;
 }
 
-inline Result Evaluate(Board& board, bool whiteKing, uint8_t whitePawnFiles, uint8_t blackPawnFiles)
+inline Result Evaluate(Board& board, bool whiteKing, uint8_t whitePawnFiles, uint8_t blackPawnFiles,
+                       const uint64_t* pieceAttacks = nullptr, const uint64_t* legacyAttacks = nullptr)
 {
     Result result;
     result.generalCentreOpenness = MissingPawnPresences(whitePawnFiles, blackPawnFiles, 2, 5);
@@ -250,8 +253,8 @@ inline Result Evaluate(Board& board, bool whiteKing, uint8_t whitePawnFiles, uin
         result.effectiveOpenness /= 2;
 
     result.immediateCastling =
-        IsImmediatelyLegalCastle(board, whiteKing, true) ||
-        IsImmediatelyLegalCastle(board, whiteKing, false);
+        IsImmediatelyLegalCastle(board, whiteKing, true, legacyAttacks) ||
+        IsImmediatelyLegalCastle(board, whiteKing, false, legacyAttacks);
 
     const bool enemyWhite = !whiteKing;
     const long long occupancy = board.whitePieces | board.blackPieces;
@@ -317,16 +320,20 @@ inline Result Evaluate(Board& board, bool whiteKing, uint8_t whitePawnFiles, uin
         const int pieceIndex = pieceType + (enemyWhite ? 0 : 8);
         for (int square : board.pieces[pieceIndex])
         {
-            const bool contested = BoardLogic::UnderAttack(board, square, whiteKing);
-            if (MinorAttacksLayerFast(occupancy, pieceType, square, innerLayer))
+            if (pieceAttacks ? (pieceAttacks[square] & innerLayer) != 0
+                             : MinorAttacksLayerFast(occupancy, pieceType, square, innerLayer))
             {
+                const bool contested = legacyAttacks
+                    ? (legacyAttacks[whiteKing ? 1 : 0] & Option::PowerTwo[square]) != 0
+                    : BoardLogic::UnderAttack(board, square, whiteKing);
                 if (!contested)
                     result.innerAttackers++;
                 else
                     result.outerAttackers++;
             }
             else if ((outerLayer & Option::PowerTwo[square]) != 0 ||
-                     MinorAttacksLayerFast(occupancy, pieceType, square, outerLayer))
+                     (pieceAttacks ? (pieceAttacks[square] & outerLayer) != 0
+                                   : MinorAttacksLayerFast(occupancy, pieceType, square, outerLayer)))
             {
                 result.outerAttackers++;
             }
