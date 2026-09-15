@@ -13,6 +13,59 @@
 #include <functional>
 #include <iostream>
 
+namespace
+{
+struct EvaluationRays
+{
+    uint64_t rays[8][64]{};
+    uint8_t ranks[8][256]{};
+    constexpr EvaluationRays()
+    {
+        const int dr[8] = {1, 1, -1, -1, 1, 0, -1, 0};
+        const int df[8] = {1, -1, 1, -1, 0, 1, 0, -1};
+        for (int dir = 0; dir < 8; ++dir)
+            for (int sq = 0; sq < 64; ++sq)
+                for (int r = sq / 8 + dr[dir], f = sq % 8 + df[dir];
+                     r >= 0 && r < 8 && f >= 0 && f < 8; r += dr[dir], f += df[dir])
+                    rays[dir][sq] |= 1ULL << (8 * r + f);
+        for (int file = 0; file < 8; ++file)
+            for (int occupied = 0; occupied < 256; ++occupied)
+                for (int step : {-1, 1})
+                    for (int to = file + step; to >= 0 && to < 8; to += step)
+                    {
+                        ranks[file][occupied] |= 1 << to;
+                        if (occupied & (1 << to)) break;
+                    }
+    }
+};
+constexpr EvaluationRays EvalRays{};
+
+uint64_t EvaluationSliderAttacks(int square, int type, uint64_t occupancy)
+{
+    // Subtraction reaches the first blocker in each direction. Byte reversal
+    // reverses square order on files and diagonals (one square per rank).
+    const uint64_t piece = 1ULL << square;
+    const auto lineAttacks = [&](uint64_t line) {
+        const uint64_t occupied = (occupancy & line) | piece;
+        return ((occupied - 2 * piece) ^
+                __builtin_bswap64(__builtin_bswap64(occupied) - 2 * __builtin_bswap64(piece))) & line;
+    };
+    uint64_t attacks = 0;
+    if (type != 4)
+    {
+        attacks = lineAttacks(EvalRays.rays[0][square] | EvalRays.rays[3][square]) |
+                  lineAttacks(EvalRays.rays[1][square] | EvalRays.rays[2][square]);
+    }
+    if (type != 3)
+    {
+        attacks |= lineAttacks(EvalRays.rays[4][square] | EvalRays.rays[6][square]);
+        const int shift = square & ~7;
+        attacks |= static_cast<uint64_t>(EvalRays.ranks[square & 7][(occupancy >> shift) & 255]) << shift;
+    }
+    return attacks;
+}
+}
+
 EvaluationContext::EvaluationContext(Board& b, int p)
     : board(b), phase(p)
 {
@@ -20,10 +73,16 @@ EvaluationContext::EvaluationContext(Board& b, int p)
     blackKingSq = b.pieces[14].front();
     whiteKingFile = whiteKingSq % 8;
     blackKingFile = blackKingSq % 8;
+    occupancy = b.whitePieces | b.blackPieces;
+    pawnAttacks[0] = ((static_cast<uint64_t>(b.whitePawns) & ~0x8080808080808080ULL) << 9) |
+                     ((static_cast<uint64_t>(b.whitePawns) & ~0x0101010101010101ULL) << 7);
+    pawnAttacks[1] = ((static_cast<uint64_t>(b.blackPawns) & ~0x0101010101010101ULL) >> 9) |
+                     ((static_cast<uint64_t>(b.blackPawns) & ~0x8080808080808080ULL) >> 7);
 
     for (int sq : b.pieces[1])
     {
         whitePawnFiles |= static_cast<uint8_t>(1 << (sq % 8));
+        ++pawnFileCounts[0][sq % 8];
         if ((PassedPawnSetup::WhitePassedMask[sq] & b.blackPawns) == 0)
         {
             whitePassedPawns |= (1ULL << sq);
@@ -34,12 +93,36 @@ EvaluationContext::EvaluationContext(Board& b, int p)
     for (int sq : b.pieces[9])
     {
         blackPawnFiles |= static_cast<uint8_t>(1 << (sq % 8));
+        ++pawnFileCounts[1][sq % 8];
         if ((PassedPawnSetup::BlackPassedMask[sq] & b.whitePawns) == 0)
         {
             blackPassedPawns |= (1ULL << sq);
             blackPassers[blackPasserCount++] = sq;
         }
     }
+}
+
+void EvaluationContext::InitializeAttacks()
+{
+    if (attacksReady) return;
+    for (int side = 0; side < 2; ++side)
+        for (int type = 1; type <= 6; ++type)
+            for (int square : board.pieces[side * 8 + type])
+            {
+                uint64_t mask;
+                if (type == 1)
+                    mask = side == 0 ? AttackPlaces::WhitePawnAttackPlaces[square]
+                                     : AttackPlaces::BlackPawnAttackPlaces[square];
+                else if (type == 2) mask = AttackPlaces::KnightAttackPlaces[square];
+                else if (type == 6) mask = AttackPlaces::KingAttackPlaces[square];
+                else mask = EvaluationSliderAttacks(square, type, occupancy);
+                attacks[square] = mask;
+                sideAttacks[side] |= mask;
+                if (type != 6) nonKingAttacks[side] |= mask;
+                // The existing BoardLogic query requires slider targets to be occupied.
+                legacyAttacks[side] |= (type >= 3 && type <= 5) ? mask & occupancy : mask;
+            }
+    attacksReady = true;
 }
 
 namespace
@@ -1514,414 +1597,101 @@ int ShelterDanger(Board& board, bool whiteKing, int kingSquare, const Evaluation
     return danger;
 }
 
-KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const EvaluationContext* ctx = nullptr)
+KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const EvaluationContext* ctx = nullptr,
+                                    bool needDetails = true)
 {
+    if (ctx == nullptr || !ctx->attacksReady)
+    {
+        EvaluationContext local(board, ctx ? ctx->phase : EvaluationLogic::CalculatePhase(board));
+        local.InitializeAttacks();
+        return EvaluateKingDanger(board, whiteKing, &local, needDetails);
+    }
     static constexpr int attackerWeight[7] = {0, 2, 5, 5, 8, 12, 0};
     static constexpr int defenderWeight[7] = {0, 2, 4, 4, 5, 7, 0};
-    const int kingSquare = ctx ? (whiteKing ? ctx->whiteKingSq : ctx->blackKingSq) : board.pieces[whiteKing ? 6 : 14].front();
+    const int kingSquare = whiteKing ? ctx->whiteKingSq : ctx->blackKingSq;
     const bool attackingWhite = !whiteKing;
     const PrecomputedKingZone& zone = KingZonesData.zones[kingSquare];
-    const long long occupiedSquares = board.whitePieces | board.blackPieces;
-
-    int attackerParticipation = 0;
-    int defenderParticipation = 0;
-    int attackerCount = 0;
-    int loneAttackerSq = -1;
-    int defenderCount = 0;
-    int filePressure = 0;
-    int diagonalPressure = 0;
-
-    uint8_t enemyAttacks[9] = {0};
-    uint8_t friendlyDefenses[9] = {0};
-
+    // With no participating attacker, the old escalation returns zero. Only
+    // shelter is consumed by other score terms; detailed reporting still runs fully.
+    if (!needDetails && (ctx->nonKingAttacks[attackingWhite ? 0 : 1] & zone.mask) == 0)
+    {
+        KingDangerResult result;
+        result.pawnShelter = ShelterDanger(board, whiteKing, kingSquare, ctx);
+        return result;
+    }
     const int kingFile = kingSquare % 8;
     const int minFile = std::max(0, kingFile - 1);
     const int maxFile = std::min(7, kingFile + 1);
-    const uint8_t friendlyPawnFiles = ctx ? (whiteKing ? ctx->whitePawnFiles : ctx->blackPawnFiles) : 0;
-    const uint8_t enemyPawnFiles = ctx ? (whiteKing ? ctx->blackPawnFiles : ctx->whitePawnFiles) : 0;
+    const uint8_t friendlyPawnFiles = whiteKing ? ctx->whitePawnFiles : ctx->blackPawnFiles;
+    const uint8_t enemyPawnFiles = whiteKing ? ctx->blackPawnFiles : ctx->whitePawnFiles;
+    int fileOpenness[8] = {};
+    for (int file = minFile; file <= maxFile; ++file)
+        fileOpenness[file] = (friendlyPawnFiles & (1 << file)) ? 0 :
+                            ((enemyPawnFiles & (1 << file)) ? 1 : 2);
 
-    int fileOpenness[8] = {0};
-    bool anyOpenFile = false;
-    for (int file = minFile; file <= maxFile; file++)
-    {
-        bool friendlyPawn = false;
-        bool enemyPawn = false;
-        if (ctx)
-        {
-            friendlyPawn = (friendlyPawnFiles & (1 << file)) != 0;
-            enemyPawn = (enemyPawnFiles & (1 << file)) != 0;
-        }
-        else
-        {
-            for (int pawn : board.pieces[whiteKing ? 1 : 9]) friendlyPawn |= pawn % 8 == file;
-            for (int pawn : board.pieces[whiteKing ? 9 : 1]) enemyPawn |= pawn % 8 == file;
-        }
-        const int openness = !friendlyPawn ? (!enemyPawn ? 2 : 1) : 0;
-        fileOpenness[file] = openness;
-        if (openness > 0)
-        {
-            anyOpenFile = true;
-        }
-    }
+    int attackerParticipation = 0, defenderParticipation = 0;
+    int attackerCount = 0, defenderCount = 0, loneAttackerSq = -1;
+    int filePressure = 0, diagonalPressure = 0;
+    const int enemySide = attackingWhite ? 0 : 1;
+    const int ownSide = whiteKing ? 0 : 1;
+    const uint64_t neighbours = zone.mask & ~Option::PowerTwo[kingSquare];
+    const uint64_t enemyControl = ctx->sideAttacks[enemySide];
+    const uint64_t undefended = neighbours & ~ctx->nonKingAttacks[ownSide];
+    int undefendedKingZoneDanger = __builtin_popcountll(undefended & enemyControl);
+    const uint64_t attackingPawnAttacks = ctx->pawnAttacks[enemySide];
+    uint64_t restrictedBetweenSquares = 0;
+    uint64_t queenHits = 0, rookHits = 0;
 
-    // Enemy pawns
-    for (int square : board.pieces[attackingWhite ? 1 : 9])
+    for (int type = 1; type <= 5; ++type)
     {
-        const long long attacks = PawnAttacksData.data[attackingWhite ? 1 : 0][square] & zone.mask;
-        if (attacks)
+        for (int square : board.pieces[enemySide * 8 + type])
         {
-            attackerParticipation += attackerWeight[1];
-            attackerCount++;
+            const uint64_t hits = ctx->attacks[square] & zone.mask;
+            if (!hits) continue;
+            attackerParticipation += attackerWeight[type];
+            ++attackerCount;
             loneAttackerSq = square;
-            for (int i = 1; i < zone.count; i++)
+            if (hits & undefended)
+                undefendedKingZoneDanger += __builtin_popcountll(hits & undefended);
+            if (type >= 3)
             {
-                if (attacks & Option::PowerTwo[zone.squares[i]])
+                uint64_t targets = hits & neighbours;
+                while (targets)
                 {
-                    enemyAttacks[i]++;
+                    const int target = __builtin_ctzll(targets);
+                    targets &= targets - 1;
+                    restrictedBetweenSquares |= AttackPlaces::BetweenMask[square][target] & attackingPawnAttacks;
                 }
-            }
-        }
-    }
-
-    // Enemy knights
-    for (int square : board.pieces[attackingWhite ? 2 : 10])
-    {
-        const long long attacks = AttackPlaces::KnightAttackPlaces[square] & zone.mask;
-        if (attacks)
-        {
-            attackerParticipation += attackerWeight[2];
-            attackerCount++;
-            loneAttackerSq = square;
-            for (int i = 1; i < zone.count; i++)
-            {
-                if (attacks & Option::PowerTwo[zone.squares[i]])
-                {
-                    enemyAttacks[i]++;
-                }
-            }
-        }
-    }
-
-    const long long attackingPawnAttacks = attackingWhite
-        ? (((board.whitePawns & ~0x8080808080808080ULL) << 9) | ((board.whitePawns & ~0x0101010101010101ULL) << 7))
-        : (((board.blackPawns & ~0x0101010101010101ULL) >> 9) | ((board.blackPawns & ~0x8080808080808080ULL) >> 7));
-    long long restrictedBetweenSquares = 0;
-
-    // Enemy bishops
-    for (int square : board.pieces[attackingWhite ? 3 : 11])
-    {
-        if ((AttackPlaces::BishopPseudoAttacks[square] & zone.mask) == 0)
-            continue;
-        bool participates = false;
-        for (int i = 0; i < zone.count; i++)
-        {
-            const int target = zone.squares[i];
-            if (AttackPlaces::BishopAttack[square][target] != 0 &&
-                (AttackPlaces::BetweenMask[square][target] & occupiedSquares) == 0)
-            {
-                participates = true;
-                if (i > 0)
-                {
-                    enemyAttacks[i]++;
-                    restrictedBetweenSquares |= (AttackPlaces::BetweenMask[square][target] & attackingPawnAttacks);
-                }
-                else
-                {
+                if ((type == 3 || type == 5) && (hits & Option::PowerTwo[kingSquare]))
                     diagonalPressure += 9;
-                }
+            }
+            if (type >= 4)
+            {
+                for (int file = minFile; file <= maxFile; ++file)
+                    if (fileOpenness[file] && (hits & (0x0101010101010101ULL << file)))
+                        filePressure += fileOpenness[file] == 2 ? 10 : 6;
+                if (type == 4) rookHits |= hits;
+                else queenHits |= hits;
             }
         }
-        if (participates)
-        {
-            attackerParticipation += attackerWeight[3];
-            attackerCount++;
-            loneAttackerSq = square;
-        }
+        for (int square : board.pieces[ownSide * 8 + type])
+            if (ctx->attacks[square] & zone.mask)
+            {
+                defenderParticipation += defenderWeight[type];
+                ++defenderCount;
+            }
     }
-
-    // Enemy rooks
-    for (int square : board.pieces[attackingWhite ? 4 : 12])
-    {
-        if ((AttackPlaces::RookPseudoAttacks[square] & zone.mask) == 0)
-            continue;
-        bool participates = false;
-        uint8_t attackedFiles = 0;
-        for (int i = 0; i < zone.count; i++)
-        {
-            const int target = zone.squares[i];
-            if (AttackPlaces::RookAttack[square][target] != 0 &&
-                (AttackPlaces::BetweenMask[square][target] & occupiedSquares) == 0)
-            {
-                participates = true;
-                if (i > 0)
-                {
-                    enemyAttacks[i]++;
-                    restrictedBetweenSquares |= (AttackPlaces::BetweenMask[square][target] & attackingPawnAttacks);
-                }
-                attackedFiles |= (1 << (target % 8));
-            }
-        }
-        if (participates)
-        {
-            attackerParticipation += attackerWeight[4];
-            attackerCount++;
-            loneAttackerSq = square;
-        }
-        if (anyOpenFile)
-        {
-            for (int file = minFile; file <= maxFile; file++)
-            {
-                if (fileOpenness[file] > 0 && (attackedFiles & (1 << file)))
-                {
-                    filePressure += (fileOpenness[file] == 2 ? 10 : 6);
-                }
-            }
-        }
-    }
-
-    // Enemy queens
-    for (int square : board.pieces[attackingWhite ? 5 : 13])
-    {
-        if ((AttackPlaces::QueenPseudoAttacks[square] & zone.mask) == 0)
-            continue;
-        bool participates = false;
-        uint8_t attackedFiles = 0;
-        for (int i = 0; i < zone.count; i++)
-        {
-            const int target = zone.squares[i];
-            if (AttackPlaces::QueenAttack[square][target] != 0 &&
-                (AttackPlaces::BetweenMask[square][target] & occupiedSquares) == 0)
-            {
-                participates = true;
-                if (i > 0)
-                {
-                    enemyAttacks[i]++;
-                    restrictedBetweenSquares |= (AttackPlaces::BetweenMask[square][target] & attackingPawnAttacks);
-                }
-                else
-                {
-                    diagonalPressure += 9;
-                }
-                attackedFiles |= (1 << (target % 8));
-            }
-        }
-        if (participates)
-        {
-            attackerParticipation += attackerWeight[5];
-            attackerCount++;
-            loneAttackerSq = square;
-        }
-        if (anyOpenFile)
-        {
-            for (int file = minFile; file <= maxFile; file++)
-            {
-                if (fileOpenness[file] > 0 && (attackedFiles & (1 << file)))
-                {
-                    filePressure += (fileOpenness[file] == 2 ? 10 : 6);
-                }
-            }
-        }
-    }
-
-    // Enemy king
-    const int enemyKingSquare = ctx ? (attackingWhite ? ctx->whiteKingSq : ctx->blackKingSq) : board.pieces[attackingWhite ? 6 : 14].front();
-    const long long kingAttacks = AttackPlaces::KingAttackPlaces[enemyKingSquare] & zone.mask;
-    if (kingAttacks)
-    {
-        for (int i = 1; i < zone.count; i++)
-        {
-            if (kingAttacks & Option::PowerTwo[zone.squares[i]])
-            {
-                enemyAttacks[i]++;
-            }
-        }
-    }
-
-    // Friendly pawns
-    for (int square : board.pieces[whiteKing ? 1 : 9])
-    {
-        const long long attacks = PawnAttacksData.data[whiteKing ? 1 : 0][square] & zone.mask;
-        if (attacks)
-        {
-            defenderParticipation += defenderWeight[1];
-            defenderCount++;
-            for (int i = 1; i < zone.count; i++)
-            {
-                if (attacks & Option::PowerTwo[zone.squares[i]])
-                {
-                    friendlyDefenses[i]++;
-                }
-            }
-        }
-    }
-
-    // Friendly knights
-    for (int square : board.pieces[whiteKing ? 2 : 10])
-    {
-        const long long attacks = AttackPlaces::KnightAttackPlaces[square] & zone.mask;
-        if (attacks)
-        {
-            defenderParticipation += defenderWeight[2];
-            defenderCount++;
-            for (int i = 1; i < zone.count; i++)
-            {
-                if (attacks & Option::PowerTwo[zone.squares[i]])
-                {
-                    friendlyDefenses[i]++;
-                }
-            }
-        }
-    }
-
-    // Friendly bishops
-    for (int square : board.pieces[whiteKing ? 3 : 11])
-    {
-        if ((AttackPlaces::BishopPseudoAttacks[square] & zone.mask) == 0)
-            continue;
-        bool participates = false;
-        for (int i = 0; i < zone.count; i++)
-        {
-            const int target = zone.squares[i];
-            if (AttackPlaces::BishopAttack[square][target] != 0 &&
-                (AttackPlaces::BetweenMask[square][target] & occupiedSquares) == 0)
-            {
-                participates = true;
-                if (i > 0)
-                {
-                    friendlyDefenses[i]++;
-                }
-            }
-        }
-        if (participates)
-        {
-            defenderParticipation += defenderWeight[3];
-            defenderCount++;
-        }
-    }
-
-    // Friendly rooks
-    for (int square : board.pieces[whiteKing ? 4 : 12])
-    {
-        if ((AttackPlaces::RookPseudoAttacks[square] & zone.mask) == 0)
-            continue;
-        bool participates = false;
-        for (int i = 0; i < zone.count; i++)
-        {
-            const int target = zone.squares[i];
-            if (AttackPlaces::RookAttack[square][target] != 0 &&
-                (AttackPlaces::BetweenMask[square][target] & occupiedSquares) == 0)
-            {
-                participates = true;
-                if (i > 0)
-                {
-                    friendlyDefenses[i]++;
-                }
-            }
-        }
-        if (participates)
-        {
-            defenderParticipation += defenderWeight[4];
-            defenderCount++;
-        }
-    }
-
-    // Friendly queens
-    for (int square : board.pieces[whiteKing ? 5 : 13])
-    {
-        if ((AttackPlaces::QueenPseudoAttacks[square] & zone.mask) == 0)
-            continue;
-        bool participates = false;
-        for (int i = 0; i < zone.count; i++)
-        {
-            const int target = zone.squares[i];
-            if (AttackPlaces::QueenAttack[square][target] != 0 &&
-                (AttackPlaces::BetweenMask[square][target] & occupiedSquares) == 0)
-            {
-                participates = true;
-                if (i > 0)
-                {
-                    friendlyDefenses[i]++;
-                }
-            }
-        }
-        if (participates)
-        {
-            defenderParticipation += defenderWeight[5];
-            defenderCount++;
-        }
-    }
-
-    int safeEscapes = 0;
-    int controlledEscapes = 0;
-    int occupiedEscapes = 0;
+    const int enemyKingSquare = attackingWhite ? ctx->whiteKingSq : ctx->blackKingSq;
+    undefendedKingZoneDanger += __builtin_popcountll(ctx->attacks[enemyKingSquare] & undefended);
+    // On an undefended square, the old 2 + (attacks - 1) is attacks + 1.
+    // The union supplies the +1; each attacking piece supplies its own count.
+    const uint64_t ownOccupancy = whiteKing ? board.whitePieces : board.blackPieces;
+    const int occupiedEscapes = __builtin_popcountll(neighbours & ownOccupancy);
+    const int controlledEscapes = __builtin_popcountll(neighbours & ~ownOccupancy & enemyControl);
+    const int safeEscapes = zone.count - 1 - occupiedEscapes - controlledEscapes;
     const int edgeDirections = 9 - zone.count;
-    int undefendedKingZoneDanger = 0;
-    constexpr int UndefendedSquareDanger = 2;
-    constexpr int AdditionalAttackerDanger = 1;
-
-    for (int i = 1; i < zone.count; i++)
-    {
-        const int target = zone.squares[i];
-        const int occupant = board.mainBoard[target];
-        const bool occupiedByDefender = occupant != 0 && (occupant < 8) == whiteKing;
-        const int eAttacks = enemyAttacks[i];
-
-        if (occupiedByDefender)
-        {
-            occupiedEscapes++;
-        }
-        else if (eAttacks > 0)
-        {
-            controlledEscapes++;
-        }
-        else
-        {
-            safeEscapes++;
-        }
-
-        if (eAttacks > 0)
-        {
-            if (friendlyDefenses[i] == 0)
-            {
-                undefendedKingZoneDanger += UndefendedSquareDanger;
-                undefendedKingZoneDanger += (eAttacks - 1) * AdditionalAttackerDanger;
-            }
-        }
-    }
-
-    bool hasHeavyMatingBattery = false;
-    const int phaseVal = ctx ? ctx->phase : EvaluationLogic::CalculatePhase(board);
-    if (phaseVal >= 12 && attackerCount >= 2)
-    {
-        for (int i = 1; i < zone.count; i++)
-        {
-            if (enemyAttacks[i] >= 2 && friendlyDefenses[i] == 0)
-            {
-                const int target = zone.squares[i];
-                bool hasQ = false, hasR = false;
-                for (int qSq : board.pieces[attackingWhite ? 5 : 13])
-                {
-                    if (AttackPlaces::QueenAttack[qSq][target] != 0 && (AttackPlaces::BetweenMask[qSq][target] & occupiedSquares) == 0)
-                    {
-                        hasQ = true; break;
-                    }
-                }
-                for (int rSq : board.pieces[attackingWhite ? 4 : 12])
-                {
-                    if (AttackPlaces::RookAttack[rSq][target] != 0 && (AttackPlaces::BetweenMask[rSq][target] & occupiedSquares) == 0)
-                    {
-                        hasR = true; break;
-                    }
-                }
-                if (hasQ && hasR)
-                {
-                    hasHeavyMatingBattery = true;
-                    break;
-                }
-            }
-        }
-    }
-
+    const int phaseVal = ctx->phase;
+    const bool hasHeavyMatingBattery = phaseVal >= 12 && (queenHits & rookHits & undefended) != 0;
     const int escapeDanger = controlledEscapes * 6 + occupiedEscapes * 2 +
                              edgeDirections * 2 + std::max(0, 3 - safeEscapes) * 8;
     const int balanceDanger = std::max(0, attackerParticipation - defenderParticipation) +
@@ -1973,7 +1743,8 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const Evaluati
         else if (attackerParticipation >= 4)
         {
             // Single minor piece creating latent pressure against an exposed/central king, weak shelter, or undefended zone
-            const bool attackerContested = (loneAttackerSq >= 0 && BoardLogic::UnderAttack(board, loneAttackerSq, !whiteKing));
+            const bool attackerContested = loneAttackerSq >= 0 &&
+                (ctx->legacyAttacks[whiteKing ? 0 : 1] & Option::PowerTwo[loneAttackerSq]);
             if (!attackerContested)
             {
                 if (centralKing || shelterDanger >= 10 || undefendedKingZoneDanger > 0)
@@ -1993,7 +1764,8 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const Evaluati
 EvaluationChessCache EvaluationLogic::EvalCache;
 PawnCache EvaluationLogic::PawnEvalCache;
 
-int EvaluationLogic::CentralKingReadinessPenalty(Board& board, bool whiteKing, int phase)
+int EvaluationLogic::CentralKingReadinessPenalty(Board& board, bool whiteKing, int phase,
+                                                const EvaluationContext* ctx)
 {
     const int king = board.pieces[whiteKing ? 6 : 14].front();
     const int home = whiteKing ? 0 : 56;
@@ -2042,24 +1814,17 @@ int EvaluationLogic::CentralKingReadinessPenalty(Board& board, bool whiteKing, i
         return 0;
 
     // Include the nearby shelter squares, not just squares giving immediate check.
-    unsigned long long area = 0;
-    for (int target = 0; target < 64; ++target)
-        if (ChebyshevDistance(target, king) <= 2)
-            area |= 1ULL << target;
-    const auto pressuresArea = [&](int type, int from, long long occupancy) {
-        unsigned long long targets = area;
-        while (targets)
-        {
-            const int target = __builtin_ctzll(targets);
-            targets &= targets - 1;
-            if (PieceAttacksSquareFast(occupancy, type, enemyWhite, from, target))
-                return true;
-        }
-        return false;
+    const uint64_t area = CentralKingAttackPressure::KingLayers.inner[king] |
+                          CentralKingAttackPressure::KingLayers.outer[king];
+    const bool reuseAttacks = ctx != nullptr && ctx->attacksReady;
+    const auto pieceAttacks = [&](int type, int from, long long occupancy) -> uint64_t {
+        if (type == 2) return AttackPlaces::KnightAttackPlaces[from];
+        return EvaluationSliderAttacks(from, type, occupancy);
     };
     bool queenPressure = false;
     for (int queen : board.pieces[enemy + 5])
-        queenPressure |= ChebyshevDistance(queen, king) <= 4 && pressuresArea(5, queen, occupied);
+        queenPressure |= ChebyshevDistance(queen, king) <= 4 &&
+            ((reuseAttacks ? ctx->attacks[queen] : pieceAttacks(5, queen, occupied)) & area) != 0;
     if (!queenPressure)
         return 0;
 
@@ -2069,15 +1834,16 @@ int EvaluationLogic::CentralKingReadinessPenalty(Board& board, bool whiteKing, i
     {
         for (int from : board.pieces[enemy + type])
         {
-            if (pressuresArea(type, from, occupied))
+            const uint64_t attacks = reuseAttacks ? ctx->attacks[from] : pieceAttacks(type, from, occupied);
+            if (attacks & area)
                 continue;
-            for (int to = 0; to < 64; ++to)
+            uint64_t destinations = attacks & ~occupied;
+            while (destinations && !(reinforcement && developedCover))
             {
-                if ((occupied & Option::PowerTwo[to]) != 0 ||
-                    !PieceAttacksSquareFast(occupied, type, enemyWhite, from, to))
-                    continue;
+                const int to = __builtin_ctzll(destinations);
+                destinations &= destinations - 1;
                 const long long after = (occupied & ~Option::PowerTwo[from]) | Option::PowerTwo[to];
-                if (!pressuresArea(type, to, after) ||
+                if ((pieceAttacks(type, to, after) & area) == 0 ||
                     HasSideAttack(board, whiteKing, board.pieces[enemy + 6].front(), after))
                     continue;
                 // Useful developed defenders contest the actual reinforcement routes.
@@ -2421,9 +2187,10 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
 
     int phase = EvaluationLogic::CalculatePhase(thisBoard);
     EvaluationContext ctx(thisBoard, phase);
+    ctx.InitializeAttacks();
 
     // Movement
-    MovementResult moveRes = EvaluationLogic::PieceMoveCountFast(thisBoard, phase);
+    MovementResult moveRes = EvaluationLogic::PieceMoveCountFast(thisBoard, phase, ctx);
     int movement = moveRes.movement;
     int attackNet = moveRes.attackNet;
     int center = moveRes.center;
@@ -2431,8 +2198,8 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     int whiteRookFile = moveRes.whiteRookFile;
     int blackRookFile = moveRes.blackRookFile;
 
-    KingDangerResult whiteKingDanger = EvaluateKingDanger(thisBoard, true, &ctx);
-    KingDangerResult blackKingDanger = EvaluateKingDanger(thisBoard, false, &ctx);
+    KingDangerResult whiteKingDanger = EvaluateKingDanger(thisBoard, true, &ctx, breakdown != nullptr);
+    KingDangerResult blackKingDanger = EvaluateKingDanger(thisBoard, false, &ctx, breakdown != nullptr);
     int kingDangerNet = blackKingDanger.danger - whiteKingDanger.danger;
 
     int whiteKingSq = ctx.whiteKingSq;
@@ -2443,9 +2210,11 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
                               + Option::KingInValueBlackEndGame[blackKingSq] * (24 - phase)) / 24;
     int kingPlacementNet = whiteKingPlacement - blackKingPlacement;
     const CentralKingAttackPressure::Result whiteCentralPressure =
-        CentralKingAttackPressure::Evaluate(thisBoard, true, ctx.whitePawnFiles, ctx.blackPawnFiles);
+        CentralKingAttackPressure::Evaluate(thisBoard, true, ctx.whitePawnFiles, ctx.blackPawnFiles,
+                                           ctx.attacks, ctx.legacyAttacks);
     const CentralKingAttackPressure::Result blackCentralPressure =
-        CentralKingAttackPressure::Evaluate(thisBoard, false, ctx.whitePawnFiles, ctx.blackPawnFiles);
+        CentralKingAttackPressure::Evaluate(thisBoard, false, ctx.whitePawnFiles, ctx.blackPawnFiles,
+                                           ctx.attacks, ctx.legacyAttacks);
     const int centralPressureNet =
         whiteCentralPressure.contribution - blackCentralPressure.contribution;
 
@@ -2496,8 +2265,8 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     }
 
     int kingSafety = kingDangerNet + kingPlacementNet + centralPressureNet + pawnShieldNet + castledSecurityNet;
-    kingSafety += EvaluationLogic::CentralKingReadinessPenalty(thisBoard, false, phase) -
-                  EvaluationLogic::CentralKingReadinessPenalty(thisBoard, true, phase);
+    kingSafety += EvaluationLogic::CentralKingReadinessPenalty(thisBoard, false, phase, &ctx) -
+                  EvaluationLogic::CentralKingReadinessPenalty(thisBoard, true, phase, &ctx);
 
     // Pawn Structure
     int pawnBase = EvaluationLogic::GetPawnStructureValue(thisBoard, phase, &ctx);
@@ -2716,35 +2485,31 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int phase, const Ev
 {
     const long long whitePawns = thisBoard.whitePawns;
     const long long blackPawns = thisBoard.blackPawns;
-    int whitePawnPerColumn[8][8];
-    int whitePawnCountPerColumn[8] = {0};
-    int blackPawnPerColumn[8][8];
-    int blackPawnCountPerColumn[8] = {0};
-
-    for (int item : thisBoard.pieces[1])
-    {
-        int col = item % 8;
-        whitePawnPerColumn[col][whitePawnCountPerColumn[col]++] = item;
-    }
-    int doubledPawnValueWhite = 0;
-    for (int counter = 0; counter < 8; counter++)
-    {
-        if (whitePawnCountPerColumn[counter] > 1)
+    // File counts are shared with the context; connected doubled pawns can
+    // be detected for a whole file without materializing per-file square lists.
+    const auto doubledPenalty = [&](uint64_t pawns, int side) {
+        const uint64_t diagonalNeighbours =
+            ((pawns & ~0x8080808080808080ULL) << 9) |
+            ((pawns & ~0x0101010101010101ULL) << 7) |
+            ((pawns & ~0x0101010101010101ULL) >> 9) |
+            ((pawns & ~0x8080808080808080ULL) >> 7);
+        const uint64_t connected = pawns & diagonalNeighbours;
+        int total = 0;
+        for (int file = 0; file < 8; ++file)
         {
-            int penalty = Option::DoubledPawnValue * (whitePawnCountPerColumn[counter] - 1);
-            for (int k = 0; k < whitePawnCountPerColumn[counter]; ++k)
+            const uint64_t fileMask = 0x0101010101010101ULL << file;
+            const int count = ctx ? ctx->pawnFileCounts[side][file]
+                                  : __builtin_popcountll(pawns & fileMask);
+            if (count > 1)
             {
-                int psq = whitePawnPerColumn[counter][k];
-                if ((AttackPlaces::WhitePawnAttackPlaces[psq] & whitePawns) != 0 ||
-                    (AttackPlaces::BlackPawnAttackPlaces[psq] & whitePawns) != 0)
-                {
-                    penalty = penalty / 2;
-                    break;
-                }
+                int penalty = Option::DoubledPawnValue * (count - 1);
+                if (connected & fileMask) penalty /= 2;
+                total += penalty;
             }
-            doubledPawnValueWhite += penalty;
         }
-    }
+        return total;
+    };
+    const int doubledPawnValueWhite = doubledPenalty(whitePawns, 0);
     int singlePastWhite = 0;
     if (ctx != nullptr)
     {
@@ -2799,30 +2564,7 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int phase, const Ev
     }
     int whitePawnSum = doubledPawnValueWhite + singlePastWhite + isolatedPawnValueWhite + goForwardPawnWhite + pawnChainWhite;
 
-    for (int item : thisBoard.pieces[9])
-    {
-        int col = item % 8;
-        blackPawnPerColumn[col][blackPawnCountPerColumn[col]++] = item;
-    }
-    int doubledPawnValueBlack = 0;
-    for (int counter = 0; counter < 8; counter++)
-    {
-        if (blackPawnCountPerColumn[counter] > 1)
-        {
-            int penalty = Option::DoubledPawnValue * (blackPawnCountPerColumn[counter] - 1);
-            for (int k = 0; k < blackPawnCountPerColumn[counter]; ++k)
-            {
-                int psq = blackPawnPerColumn[counter][k];
-                if ((AttackPlaces::BlackPawnAttackPlaces[psq] & blackPawns) != 0 ||
-                    (AttackPlaces::WhitePawnAttackPlaces[psq] & blackPawns) != 0)
-                {
-                    penalty = penalty / 2;
-                    break;
-                }
-            }
-            doubledPawnValueBlack += penalty;
-        }
-    }
+    const int doubledPawnValueBlack = doubledPenalty(blackPawns, 1);
     int singlePastBlack = 0;
     if (ctx != nullptr)
     {
@@ -2916,9 +2658,13 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int phase, const Ev
 
 MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase)
 {
-    // int pieceMovePosition[2][3][64][7];
-    int whitePieceAttack[64] = {0};
-    int blackPieceAttack[64] = {0};
+    EvaluationContext ctx(thisBoard, phase);
+    ctx.InitializeAttacks();
+    return PieceMoveCountFast(thisBoard, phase, ctx);
+}
+
+MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase, const EvaluationContext& ctx)
+{
     long long whitePieces = thisBoard.whitePieces;
     long long blackPieces = thisBoard.blackPieces;
     int *mainBoard = thisBoard.mainBoard;
@@ -2930,10 +2676,19 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase)
     int whiteRookFileBonus = 0;
     int blackRookFileBonus = 0;
     int moveCount;
-    const long long bpa = ((thisBoard.blackPawns & ~0x0101010101010101ULL) >> 9) |
-                          ((thisBoard.blackPawns & ~0x8080808080808080ULL) >> 7);
-    const long long wpa = ((thisBoard.whitePawns & ~0x8080808080808080ULL) << 9) |
-                          ((thisBoard.whitePawns & ~0x0101010101010101ULL) << 7);
+    const long long bpa = ctx.pawnAttacks[1];
+    const long long wpa = ctx.pawnAttacks[0];
+    const auto centerSum = [](uint64_t attacks, bool black, int type, const int* values) {
+        attacks &= Option::MoveCenterNonzero[black ? 1 : 0][type];
+        int sum = 0;
+        while (attacks)
+        {
+            const int square = __builtin_ctzll(attacks);
+            attacks &= attacks - 1;
+            sum += values[square];
+        }
+        return sum;
+    };
     const auto taperedTable = [phase](const auto& values, int index)
     {
         return TaperEvaluationValue(values[0][index], values[2][index], phase);
@@ -3006,8 +2761,6 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase)
                 break;
             case 2:
             {
-                static const int knightOffsets[8] = {17, 10, 15, 6, -10, -17, -15, -6};
-                static const int knightDirs[8] = {0, 2, 4, 6, 8, 10, 12, 14};
                 uint64_t whiteOutpostHolesAwarded = 0;
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
@@ -3016,36 +2769,33 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase)
                     if (phase >= 16 && (piecePoisiion % 8 == 0 || piecePoisiion % 8 == 7)) movement -= 15;
                     movement += KnightOutpostValue(thisBoard, piecePoisiion, true, phase);
                     centerValue += Option::KnightInCenterValueWhite[piecePoisiion];
-                    for (int i = 0; i < 8; ++i)
+                    const uint64_t attacks = ctx.attacks[piecePoisiion];
+                    centerValue += centerSum(attacks, false, 2, Option::KnightMoveCenterValueWhite);
+                    moveCount = __builtin_popcountll(attacks & ~wholeBoard & ~bpa);
+                    uint64_t holes = attacks & ~wholeBoard & ~whiteOutpostHolesAwarded;
+                    while (holes)
                     {
-                        int endPlace = piecePoisiion + knightOffsets[i];
-                        int dir = knightDirs[i];
-                        if (PieceMoves::KnightMoves[piecePoisiion][dir] != nullptr)
+                        const int endPlace = __builtin_ctzll(holes);
+                        holes &= holes - 1;
+                        if (KnightOutpostAdvanced[1][endPlace] &&
+                            (KnightOutpostChallengeMask[1][endPlace] & thisBoard.blackPawns) == 0 &&
+                            (KnightOutpostSupportMask[1][endPlace] & thisBoard.whitePawns) != 0)
                         {
-                            centerValue += Option::KnightMoveCenterValueWhite[endPlace];
-                            if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                            {
-                                if ((Option::PowerTwo[endPlace] & bpa) == 0)
-                                    moveCount++;
-                                if ((whiteOutpostHolesAwarded & Option::PowerTwo[endPlace]) == 0 &&
-                                    KnightOutpostAdvanced[1][endPlace] &&
-                                    (KnightOutpostChallengeMask[1][endPlace] & thisBoard.blackPawns) == 0 &&
-                                    (KnightOutpostSupportMask[1][endPlace] & thisBoard.whitePawns) != 0)
-                                {
-                                    whiteOutpostHolesAwarded |= Option::PowerTwo[endPlace];
-                                    movement += TaperGroup1Value(10, 2, phase) * KnightOutpostFileScale[endPlace] / 100;
-                                }
-                            }
-                            else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                            {
-                                whiteAttackValue += taperedGroup1Table(Option::KnightAttackValue, mainBoard[endPlace]);
-                                if (mainBoard[endPlace] == 9 && !BoardLogic::UnderAttack(thisBoard, endPlace, true))
-                                {
-                                    int f = endPlace % 8, r = endPlace / 8;
-                                    bool isCentral = (f >= 2 && f <= 5 && r >= 2 && r <= 5);
-                                    whiteAttackValue += isCentral ? 32 : 16;
-                                }
-                            }
+                            whiteOutpostHolesAwarded |= Option::PowerTwo[endPlace];
+                            movement += TaperGroup1Value(10, 2, phase) * KnightOutpostFileScale[endPlace] / 100;
+                        }
+                    }
+                    uint64_t captures = attacks & blackPieces;
+                    while (captures)
+                    {
+                        const int endPlace = __builtin_ctzll(captures);
+                        captures &= captures - 1;
+                        whiteAttackValue += taperedGroup1Table(Option::KnightAttackValue, mainBoard[endPlace]);
+                        if (mainBoard[endPlace] == 9 &&
+                            (ctx.legacyAttacks[1] & Option::PowerTwo[endPlace]) == 0)
+                        {
+                            const int f = endPlace % 8, r = endPlace / 8;
+                            whiteAttackValue += (f >= 2 && f <= 5 && r >= 2 && r <= 5) ? 32 : 16;
                         }
                     }
                     movement += taperedGroup1Table(Option::KnightMoveCountValue, moveCount);
@@ -3058,34 +2808,20 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase)
                     moveCount = 0;
                     movement += taperedTable(Option::BishopInValueWhite, piecePoisiion);
                     centerValue += Option::BishopInCenterValueWhite[piecePoisiion];
-                    for (int d = 0; d < 4; d++)
+                    const uint64_t attacks = ctx.attacks[piecePoisiion];
+                    moveCount = __builtin_popcountll(attacks & ~wholeBoard & ~bpa);
+                    centerValue += centerSum(attacks, false, 3, Option::BishopMoveCenterValueWhite);
+                    uint64_t captures = attacks & blackPieces;
+                    while (captures)
                     {
-                        for (int k = 0; k < 8; k++)
+                        const int endPos = __builtin_ctzll(captures);
+                        captures &= captures - 1;
+                        const int endPiece = mainBoard[endPos];
+                        whiteAttackValue += taperedGroup1Table(Option::BishopAttackValue, endPiece);
+                        if (endPiece == 9 && (ctx.legacyAttacks[1] & Option::PowerTwo[endPos]) == 0)
                         {
-                            int endPos = PieceMoves::SliderRaySquares[0][piecePoisiion][d][k];
-                            if (endPos < 0) break;
-                            int endPiece = mainBoard[endPos];
-                            centerValue += Option::BishopMoveCenterValueWhite[endPos];
-                            if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                            {
-                                if ((Option::PowerTwo[endPos] & bpa) == 0)
-                                    moveCount++;
-                            }
-                            else if ((Option::PowerTwo[endPos] & blackPieces) != 0)
-                            {
-                                whiteAttackValue += taperedGroup1Table(Option::BishopAttackValue, endPiece);
-                                if (endPiece == 9 && !BoardLogic::UnderAttack(thisBoard, endPos, true))
-                                {
-                                    int f = endPos % 8, r = endPos / 8;
-                                    bool isCentral = (f >= 2 && f <= 5 && r >= 2 && r <= 5);
-                                    whiteAttackValue += isCentral ? 32 : 16;
-                                }
-                                break;
-                            }
-                            else
-                            {
-                                break;
-                            }
+                            const int f = endPos % 8, r = endPos / 8;
+                            whiteAttackValue += (f >= 2 && f <= 5 && r >= 2 && r <= 5) ? 32 : 16;
                         }
                     }
                     movement += taperedGroup1Table(Option::BishopMoveCountValue, moveCount);
@@ -3120,28 +2856,16 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase)
                     moveCount = 0;
                     movement += taperedGroup2Table(Option::RookInValueWhite, piecePoisiion);
                     centerValue += Option::RookInCenterValueWhite[piecePoisiion];
-                    for (int d = 0; d < 4; d++)
+                    const uint64_t attacks = ctx.attacks[piecePoisiion];
+                    moveCount = __builtin_popcountll(attacks & ~wholeBoard);
+                    centerValue += centerSum(attacks, false, 4, Option::RookMoveCenterValueWhite);
+                    uint64_t captures = attacks & blackPieces;
+                    while (captures)
                     {
-                        for (int k = 0; k < 8; k++)
-                        {
-                            int endPos = PieceMoves::SliderRaySquares[1][piecePoisiion][d][k];
-                            if (endPos < 0) break;
-                            int endPiece = mainBoard[endPos];
-                            centerValue += Option::RookMoveCenterValueWhite[endPos];
-                            if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                            {
-                                moveCount++;
-                            }
-                            else if ((Option::PowerTwo[endPos] & blackPieces) != 0)
-                            {
-                                whiteAttackValue += taperedGroup2Table(Option::RookAttackValue, endPiece);
-                                break;
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        }
+                        const int endPos = __builtin_ctzll(captures);
+                        captures &= captures - 1;
+                        const int endPiece = mainBoard[endPos];
+                        whiteAttackValue += taperedGroup2Table(Option::RookAttackValue, endPiece);
                     }
                     movement += taperedGroup2Table(Option::RookMoveCountValue, moveCount);
                 }
@@ -3166,56 +2890,36 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase)
                             }
                         }
                     }
-                    for (int d = 0; d < 8; d++)
+                    const uint64_t attacks = ctx.attacks[piecePoisiion];
+                    moveCount = __builtin_popcountll(attacks & ~wholeBoard);
+                    centerValue += centerSum(attacks, false, 5, Option::QueenMoveCenterValueWhite);
+                    uint64_t captures = attacks & blackPieces;
+                    while (captures)
                     {
-                        for (int k = 0; k < 8; k++)
-                        {
-                            int endPos = PieceMoves::SliderRaySquares[2][piecePoisiion][d][k];
-                            if (endPos < 0) break;
-                            int endPiece = mainBoard[endPos];
-                            centerValue += Option::QueenMoveCenterValueWhite[endPos];
-                            if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                            {
-                                moveCount++;
-                            }
-                            else if ((Option::PowerTwo[endPos] & blackPieces) != 0)
-                            {
-                                whiteAttackValue += taperedGroup1Table(Option::QueenAttackValue, endPiece);
-                                break;
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        }
+                        const int endPos = __builtin_ctzll(captures);
+                        captures &= captures - 1;
+                        const int endPiece = mainBoard[endPos];
+                        whiteAttackValue += taperedGroup1Table(Option::QueenAttackValue, endPiece);
                     }
                     movement += taperedGroup1Table(Option::QueenMoveCountValue, moveCount);
                 }
                 break;
             case 6:
-                static const int kingOffsets[8] = {7, 8, 9, 1, -7, -8, -9, -1};
-                static const int kingDirs[8] = {0, 2, 4, 6, 8, 10, 12, 14};
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
                     moveCount = 0;
                     movement += taperedTable(Option::KingInValueWhite, piecePoisiion);
                     centerValue += Option::KingInCenterValueWhite[piecePoisiion];
-                    for (int i = 0; i < 8; ++i)
+                    const uint64_t attacks = ctx.attacks[piecePoisiion];
+                    moveCount = __builtin_popcountll(attacks & ~wholeBoard);
+                    centerValue += centerSum(attacks, false, 6, Option::KingMoveCenterValueWhite);
+                    uint64_t captures = attacks & blackPieces;
+                    while (captures)
                     {
-                        int endPlace = piecePoisiion + kingOffsets[i];
-                        int dir = kingDirs[i];
-                        if (PieceMoves::WhiteKingMoves[piecePoisiion][dir] != nullptr)
-                        {
-                            centerValue += Option::KingMoveCenterValueWhite[endPlace];
-                            if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                            {
-                                moveCount++;
-                            }
-                            else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                            {
-                                whiteAttackValue += taperedTable(Option::KingAttackValue, mainBoard[endPlace]);
-                            }
-                        }
+                        const int endPos = __builtin_ctzll(captures);
+                        captures &= captures - 1;
+                        const int endPiece = mainBoard[endPos];
+                        whiteAttackValue += taperedTable(Option::KingAttackValue, endPiece);
                     }
                     movement += taperedTable(Option::KingMoveCountValue, moveCount);
                 }
@@ -3283,8 +2987,6 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase)
                 break;
             case 10:
             {
-                static const int knightOffsets[8] = {17, 10, 15, 6, -10, -17, -15, -6};
-                static const int knightDirs[8] = {0, 2, 4, 6, 8, 10, 12, 14};
                 uint64_t blackOutpostHolesAwarded = 0;
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
@@ -3293,36 +2995,33 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase)
                     if (phase >= 16 && (piecePoisiion % 8 == 0 || piecePoisiion % 8 == 7)) movement += 15;
                     movement -= KnightOutpostValue(thisBoard, piecePoisiion, false, phase);
                     centerValue -= Option::KnightInCenterValueBlack[piecePoisiion];
-                    for (int i = 0; i < 8; ++i)
+                    const uint64_t attacks = ctx.attacks[piecePoisiion];
+                    centerValue -= centerSum(attacks, true, 2, Option::KnightMoveCenterValueBlack);
+                    moveCount = __builtin_popcountll(attacks & ~wholeBoard & ~wpa);
+                    uint64_t holes = attacks & ~wholeBoard & ~blackOutpostHolesAwarded;
+                    while (holes)
                     {
-                        int endPlace = piecePoisiion + knightOffsets[i];
-                        int dir = knightDirs[i];
-                        if (PieceMoves::KnightMoves[piecePoisiion][dir] != nullptr)
+                        const int endPlace = __builtin_ctzll(holes);
+                        holes &= holes - 1;
+                        if (KnightOutpostAdvanced[0][endPlace] &&
+                            (KnightOutpostChallengeMask[0][endPlace] & thisBoard.whitePawns) == 0 &&
+                            (KnightOutpostSupportMask[0][endPlace] & thisBoard.blackPawns) != 0)
                         {
-                            centerValue -= Option::KnightMoveCenterValueBlack[endPlace];
-                            if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                            {
-                                if ((Option::PowerTwo[endPlace] & wpa) == 0)
-                                    moveCount++;
-                                if ((blackOutpostHolesAwarded & Option::PowerTwo[endPlace]) == 0 &&
-                                    KnightOutpostAdvanced[0][endPlace] &&
-                                    (KnightOutpostChallengeMask[0][endPlace] & thisBoard.whitePawns) == 0 &&
-                                    (KnightOutpostSupportMask[0][endPlace] & thisBoard.blackPawns) != 0)
-                                {
-                                    blackOutpostHolesAwarded |= Option::PowerTwo[endPlace];
-                                    movement -= TaperGroup1Value(10, 2, phase) * KnightOutpostFileScale[endPlace] / 100;
-                                }
-                            }
-                            else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                            {
-                                blackAttackValue += taperedGroup1Table(Option::KnightAttackValue, mainBoard[endPlace]);
-                                if (mainBoard[endPlace] == 1 && !BoardLogic::UnderAttack(thisBoard, endPlace, false))
-                                {
-                                    int f = endPlace % 8, r = endPlace / 8;
-                                    bool isCentral = (f >= 2 && f <= 5 && r >= 2 && r <= 5);
-                                    blackAttackValue += isCentral ? 32 : 16;
-                                }
-                            }
+                            blackOutpostHolesAwarded |= Option::PowerTwo[endPlace];
+                            movement -= TaperGroup1Value(10, 2, phase) * KnightOutpostFileScale[endPlace] / 100;
+                        }
+                    }
+                    uint64_t captures = attacks & whitePieces;
+                    while (captures)
+                    {
+                        const int endPlace = __builtin_ctzll(captures);
+                        captures &= captures - 1;
+                        blackAttackValue += taperedGroup1Table(Option::KnightAttackValue, mainBoard[endPlace]);
+                        if (mainBoard[endPlace] == 1 &&
+                            (ctx.legacyAttacks[0] & Option::PowerTwo[endPlace]) == 0)
+                        {
+                            const int f = endPlace % 8, r = endPlace / 8;
+                            blackAttackValue += (f >= 2 && f <= 5 && r >= 2 && r <= 5) ? 32 : 16;
                         }
                     }
                     movement -= taperedGroup1Table(Option::KnightMoveCountValue, moveCount);
@@ -3336,34 +3035,20 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase)
                     movement -= taperedTable(Option::BishopInValueBlack, piecePoisiion);
                     centerValue -= Option::BishopInCenterValueBlack[piecePoisiion];
 
-                    for (int d = 0; d < 4; d++)
+                    const uint64_t attacks = ctx.attacks[piecePoisiion];
+                    moveCount = __builtin_popcountll(attacks & ~wholeBoard & ~wpa);
+                    centerValue -= centerSum(attacks, true, 3, Option::BishopMoveCenterValueBlack);
+                    uint64_t captures = attacks & whitePieces;
+                    while (captures)
                     {
-                        for (int k = 0; k < 8; k++)
+                        const int endPos = __builtin_ctzll(captures);
+                        captures &= captures - 1;
+                        const int endPiece = mainBoard[endPos];
+                        blackAttackValue += taperedGroup1Table(Option::BishopAttackValue, endPiece);
+                        if (endPiece == 1 && (ctx.legacyAttacks[0] & Option::PowerTwo[endPos]) == 0)
                         {
-                            int endPos = PieceMoves::SliderRaySquares[0][piecePoisiion][d][k];
-                            if (endPos < 0) break;
-                            int endPiece = mainBoard[endPos];
-                            centerValue -= Option::BishopMoveCenterValueBlack[endPos];
-                            if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                            {
-                                if ((Option::PowerTwo[endPos] & wpa) == 0)
-                                    moveCount++;
-                            }
-                            else if ((Option::PowerTwo[endPos] & whitePieces) != 0)
-                            {
-                                blackAttackValue += taperedGroup1Table(Option::BishopAttackValue, endPiece);
-                                if (endPiece == 1 && !BoardLogic::UnderAttack(thisBoard, endPos, false))
-                                {
-                                    int f = endPos % 8, r = endPos / 8;
-                                    bool isCentral = (f >= 2 && f <= 5 && r >= 2 && r <= 5);
-                                    blackAttackValue += isCentral ? 32 : 16;
-                                }
-                                break;
-                            }
-                            else
-                            {
-                                break;
-                            }
+                            const int f = endPos % 8, r = endPos / 8;
+                            blackAttackValue += (f >= 2 && f <= 5 && r >= 2 && r <= 5) ? 32 : 16;
                         }
                     }
                     movement -= taperedGroup1Table(Option::BishopMoveCountValue, moveCount);
@@ -3399,28 +3084,16 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase)
                     movement -= taperedGroup2Table(Option::RookInValueBlack, piecePoisiion);
                     centerValue -= Option::RookInCenterValueBlack[piecePoisiion];
 
-                    for (int d = 0; d < 4; d++)
+                    const uint64_t attacks = ctx.attacks[piecePoisiion];
+                    moveCount = __builtin_popcountll(attacks & ~wholeBoard);
+                    centerValue -= centerSum(attacks, true, 4, Option::RookMoveCenterValueBlack);
+                    uint64_t captures = attacks & whitePieces;
+                    while (captures)
                     {
-                        for (int k = 0; k < 8; k++)
-                        {
-                            int endPos = PieceMoves::SliderRaySquares[1][piecePoisiion][d][k];
-                            if (endPos < 0) break;
-                            int endPiece = mainBoard[endPos];
-                            centerValue -= Option::RookMoveCenterValueBlack[endPos];
-                            if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                            {
-                                moveCount++;
-                            }
-                            else if ((Option::PowerTwo[endPos] & whitePieces) != 0)
-                            {
-                                blackAttackValue += taperedGroup2Table(Option::RookAttackValue, endPiece);
-                                break;
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        }
+                        const int endPos = __builtin_ctzll(captures);
+                        captures &= captures - 1;
+                        const int endPiece = mainBoard[endPos];
+                        blackAttackValue += taperedGroup2Table(Option::RookAttackValue, endPiece);
                     }
                     movement -= taperedGroup2Table(Option::RookMoveCountValue, moveCount);
                 }
@@ -3446,56 +3119,36 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase)
                         }
                     }
 
-                    for (int d = 0; d < 8; d++)
+                    const uint64_t attacks = ctx.attacks[piecePoisiion];
+                    moveCount = __builtin_popcountll(attacks & ~wholeBoard);
+                    centerValue -= centerSum(attacks, true, 5, Option::QueenMoveCenterValueBlack);
+                    uint64_t captures = attacks & whitePieces;
+                    while (captures)
                     {
-                        for (int k = 0; k < 8; k++)
-                        {
-                            int endPos = PieceMoves::SliderRaySquares[2][piecePoisiion][d][k];
-                            if (endPos < 0) break;
-                            int endPiece = mainBoard[endPos];
-                            centerValue -= Option::QueenMoveCenterValueBlack[endPos];
-                            if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                            {
-                                moveCount++;
-                            }
-                            else if ((Option::PowerTwo[endPos] & whitePieces) != 0)
-                            {
-                                blackAttackValue += taperedGroup1Table(Option::QueenAttackValue, endPiece);
-                                break;
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        }
+                        const int endPos = __builtin_ctzll(captures);
+                        captures &= captures - 1;
+                        const int endPiece = mainBoard[endPos];
+                        blackAttackValue += taperedGroup1Table(Option::QueenAttackValue, endPiece);
                     }
                     movement -= taperedGroup1Table(Option::QueenMoveCountValue, moveCount);
                 }
                 break;
             case 14:
-                static const int kingOffsets[8] = {7, 8, 9, 1, -7, -8, -9, -1};
-                static const int kingDirs[8] = {0, 2, 4, 6, 8, 10, 12, 14};
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
                     moveCount = 0;
                     movement -= taperedTable(Option::KingInValueBlack, piecePoisiion);
                     centerValue -= Option::KingInCenterValueBlack[piecePoisiion];
-                    for (int i = 0; i < 8; ++i)
+                    const uint64_t attacks = ctx.attacks[piecePoisiion];
+                    moveCount = __builtin_popcountll(attacks & ~wholeBoard);
+                    centerValue -= centerSum(attacks, true, 6, Option::KingMoveCenterValueBlack);
+                    uint64_t captures = attacks & whitePieces;
+                    while (captures)
                     {
-                        int endPlace = piecePoisiion + kingOffsets[i];
-                        int dir = kingDirs[i];
-                        if (PieceMoves::BlackKingMoves[piecePoisiion][dir] != nullptr)
-                        {
-                            centerValue -= Option::KingMoveCenterValueBlack[endPlace];
-                            if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                            {
-                                moveCount++;
-                            }
-                            else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                            {
-                                blackAttackValue += taperedTable(Option::KingAttackValue, mainBoard[endPlace]);
-                            }
-                        }
+                        const int endPos = __builtin_ctzll(captures);
+                        captures &= captures - 1;
+                        const int endPiece = mainBoard[endPos];
+                        blackAttackValue += taperedTable(Option::KingAttackValue, endPiece);
                     }
                     movement -= taperedTable(Option::KingMoveCountValue, moveCount);
                 }
@@ -3723,7 +3376,7 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase)
                 }
             }
             if (attackedByQ) {
-                bool defended = BoardLogic::UnderAttack(thisBoard, sq, false);
+                bool defended = ((ctx.legacyAttacks[0] & Option::PowerTwo[sq]) != 0);
                 if (!defended) {
                     movement -= 40;
                 } else {
@@ -3746,7 +3399,7 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase)
                 }
             }
             if (attackedByQ) {
-                bool defended = BoardLogic::UnderAttack(thisBoard, sq, true);
+                bool defended = ((ctx.legacyAttacks[1] & Option::PowerTwo[sq]) != 0);
                 if (!defended) {
                     movement += 40;
                 } else {

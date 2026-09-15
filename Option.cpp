@@ -631,6 +631,7 @@ int Option::QueenInValueWhite[3][64] = {{0}};
 int Option::KingInValueWhite[3][64] = {{0}};
 
 int Option::PawnMoveCenterValueBlack[64] = {0};
+unsigned long long Option::MoveCenterNonzero[2][7] = {};
 int Option::PawnInCenterValueBlack[64] = {0};
 int Option::KnightMoveCenterValueBlack[64] = {0};
 int Option::KnightInCenterValueBlack[64] = {0};
@@ -893,6 +894,16 @@ void Option::Initialize()
             QueenMoveCenterValueBlack[counter] = QueenMoveCenterValueWhite[(7 - (counter / 8)) * 8 + counter % 8];
             KingInCenterValueBlack[counter] = KingInCenterValueWhite[(7 - (counter / 8)) * 8 + counter % 8];
             KingMoveCenterValueBlack[counter] = KingMoveCenterValueWhite[(7 - (counter / 8)) * 8 + counter % 8];
+            const int* centerValues[2][7] = {
+                {nullptr, PawnMoveCenterValueWhite, KnightMoveCenterValueWhite, BishopMoveCenterValueWhite,
+                 RookMoveCenterValueWhite, QueenMoveCenterValueWhite, KingMoveCenterValueWhite},
+                {nullptr, PawnMoveCenterValueBlack, KnightMoveCenterValueBlack, BishopMoveCenterValueBlack,
+                 RookMoveCenterValueBlack, QueenMoveCenterValueBlack, KingMoveCenterValueBlack}
+            };
+            for (int side = 0; side < 2; ++side)
+                for (int type = 1; type <= 6; ++type)
+                    if (centerValues[side][type][counter] != 0)
+                        MoveCenterNonzero[side][type] |= 1ULL << counter;
             BlackKingPlacePawnShieldMiddleGame[counter] = WhiteKingPlacePawnShieldMiddleGame[(7 - (counter / 8)) * 8 + counter % 8];
             BlackKingPlaceSafetyMiddleGame[counter] = WhiteKingPlaceSafetyMiddleGame[(7 - (counter / 8)) * 8 + counter % 8];
             PawnInValueBlackMiddleGame[counter] = PawnInValueWhiteMiddleGame[(7 - (counter / 8)) * 8 + counter % 8];

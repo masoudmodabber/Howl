@@ -144,7 +144,17 @@ struct EvaluationContext
     int blackPassers[8] = {0};
     int blackPasserCount = 0;
 
+    uint64_t occupancy = 0;
+    uint64_t attacks[64]; // Only occupied squares are read.
+    uint64_t sideAttacks[2] = {0, 0}; // White, black; geometric attacks.
+    uint64_t nonKingAttacks[2] = {0, 0};
+    uint64_t legacyAttacks[2] = {0, 0}; // BoardLogic::UnderAttack semantics.
+    uint64_t pawnAttacks[2] = {0, 0};
+    uint8_t pawnFileCounts[2][8] = {};
+    bool attacksReady = false;
+
     EvaluationContext(Board& b, int p);
+    void InitializeAttacks();
 };
 
 class EvaluationLogic
@@ -153,10 +163,12 @@ public:
     static int CalculatePhase(const Board& thisBoard);
     static int Evaluate(Board& thisBoard);
     static EvaluationBreakdown EvaluateDetailed(Board& thisBoard);
-    static int CentralKingReadinessPenalty(Board& board, bool whiteKing, int phase);
+    static int CentralKingReadinessPenalty(Board& board, bool whiteKing, int phase,
+                                           const EvaluationContext* ctx = nullptr);
     static int GetPawnStructureValue(Board& thisBoard, int phase, const EvaluationContext* ctx = nullptr);
     static int* PieceMoveCount(Board& thisBoard, int phase);
     static MovementResult PieceMoveCountFast(Board& thisBoard, int phase);
+    static MovementResult PieceMoveCountFast(Board& thisBoard, int phase, const EvaluationContext& ctx);
     static std::size_t EvalCacheSize();
     static std::size_t EvalCacheCapacityBytes();
     static std::size_t EvalCacheEntryCapacity();

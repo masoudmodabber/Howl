@@ -24,6 +24,27 @@ struct AttackerState {
     int orderingScores[64] = {};
 };
 
+class MoveGenContext
+{
+public:
+    explicit MoveGenContext(Board& board);
+
+    bool BuildMove(int from, int to, int promotionPiece, Move& move) const;
+    bool IsLegal(const Move& move) const;
+    bool GivesCheck(const Move& move) const;
+    const AttackerState& WhiteAttacker();
+    const AttackerState& BlackAttacker();
+
+private:
+    Board& board;
+    long long occupancy;
+    bool movingWhite;
+    int kingSquare;
+    bool attackersReady = false;
+    AttackerState whiteAttacker{};
+    AttackerState blackAttacker{};
+};
+
 class MoveLogic
 {
 public:
@@ -34,6 +55,7 @@ public:
     static MoveList MaterializeStage2(Board &thisBoard, int depth, int depthGone, const DeferredMove* deferredMoves, int deferredCount);
     static bool HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int depthGone);
     static void ScoreAndSortMoves(Board& thisBoard, MoveList& moveList, int depth, int depthGone, const AttackerState& whiteAttacker, const AttackerState& blackAttacker);
+    static void ScoreMove(Board& thisBoard, Move& move, const AttackerState& whiteAttacker, const AttackerState& blackAttacker);
     static AttackerState SetWhiteAttacker(Board &thisBoard);
     static AttackerState SetBlackAttacker(Board &thisBoard);
     static Move *MoveCopy(Move *move);
