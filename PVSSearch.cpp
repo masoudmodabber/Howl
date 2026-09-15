@@ -164,22 +164,17 @@ namespace
         MovePicker(Board& boardValue, int depthValue, int depthGoneValue,
                    int turnValue, const Move& previousMoveValue,
                    uint16_t ttMoveValue)
-            : board(boardValue), context(boardValue), depth(depthValue),
-              depthGone(depthGoneValue), turn(turnValue),
-              previousMove(previousMoveValue)
+            : board(boardValue), depth(depthValue), depthGone(depthGoneValue),
+              turn(turnValue), previousMove(previousMoveValue), packedTTMove(ttMoveValue) {}
+
+        ~MovePicker()
         {
-            if (ttMoveValue != 0)
-            {
-                Move move{};
-                if (context.BuildMove(TTMoveHelper::UnpackFrom(ttMoveValue),
-                                      TTMoveHelper::UnpackTo(ttMoveValue),
-                                      TTMoveHelper::UnpackPromotion(ttMoveValue), move))
-                {
-                    ttEntry = Add(move, 0);
-                    hasTTMove = true;
-                }
-            }
+            for (int i = 0; i < entryCount; ++i)
+                delete entries[i].move;
         }
+
+        MovePicker(const MovePicker&) = delete;
+        MovePicker& operator=(const MovePicker&) = delete;
 
         Move* Next()
         {
@@ -189,6 +184,7 @@ namespace
                 {
                 case Stage::TT:
                     stage = Stage::GoodTactical;
+                    PrepareTT();
                     if (ttEntry >= 0)
                         return MarkReturned(ttEntry);
                     break;
@@ -204,13 +200,20 @@ namespace
                         return move;
                     break;
                 case Stage::KillerTwo:
-                    stage = Stage::Quiets;
+                    stage = Stage::StrongQuiets;
                     if (Move* move = BuildKiller(1))
                         return move;
                     break;
-                case Stage::Quiets:
-                    GenerateQuiets();
-                    if (Move* move = Select(quiets, quietCount, quietCursor))
+                case Stage::StrongQuiets:
+                    ScoreAndClassifyQuiets();
+                    if (Move* move = Select(strongQuiets, strongQuietCount, strongQuietCursor))
+                        return move;
+                    stage = Stage::RemainingQuiets;
+                    break;
+                case Stage::RemainingQuiets:
+                    ScoreAndClassifyQuiets();
+                    if (Move* move = Select(remainingQuiets, remainingQuietCount,
+                                            remainingQuietCursor))
                         return move;
                     stage = Stage::BadTactical;
                     break;
@@ -226,15 +229,20 @@ namespace
             }
         }
 
-        bool HasTTMove() const { return hasTTMove; }
+        bool HasTTMove()
+        {
+            PrepareTT();
+            return ttEntry >= 0;
+        }
         int GeneratedCount() const { return entryCount; }
 
     private:
         struct Entry
         {
-            Move move{};
+            Move* move = nullptr;
             int key = 0;
             bool returned = false;
+            bool scored = false;
         };
 
         enum class Stage : uint8_t
@@ -243,44 +251,44 @@ namespace
             GoodTactical,
             KillerOne,
             KillerTwo,
-            Quiets,
+            StrongQuiets,
+            RemainingQuiets,
             BadTactical,
             Done
         };
 
-        static bool SameMove(const Move& a, const Move& b)
+        bool MatchesTT(const Move& move) const
         {
-            return a.beginPlace == b.beginPlace && a.endPlace == b.endPlace &&
-                   (a.promotionPiece > 0 ? a.promotionPiece : 0) ==
-                   (b.promotionPiece > 0 ? b.promotionPiece : 0);
+            if (packedTTMove == 0)
+                return false;
+            return move.beginPlace == TTMoveHelper::UnpackFrom(packedTTMove) &&
+                   move.endPlace == TTMoveHelper::UnpackTo(packedTTMove) &&
+                   (move.promotionPiece > 0 ? move.promotionPiece : 0) ==
+                       TTMoveHelper::UnpackPromotion(packedTTMove);
         }
 
-        bool AlreadyReturned(const Move& move) const
-        {
-            for (int i = 0; i < entryCount; ++i)
-                if (entries[i].returned && SameMove(entries[i].move, move))
-                    return true;
-            return false;
-        }
-
-        int Add(const Move& source, int key)
+        int Add(Move* move)
         {
             if (entryCount >= static_cast<int>(entries.size()))
+            {
+                delete move;
                 return -1;
+            }
             Entry& entry = entries[entryCount];
-            entry.move = source;
-            entry.move.depth = depth;
-            entry.move.depthGone = depthGone;
-            entry.move.moveCount = Search::moveCount;
-            entry.key = key;
+            entry.move = move;
+            entry.move->depth = depth;
+            entry.move->depthGone = depthGone;
+            entry.move->moveCount = Search::moveCount;
             entry.returned = false;
+            entry.scored = false;
             return entryCount++;
         }
 
         Move* MarkReturned(int index)
         {
             entries[index].returned = true;
-            return &entries[index].move;
+            Score(index);
+            return entries[index].move;
         }
 
         Move* Select(std::array<int, 256>& indices, int count, int& cursor)
@@ -290,11 +298,57 @@ namespace
             int best = cursor;
             for (int i = cursor + 1; i < count; ++i)
             {
-                if (entries[indices[i]].key > entries[indices[best]].key)
+                if (entries[indices[i]].returned)
+                    continue;
+                if (entries[indices[best]].returned ||
+                    entries[indices[i]].key > entries[indices[best]].key)
                     best = i;
             }
             std::swap(indices[cursor], indices[best]);
-            return MarkReturned(indices[cursor++]);
+            const int index = indices[cursor++];
+            return entries[index].returned ? Select(indices, count, cursor) : MarkReturned(index);
+        }
+
+        void EnsureAttackers()
+        {
+            if (attackersReady)
+                return;
+            whiteAttacker = MoveLogic::SetWhiteAttacker(board);
+            blackAttacker = MoveLogic::SetBlackAttacker(board);
+            attackersReady = true;
+        }
+
+        void Score(int index)
+        {
+            Entry& entry = entries[index];
+            if (entry.scored)
+                return;
+            EnsureAttackers();
+            entry.move->givesCheck = MoveLogic::MoveGivesCheck(board, *entry.move);
+            MoveLogic::ScoreMove(board, *entry.move, whiteAttacker, blackAttacker);
+            entry.scored = true;
+        }
+
+        bool TTHintIsTactical() const
+        {
+            if (packedTTMove == 0)
+                return false;
+            const int from = TTMoveHelper::UnpackFrom(packedTTMove);
+            const int to = TTMoveHelper::UnpackTo(packedTTMove);
+            if (TTMoveHelper::UnpackPromotion(packedTTMove) != 0 || board.mainBoard[to] != 0)
+                return true;
+            return board.mainBoard[from] % 8 == 1 && to == board.unpassentPlace;
+        }
+
+        void PrepareTT()
+        {
+            if (ttPrepared || packedTTMove == 0)
+                return;
+            ttPrepared = true;
+            if (TTHintIsTactical())
+                GenerateTactical();
+            else
+                GenerateQuietPseudoMoves();
         }
 
         void GenerateTactical()
@@ -306,49 +360,51 @@ namespace
             AttackerState emptyBlack{};
             MoveList generated = MoveLogic::MoveGenerator(
                 board, depth, depthGone, true, false, emptyWhite, emptyBlack, false);
-            const AttackerState& whiteAttacker = context.WhiteAttacker();
-            const AttackerState& blackAttacker = context.BlackAttacker();
             for (int i = 0; i < generated.count; ++i)
             {
                 Move* candidate = generated.moves[i];
-                if (!AlreadyReturned(*candidate) && context.IsLegal(*candidate))
+                if (candidate->endPiece % 8 == 6)
                 {
-                    candidate->givesCheck = context.GivesCheck(*candidate);
-                    MoveLogic::ScoreMove(board, *candidate, whiteAttacker, blackAttacker);
-                    const int key = candidate->value +
-                        (candidate->givesCheck ? CheckOrderingBonus : 0);
-                    const int index = Add(*candidate, key);
-                    if (index >= 0)
-                    {
-                        if (candidate->value >= 0)
-                            goodTactical[goodCount++] = index;
-                        else
-                            badTactical[badCount++] = index;
-                    }
+                    delete candidate;
+                    continue;
                 }
-                delete candidate;
+                const int index = Add(candidate);
+                if (index >= 0)
+                {
+                    Score(index);
+                    entries[index].key = BasePvsOrderingScore(entries[index].move);
+                    if (MatchesTT(*entries[index].move))
+                        ttEntry = index;
+                    if (entries[index].move->value >= 0)
+                        goodTactical[goodCount++] = index;
+                    else
+                        badTactical[badCount++] = index;
+                }
             }
         }
 
         Move* BuildKiller(int killerIndex)
         {
+            GenerateQuietPseudoMoves();
             if (depthGone < 0 || depthGone >= PVSSearch::MaxKillerPly)
                 return nullptr;
             const PVSSearch::KillerMove& killer = PVSSearch::killers[depthGone][killerIndex];
             if (!killer.isValid())
                 return nullptr;
-            Move move{};
-            if (!context.BuildMove(killer.beginPlace, killer.endPlace,
-                                   killer.promotionPiece, move) || !IsQuietMove(move) ||
-                AlreadyReturned(move))
-                return nullptr;
-            const int key = (killerIndex == 0 ? 500000 : 400000) +
-                (move.givesCheck ? CheckOrderingBonus : 0);
-            const int index = Add(move, key);
-            return index >= 0 ? MarkReturned(index) : nullptr;
+            for (int i = 0; i < quietEntryCount; ++i)
+            {
+                const int index = quietEntries[i];
+                if (!entries[index].returned &&
+                    entries[index].move->beginPlace == killer.beginPlace &&
+                    entries[index].move->endPlace == killer.endPlace &&
+                    (entries[index].move->promotionPiece > 0
+                         ? entries[index].move->promotionPiece : 0) == killer.promotionPiece)
+                    return MarkReturned(index);
+            }
+            return nullptr;
         }
 
-        void GenerateQuiets()
+        void GenerateQuietPseudoMoves()
         {
             if (quietsGenerated)
                 return;
@@ -357,47 +413,92 @@ namespace
             AttackerState emptyBlack{};
             MoveList generated = MoveLogic::MoveGenerator(
                 board, depth, depthGone, false, false, emptyWhite, emptyBlack, true);
-            const AttackerState& whiteAttacker = context.WhiteAttacker();
-            const AttackerState& blackAttacker = context.BlackAttacker();
             for (int i = 0; i < generated.count; ++i)
             {
                 Move* candidate = generated.moves[i];
-                if (IsQuietMove(*candidate) && !AlreadyReturned(*candidate) &&
-                    context.IsLegal(*candidate))
+                if (IsQuietMove(*candidate))
                 {
-                    candidate->givesCheck = context.GivesCheck(*candidate);
-                    MoveLogic::ScoreMove(board, *candidate, whiteAttacker, blackAttacker);
-                    const int key = 100000 + CombinedHistoryScore(turn, previousMove, *candidate) +
-                        BasePvsOrderingScore(candidate);
-                    const int index = Add(*candidate, key);
+                    const int index = Add(candidate);
                     if (index >= 0)
-                        quiets[quietCount++] = index;
+                    {
+                        quietEntries[quietEntryCount++] = index;
+                        if (MatchesTT(*entries[index].move))
+                            ttEntry = index;
+                    }
                 }
-                delete candidate;
+                else
+                    delete candidate;
+            }
+        }
+
+        bool IsKiller(const Move& move) const
+        {
+            if (depthGone < 0 || depthGone >= PVSSearch::MaxKillerPly)
+                return false;
+            for (int i = 0; i < 2; ++i)
+            {
+                const PVSSearch::KillerMove& killer = PVSSearch::killers[depthGone][i];
+                if (killer.isValid() && move.beginPlace == killer.beginPlace &&
+                    move.endPlace == killer.endPlace &&
+                    (move.promotionPiece > 0 ? move.promotionPiece : 0) ==
+                        killer.promotionPiece)
+                    return true;
+            }
+            return false;
+        }
+
+        void ScoreAndClassifyQuiets()
+        {
+            if (quietsScored)
+                return;
+            quietsScored = true;
+            GenerateQuietPseudoMoves();
+            for (int i = 0; i < quietEntryCount; ++i)
+            {
+                const int index = quietEntries[i];
+                if (entries[index].returned || IsKiller(*entries[index].move))
+                    continue;
+                Score(index);
+                entries[index].key = 100000 +
+                    CombinedHistoryScore(turn, previousMove, *entries[index].move) +
+                    BasePvsOrderingScore(entries[index].move);
+                if (entries[index].key >= 100000)
+                    strongQuiets[strongQuietCount++] = index;
+                else
+                    remainingQuiets[remainingQuietCount++] = index;
             }
         }
 
         Board& board;
-        MoveGenContext context;
         int depth;
         int depthGone;
         int turn;
         const Move& previousMove;
+        uint16_t packedTTMove;
         std::array<Entry, 256> entries{};
         std::array<int, 256> goodTactical{};
         std::array<int, 256> badTactical{};
-        std::array<int, 256> quiets{};
+        std::array<int, 256> quietEntries{};
+        std::array<int, 256> strongQuiets{};
+        std::array<int, 256> remainingQuiets{};
         int entryCount = 0;
         int goodCount = 0;
         int badCount = 0;
-        int quietCount = 0;
+        int quietEntryCount = 0;
+        int strongQuietCount = 0;
+        int remainingQuietCount = 0;
         int goodCursor = 0;
         int badCursor = 0;
-        int quietCursor = 0;
+        int strongQuietCursor = 0;
+        int remainingQuietCursor = 0;
         int ttEntry = -1;
+        AttackerState whiteAttacker{};
+        AttackerState blackAttacker{};
         bool tacticalGenerated = false;
         bool quietsGenerated = false;
-        bool hasTTMove = false;
+        bool quietsScored = false;
+        bool attackersReady = false;
+        bool ttPrepared = false;
         Stage stage = Stage::TT;
     };
 
@@ -1437,7 +1538,8 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
         {
             const int probBeta = beta + 120;
             int forcingMovesTried = 0;
-            MovePicker probPicker = movePicker;
+            MovePicker probPicker(board4, depth, depthGone, turn, prevMove,
+                                  ttHit ? ttEntry.bestMove : 0);
             for (int i = 0; i < 6 && forcingMovesTried < 2; ++i)
             {
                 Move* nextProbMove = probPicker.Next();
@@ -1446,6 +1548,12 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 Move &probMove = *nextProbMove;
                 MissingInfoAboutPrevStateFromMove probUndo(board4, probMove);
                 GameLogic::DoMove(board4, probMove, prevMove, depthGone, depthGone, &probUndo);
+                if (BoardLogic::UnderAttack(
+                        board4, board4.pieces[turn * 8 + 6].front(), board4.sideToMove))
+                {
+                    GameLogic::UndoMove(board4, probMove, probUndo);
+                    continue;
+                }
                 const bool givesCheck = BoardLogic::UnderAttack(
                     board4, board4.pieces[board4.sideToMove * 8 + 6].front(),
                     !board4.sideToMove);
@@ -1517,6 +1625,20 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
                 MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
                 GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone, missingInfoAboutPrevStateFromMove);
+                if (BoardLogic::UnderAttack(
+                        board4, board4.pieces[turn * 8 + 6].front(), board4.sideToMove))
+                {
+                    GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
+                    delete missingInfoAboutPrevStateFromMove;
+                    missingInfoAboutPrevStateFromMove = nullptr;
+                    if (UCI::IsTest())
+                    {
+                        Board::AreBoardsEqual(board4, *boardCopy);
+                        delete boardCopy;
+                        boardCopy = nullptr;
+                    }
+                    continue;
+                }
                 if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
                 {
                     firstMoveWasRepetition = true;
@@ -1729,7 +1851,6 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     (TTMoveHelper::UnpackPromotion(ttEntry.bestMove) == 0
                          ? move->promotionPiece <= 0
                          : move->promotionPiece == TTMoveHelper::UnpackPromotion(ttEntry.bestMove));
-                const int predictedDepth = depth - 1 - LMRDepth;
                 const int combinedHistory = IsQuietMove(*move)
                     ? CombinedHistoryScore(turn, prevMove, *move)
                     : 0;
@@ -1771,6 +1892,20 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
                 MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
                 GameLogic::DoMove(board4, *move, prevMove, depth, depthGone, missingInfoAboutPrevStateFromMove);
+                if (BoardLogic::UnderAttack(
+                        board4, board4.pieces[turn * 8 + 6].front(), board4.sideToMove))
+                {
+                    GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
+                    delete missingInfoAboutPrevStateFromMove;
+                    missingInfoAboutPrevStateFromMove = nullptr;
+                    if (UCI::IsTest())
+                    {
+                        Board::AreBoardsEqual(board4, *boardCopy);
+                        delete boardCopy;
+                        boardCopy = nullptr;
+                    }
+                    continue;
+                }
                 int value;
                 bool valueSelective = false;
                 if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
