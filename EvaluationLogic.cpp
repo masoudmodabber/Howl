@@ -1993,6 +1993,122 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const Evaluati
 EvaluationChessCache EvaluationLogic::EvalCache;
 PawnCache EvaluationLogic::PawnEvalCache;
 
+int EvaluationLogic::CentralKingReadinessPenalty(Board& board, bool whiteKing, int phase)
+{
+    const int king = board.pieces[whiteKing ? 6 : 14].front();
+    const int home = whiteKing ? 0 : 56;
+    const int forward = whiteKing ? 8 : -8;
+    // Restrict this opening interaction to a king still in the central files.
+    if (phase <= 12 || king % 8 < 3 || king % 8 > 4 ||
+        (whiteKing ? king / 8 > 1 : king / 8 < 6))
+        return 0;
+
+    const bool enemyWhite = !whiteKing;
+    const int own = whiteKing ? 0 : 8;
+    const int enemy = enemyWhite ? 0 : 8;
+    const long long occupied = board.whitePieces | board.blackPieces;
+    bool activeQueen = false;
+    for (int queen : board.pieces[enemy + 5])
+        activeQueen |= ChebyshevDistance(queen, king) <= 4 &&
+                       (enemyWhite ? queen / 8 >= 3 : queen / 8 <= 4);
+    bool centralSpace = false;
+    for (int pawn : board.pieces[enemy + 1])
+        centralSpace |= pawn % 8 >= 3 && pawn % 8 <= 4 &&
+                        (enemyWhite ? pawn / 8 >= 4 : pawn / 8 <= 3);
+    if (!activeQueen || !centralSpace)
+        return 0;
+
+    int unready = 0;
+    int blockedBishops = 0;
+    for (int knight : board.pieces[own + 2])
+        unready += knight == home + 1 || knight == home + 6;
+    for (int bishop : board.pieces[own + 3])
+    {
+        if (bishop != home + 2 && bishop != home + 5)
+            continue;
+        ++unready;
+        const int left = board.mainBoard[bishop + forward - 1];
+        const int right = board.mainBoard[bishop + forward + 1];
+        const auto friendly = [&](int piece) { return piece != 0 && (piece < 8) == whiteKing; };
+        if (friendly(left) && friendly(right) &&
+            (left == own + 2 || left == own + 3 || right == own + 2 || right == own + 3))
+        {
+            // A minor blocking a home bishop's last exit is not useful development.
+            ++unready;
+            ++blockedBishops;
+        }
+    }
+    if (unready < 2)
+        return 0;
+
+    // Include the nearby shelter squares, not just squares giving immediate check.
+    unsigned long long area = 0;
+    for (int target = 0; target < 64; ++target)
+        if (ChebyshevDistance(target, king) <= 2)
+            area |= 1ULL << target;
+    const auto pressuresArea = [&](int type, int from, long long occupancy) {
+        unsigned long long targets = area;
+        while (targets)
+        {
+            const int target = __builtin_ctzll(targets);
+            targets &= targets - 1;
+            if (PieceAttacksSquareFast(occupancy, type, enemyWhite, from, target))
+                return true;
+        }
+        return false;
+    };
+    bool queenPressure = false;
+    for (int queen : board.pieces[enemy + 5])
+        queenPressure |= ChebyshevDistance(queen, king) <= 4 && pressuresArea(5, queen, occupied);
+    if (!queenPressure)
+        return 0;
+
+    bool reinforcement = false;
+    bool developedCover = false;
+    for (int type : {2, 3})
+    {
+        for (int from : board.pieces[enemy + type])
+        {
+            if (pressuresArea(type, from, occupied))
+                continue;
+            for (int to = 0; to < 64; ++to)
+            {
+                if ((occupied & Option::PowerTwo[to]) != 0 ||
+                    !PieceAttacksSquareFast(occupied, type, enemyWhite, from, to))
+                    continue;
+                const long long after = (occupied & ~Option::PowerTwo[from]) | Option::PowerTwo[to];
+                if (!pressuresArea(type, to, after) ||
+                    HasSideAttack(board, whiteKing, board.pieces[enemy + 6].front(), after))
+                    continue;
+                // Useful developed defenders contest the actual reinforcement routes.
+                for (int defenderType : {2, 3, 5})
+                    for (int defender : board.pieces[own + defenderType])
+                        if ((whiteKing ? defender / 8 >= 2 : defender / 8 <= 5) &&
+                            PieceAttacksSquareFast(after, defenderType, whiteKing, defender, to))
+                            developedCover = true;
+                if (!HasSideAttack(board, whiteKing, to, after))
+                    reinforcement = true;
+            }
+        }
+    }
+
+    // Direct centipawn terms: coordination <=64, latent reinforcement <=24,
+    // future shelter <=48. Developed coverage reduces the unresolved liability.
+    const int coordination = 16 * std::min(4, unready + blockedBishops);
+    const int latent = reinforcement ? 24 : 0;
+    int shelter = 0;
+    if (reinforcement && (whiteKing ? board.whiteSmallCastle : board.blackSmallCastle) &&
+        board.mainBoard[home + 7] == own + 4)
+    {
+        for (int file = 5; file <= 7; ++file)
+            if (board.mainBoard[home + forward + file] != own + 1)
+                shelter += file == 6 ? 32 : 16;
+        shelter = std::min(48, shelter);
+    }
+    const int penalty = (coordination + latent + shelter) / (developedCover ? 4 : 1);
+    return penalty * std::min(8, phase - 12) / 8;
+}
+
 std::size_t EvaluationLogic::EvalCacheSize()
 {
     return EvalCache.size();
@@ -2380,6 +2496,8 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     }
 
     int kingSafety = kingDangerNet + kingPlacementNet + centralPressureNet + pawnShieldNet + castledSecurityNet;
+    kingSafety += EvaluationLogic::CentralKingReadinessPenalty(thisBoard, false, phase) -
+                  EvaluationLogic::CentralKingReadinessPenalty(thisBoard, true, phase);
 
     // Pawn Structure
     int pawnBase = EvaluationLogic::GetPawnStructureValue(thisBoard, phase, &ctx);

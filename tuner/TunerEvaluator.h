@@ -2,6 +2,7 @@
 #define HOWL_TUNER_EVALUATOR_H
 
 #include "Board.h"
+#include "EvaluationLogic.h"
 #include "CentralKingAttackPressure.h"
 #include "Option.h"
 #include "KingSetup.h"
@@ -2768,6 +2769,8 @@ public:
         int kingSafety = kingDangerNet + kingPlacementNet +
                          whiteCentralPressure.contribution - blackCentralPressure.contribution +
                          pawnShieldNet + castledSecurityNet;
+        kingSafety += EvaluationLogic::CentralKingReadinessPenalty(thisBoard, false, phase) -
+                      EvaluationLogic::CentralKingReadinessPenalty(thisBoard, true, phase);
 
         // Pawn Structure
         int pawnStructure = Detail::GetPawnStructureValue(thisBoard, phase, state);
