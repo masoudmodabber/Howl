@@ -16,6 +16,10 @@
 #include "TranspositionTable.h"
 
 namespace {
+constexpr int QSearchLimitCheckMask = 2047;
+constexpr int QSearchCheckExtensionLimit = 2;
+constexpr int QSearchFrontierDistance = 1;
+constexpr int QSearchDeepResolutionDistance = 5;
 thread_local int qSearchPoolDepth = 0;
 
 class QSearchMovePoolScope
@@ -85,7 +89,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
     const int origBeta = beta;
     const int qsearchDistance = std::max(0, depthGone - depthQuisStarted);
     Search::searchNodeCount++;
-    if ((Search::searchNodeCount & 2047) == 0 ||
+    if ((Search::searchNodeCount & QSearchLimitCheckMask) == 0 ||
         (Search::maxNodes > 0 && Search::searchNodeCount >= Search::maxNodes))
     {
         Search::CheckLimits();
@@ -143,7 +147,8 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         return retValue;
     }
     
-    if (currentSideInCheck && lastCheck < 2 && depthGone - depthQuisStarted < extention) {
+    if (currentSideInCheck && lastCheck < QSearchCheckExtensionLimit &&
+        depthGone - depthQuisStarted < extention) {
         delete retValue;
         retValue = nullptr;
         delete MPValue;
@@ -177,8 +182,8 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         return QSearch(isPVNode, alpha, beta, prevMove, depthGone, 0, false, 1, move1, move2, move3, board4, MAtESearch, depthQuisStarted, nullWindowSearch);
     }
 
-    const bool frontierPhase = qsearchDistance <= 1;
-    const bool deepResolutionPhase = qsearchDistance >= 5;
+    const bool frontierPhase = qsearchDistance <= QSearchFrontierDistance;
+    const bool deepResolutionPhase = qsearchDistance >= QSearchDeepResolutionDistance;
     const uint8_t phaseState = frontierPhase ? 0 : (deepResolutionPhase ? 2 : 1);
     const uint8_t modeState = currentSideInCheck ? QTT_EVASION
         : (checkChecked ? QTT_CHECK_SEQUENCE : QTT_CAPTURE_ONLY);
