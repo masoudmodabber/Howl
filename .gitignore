@@ -216,6 +216,8 @@ match-engines/
 # Tuner datasets and output files
 tuner-corpus/
 spsa_state/
+spsa_state_*/
+.cloud_spsa.json
 *.tsv
 
 # Scratch / temporary investigation files
@@ -229,4 +231,3 @@ Testing/
 
 # Tooling and IDE
 .codex/
-

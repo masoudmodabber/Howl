@@ -59,25 +59,6 @@ struct TunerEvaluationState
     int QueenInValueWhiteEndGame[64] = {0};
     int KingInValueWhiteEndGame[64] = {0};
 
-    // Family: CenterPresence (384: 6 pieces * 64 squares)
-    int PawnInCenterValueWhite[64] = {0};
-    int KnightInCenterValueWhite[64] = {0};
-    int BishopInCenterValueWhite[64] = {0};
-    int RookInCenterValueWhite[64] = {0};
-    int QueenInCenterValueWhite[64] = {0};
-    int KingInCenterValueWhite[64] = {0};
-
-    // Family: CenterMove (384: 6 pieces * 64 squares)
-    int PawnMoveCenterValueWhite[64] = {0};
-    int KnightMoveCenterValueWhite[64] = {0};
-    int BishopMoveCenterValueWhite[64] = {0};
-    int RookMoveCenterValueWhite[64] = {0};
-    int QueenMoveCenterValueWhite[64] = {0};
-    int KingMoveCenterValueWhite[64] = {0};
-
-    // Family: KingSafety (64 squares)
-    int WhiteKingPlaceSafetyMiddleGame[64] = {0};
-
     // Families: Mobility v2 (base anchor plus non-negative increments)
     int KnightMobilityMiddleGameParameters[4] = {0};
     int KnightMobilityEndGameParameters[4] = {0};
@@ -162,22 +143,6 @@ struct TunerEvaluationState
     int QueenInValueBlackEndGame[64] = {0};
     int KingInValueBlackEndGame[64] = {0};
 
-    int PawnInCenterValueBlack[64] = {0};
-    int KnightInCenterValueBlack[64] = {0};
-    int BishopInCenterValueBlack[64] = {0};
-    int RookInCenterValueBlack[64] = {0};
-    int QueenInCenterValueBlack[64] = {0};
-    int KingInCenterValueBlack[64] = {0};
-
-    int PawnMoveCenterValueBlack[64] = {0};
-    int KnightMoveCenterValueBlack[64] = {0};
-    int BishopMoveCenterValueBlack[64] = {0};
-    int RookMoveCenterValueBlack[64] = {0};
-    int QueenMoveCenterValueBlack[64] = {0};
-    int KingMoveCenterValueBlack[64] = {0};
-
-    int BlackKingPlaceSafetyMiddleGame[64] = {0};
-
     // =========================================================================
     // 3. Tuner-Side Derived Data: Runtime Evaluation Layout Copies [3][...]
     //    ([0] = MiddleGame, [1] = Unused/0, [2] = EndGame)
@@ -256,37 +221,6 @@ struct TunerEvaluationState
             };
             return &tables[table][sq];
         }
-
-        case ParameterFamily::CenterPresence:
-        {
-            if (semanticIndex < 0 || semanticIndex >= 384)
-                return nullptr;
-            int table = semanticIndex / 64;
-            int sq = semanticIndex % 64;
-            int* tables[6] = {
-                PawnInCenterValueWhite, KnightInCenterValueWhite, BishopInCenterValueWhite,
-                RookInCenterValueWhite, QueenInCenterValueWhite, KingInCenterValueWhite
-            };
-            return &tables[table][sq];
-        }
-
-        case ParameterFamily::CenterMove:
-        {
-            if (semanticIndex < 0 || semanticIndex >= 384)
-                return nullptr;
-            int table = semanticIndex / 64;
-            int sq = semanticIndex % 64;
-            int* tables[6] = {
-                PawnMoveCenterValueWhite, KnightMoveCenterValueWhite, BishopMoveCenterValueWhite,
-                RookMoveCenterValueWhite, QueenMoveCenterValueWhite, KingMoveCenterValueWhite
-            };
-            return &tables[table][sq];
-        }
-
-        case ParameterFamily::KingSafety:
-            if (semanticIndex >= 0 && semanticIndex < 64)
-                return &WhiteKingPlaceSafetyMiddleGame[semanticIndex];
-            return nullptr;
 
         case ParameterFamily::KnightMobility:
             if (semanticIndex >= 0 && semanticIndex < 4)
@@ -456,7 +390,6 @@ struct TunerEvaluationState
             int mSq = mirrorSquare(sq);
             BlackPassedPawnValueMiddleGam[sq] = WhitePassedPawnValueMiddleGam[mSq];
             BlackPassedPawnValueEndGam[sq] = WhitePassedPawnValueEndGame[mSq];
-            BlackKingPlaceSafetyMiddleGame[sq] = WhiteKingPlaceSafetyMiddleGame[mSq];
         }
 
         int* whitePstMg[6] = {
@@ -476,24 +409,6 @@ struct TunerEvaluationState
             RookInValueBlackEndGame, QueenInValueBlackEndGame, KingInValueBlackEndGame
         };
 
-        int* whiteCenterPresence[6] = {
-            PawnInCenterValueWhite, KnightInCenterValueWhite, BishopInCenterValueWhite,
-            RookInCenterValueWhite, QueenInCenterValueWhite, KingInCenterValueWhite
-        };
-        int* blackCenterPresence[6] = {
-            PawnInCenterValueBlack, KnightInCenterValueBlack, BishopInCenterValueBlack,
-            RookInCenterValueBlack, QueenInCenterValueBlack, KingInCenterValueBlack
-        };
-
-        int* whiteCenterMove[6] = {
-            PawnMoveCenterValueWhite, KnightMoveCenterValueWhite, BishopMoveCenterValueWhite,
-            RookMoveCenterValueWhite, QueenMoveCenterValueWhite, KingMoveCenterValueWhite
-        };
-        int* blackCenterMove[6] = {
-            PawnMoveCenterValueBlack, KnightMoveCenterValueBlack, BishopMoveCenterValueBlack,
-            RookMoveCenterValueBlack, QueenMoveCenterValueBlack, KingMoveCenterValueBlack
-        };
-
         for (int p = 0; p < 6; ++p)
         {
             for (int sq = 0; sq < 64; ++sq)
@@ -501,8 +416,6 @@ struct TunerEvaluationState
                 int mSq = mirrorSquare(sq);
                 blackPstMg[p][sq] = whitePstMg[p][mSq];
                 blackPstEg[p][sq] = whitePstEg[p][mSq];
-                blackCenterPresence[p][sq] = whiteCenterPresence[p][mSq];
-                blackCenterMove[p][sq] = whiteCenterMove[p][mSq];
             }
         }
 
@@ -660,10 +573,7 @@ struct TunerEvaluationState
             int mSq = mirrorSquare(sq);
             if (state.BlackPassedPawnValueMiddleGam[sq] != state.WhitePassedPawnValueMiddleGam[mSq] ||
                 state.BlackPassedPawnValueEndGam[sq] != state.WhitePassedPawnValueEndGame[mSq] ||
-                state.BlackKingPlaceSafetyMiddleGame[sq] != state.WhiteKingPlaceSafetyMiddleGame[mSq] ||
-                state.PawnInValueBlackMiddleGame[sq] != state.PawnInValueWhiteMiddleGame[mSq] ||
-                state.PawnInCenterValueBlack[sq] != state.PawnInCenterValueWhite[mSq] ||
-                state.PawnMoveCenterValueBlack[sq] != state.PawnMoveCenterValueWhite[mSq])
+                state.PawnInValueBlackMiddleGame[sq] != state.PawnInValueWhiteMiddleGame[mSq])
             {
                 mirrorOk = false;
                 break;

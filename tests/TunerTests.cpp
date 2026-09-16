@@ -136,7 +136,7 @@ int TestRefine1SelectionUnchanged()
             Tuner::TunerCoordinateDescent::GetFamilyDeltaRefine1(parameter.family) > 0)
             selected++;
     }
-    return selected == 1230 ? 0 : 1;
+    return selected == 782 ? 0 : 1;
 }
 
 int TestParityRegression()
@@ -160,7 +160,7 @@ int TestParityRegression()
                   << " tuner=" << verifierResult.tunerScore << '\n';
         return 1;
     }
-    return productionScore == 84 && tunerScore == productionScore ? 0 : 1;
+    return productionScore == 81 && tunerScore == productionScore ? 0 : 1;
 }
 
 template <std::size_t N>

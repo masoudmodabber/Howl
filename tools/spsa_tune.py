@@ -674,16 +674,7 @@ def discover_parameters_from_option_cpp(option_cpp_path: str = "Option.cpp") -> 
         extract_array(f"{piece}InValueWhiteMiddleGame", 64, -150, 150, 1.0)
         extract_array(f"{piece}InValueWhiteEndGame", 64, -150, 150, 1.0)
 
-    # 7. Center Tables
-    for piece in ["Pawn", "Knight", "Bishop", "Rook", "Queen", "King"]:
-        extract_array(f"{piece}InCenterValueWhite", 64, -100, 100, 1.0)
-        extract_array(f"{piece}MoveCenterValueWhite", 64, -100, 100, 1.0)
-
-    # 8. King Safety
-    extract_array("WhiteKingPlaceSafetyMiddleGame", 64, -100, 100, 1.0)
-    extract_array("WhiteKingPlacePawnShieldMiddleGame", 64, -100, 100, 1.0)
-
-    # 9. Attack Tables
+    # 7. Attack Tables
     for piece in ["Pawn", "Knight", "Bishop", "Rook", "Queen"]:
         extract_array(f"{piece}AttackValueMiddleGame", 16, -50, 200, 1.0)
         extract_array(f"{piece}AttackValueEndGame", 16, -50, 200, 1.0)

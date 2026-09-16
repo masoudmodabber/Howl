@@ -1533,14 +1533,13 @@ inline int EvaluatePassedPawnCorridorSafety(Board &board)
     return whiteTotal - blackTotal;
 }
 
-inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const TunerEvaluationState& state)
+inline int PieceMoveCount(Board& thisBoard, int phase, const TunerEvaluationState& state)
 {
     long long whitePieces = thisBoard.whitePieces;
     long long blackPieces = thisBoard.blackPieces;
     int* mainBoard = thisBoard.mainBoard;
     long long wholeBoard = whitePieces | blackPieces;
     int movement = 0;
-    int centerValue = 0;
     int whiteAttackValue = 0;
     int blackAttackValue = 0;
     int whiteRookFileBonus = 0;
@@ -1574,7 +1573,6 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
             {
                 moveCount = 0;
                 movement += taperedTable(state.PawnInValueWhite, piecePoisiion);
-                centerValue += state.PawnInCenterValueWhite[piecePoisiion];
                 if (PieceMoves::WhitePawnMoves[piecePoisiion][0] != nullptr)
                 {
                     if ((PieceMoves::pawnTwoMove[piecePoisiion] & wholeBoard) == 0)
@@ -1602,14 +1600,6 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                 {
                     whiteAttackValue += taperedGroup1Table(state.PawnAttackValue, mainBoard[piecePoisiion + 9]);
                 }
-                if (PieceMoves::WhitePawnMoves[piecePoisiion][8] != nullptr)
-                {
-                    centerValue += state.PawnMoveCenterValueWhite[piecePoisiion + 7];
-                }
-                if (PieceMoves::WhitePawnMoves[piecePoisiion][13] != nullptr)
-                {
-                    centerValue += state.PawnMoveCenterValueWhite[piecePoisiion + 9];
-                }
                 movement += taperedTable(state.PawnMoveCountValue, moveCount);
             }
             break;
@@ -1617,31 +1607,22 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
         {
             static const int knightOffsets[8] = {17, 10, 15, 6, -10, -17, -15, -6};
             static const int knightDirs[8] = {0, 2, 4, 6, 8, 10, 12, 14};
-            uint64_t whiteOutpostHolesAwarded = 0;
             for (int piecePoisiion : thisBoard.pieces[piece])
             {
                 moveCount = 0;
                 movement += taperedTable(state.KnightInValueWhite, piecePoisiion);
                 if (phase >= 16 && (piecePoisiion % 8 == 0 || piecePoisiion % 8 == 7)) movement -= 15;
                 movement += KnightOutpostValue(thisBoard, piecePoisiion, true, phase, state);
-                centerValue += state.KnightInCenterValueWhite[piecePoisiion];
                 for (int i = 0; i < 8; ++i)
                 {
                     int endPlace = piecePoisiion + knightOffsets[i];
                     int dir = knightDirs[i];
                     if (PieceMoves::KnightMoves[piecePoisiion][dir] != nullptr)
                     {
-                        centerValue += state.KnightMoveCenterValueWhite[endPlace];
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if ((Option::PowerTwo[endPlace] & bpa) == 0)
                                 moveCount++;
-                            if ((whiteOutpostHolesAwarded & Option::PowerTwo[endPlace]) == 0 &&
-                                IsKnightOutpostHole(endPlace, true, thisBoard.whitePawns, thisBoard.blackPawns))
-                            {
-                                whiteOutpostHolesAwarded |= Option::PowerTwo[endPlace];
-                                movement += TaperGroup1Value(10, 2, phase) * KnightOutpostHoleFileScale[endPlace % 8] / 100;
-                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
                         {
@@ -1664,14 +1645,12 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
             {
                 moveCount = 0;
                 movement += taperedTable(state.BishopInValueWhite, piecePoisiion);
-                centerValue += state.BishopInCenterValueWhite[piecePoisiion];
                 for (int direction = 0; direction <= 6; direction += 2)
                 {
                     for (size_t counter = 0; counter < PieceMoves::BishopMoves[piecePoisiion][direction].size(); counter++)
                     {
                         int endPos = PieceMoves::BishopMoves[piecePoisiion][direction][counter]->endPlace;
                         int endPiece = mainBoard[endPos];
-                        centerValue += state.BishopMoveCenterValueWhite[endPos];
                         if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                         {
                             if ((Option::PowerTwo[endPos] & bpa) == 0)
@@ -1736,14 +1715,12 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
 
                 moveCount = 0;
                 movement += taperedGroup2Table(state.RookInValueWhite, piecePoisiion);
-                centerValue += state.RookInCenterValueWhite[piecePoisiion];
                 for (int direction = 0; direction <= 6; direction += 2)
                 {
                     for (size_t counter = 0; counter < PieceMoves::RookMoves[piecePoisiion][direction].size(); counter++)
                     {
                         int endPos = PieceMoves::RookMoves[piecePoisiion][direction][counter]->endPlace;
                         int endPiece = mainBoard[endPos];
-                        centerValue += state.RookMoveCenterValueWhite[endPos];
                         if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                         {
                             moveCount++;
@@ -1767,7 +1744,6 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
             {
                 moveCount = 0;
                 movement += taperedGroup2Table(state.QueenInValueWhite, piecePoisiion);
-                centerValue += state.QueenInCenterValueWhite[piecePoisiion];
                 int qFile = piecePoisiion % 8;
                 unsigned long long qFileMask = 0x0101010101010101ULL << qFile;
                 if ((thisBoard.whitePawns & qFileMask) == 0 && (thisBoard.blackPawns & qFileMask) != 0)
@@ -1800,7 +1776,6 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                     {
                         int endPos = PieceMoves::QueenMoves[piecePoisiion][direction][counter]->endPlace;
                         int endPiece = mainBoard[endPos];
-                        centerValue += state.QueenMoveCenterValueWhite[endPos];
                         if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                         {
                             moveCount++;
@@ -1826,14 +1801,12 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
             {
                 moveCount = 0;
                 movement += taperedTable(state.KingInValueWhite, piecePoisiion);
-                centerValue += state.KingInCenterValueWhite[piecePoisiion];
                 for (int i = 0; i < 8; ++i)
                 {
                     int endPlace = piecePoisiion + kingOffsets[i];
                     int dir = kingDirs[i];
                     if (PieceMoves::WhiteKingMoves[piecePoisiion][dir] != nullptr)
                     {
-                        centerValue += state.KingMoveCenterValueWhite[endPlace];
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             moveCount++;
@@ -1860,7 +1833,6 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
             {
                 moveCount = 0;
                 movement -= taperedTable(state.PawnInValueBlack, piecePoisiion);
-                centerValue -= state.PawnInCenterValueBlack[piecePoisiion];
 
                 if (PieceMoves::BlackPawnMoves[piecePoisiion][0] != nullptr)
                 {
@@ -1889,14 +1861,6 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                 {
                     blackAttackValue += taperedGroup1Table(state.PawnAttackValue, mainBoard[piecePoisiion - 9]);
                 }
-                if (PieceMoves::BlackPawnMoves[piecePoisiion][8] != nullptr)
-                {
-                    centerValue -= state.PawnMoveCenterValueBlack[piecePoisiion - 7];
-                }
-                if (PieceMoves::BlackPawnMoves[piecePoisiion][13] != nullptr)
-                {
-                    centerValue -= state.PawnMoveCenterValueBlack[piecePoisiion - 9];
-                }
                 movement -= taperedTable(state.PawnMoveCountValue, moveCount);
             }
             break;
@@ -1904,31 +1868,22 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
         {
             static const int knightOffsets[8] = {17, 10, 15, 6, -10, -17, -15, -6};
             static const int knightDirs[8] = {0, 2, 4, 6, 8, 10, 12, 14};
-            uint64_t blackOutpostHolesAwarded = 0;
             for (int piecePoisiion : thisBoard.pieces[piece])
             {
                 moveCount = 0;
                 movement -= taperedTable(state.KnightInValueBlack, piecePoisiion);
                 if (phase >= 16 && (piecePoisiion % 8 == 0 || piecePoisiion % 8 == 7)) movement += 15;
                 movement -= KnightOutpostValue(thisBoard, piecePoisiion, false, phase, state);
-                centerValue -= state.KnightInCenterValueBlack[piecePoisiion];
                 for (int i = 0; i < 8; ++i)
                 {
                     int endPlace = piecePoisiion + knightOffsets[i];
                     int dir = knightDirs[i];
                     if (PieceMoves::KnightMoves[piecePoisiion][dir] != nullptr)
                     {
-                        centerValue -= state.KnightMoveCenterValueBlack[endPlace];
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if ((Option::PowerTwo[endPlace] & wpa) == 0)
                                 moveCount++;
-                            if ((blackOutpostHolesAwarded & Option::PowerTwo[endPlace]) == 0 &&
-                                IsKnightOutpostHole(endPlace, false, thisBoard.blackPawns, thisBoard.whitePawns))
-                            {
-                                blackOutpostHolesAwarded |= Option::PowerTwo[endPlace];
-                                movement -= TaperGroup1Value(10, 2, phase) * KnightOutpostHoleFileScale[endPlace % 8] / 100;
-                            }
                         }
                         else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
                         {
@@ -1951,7 +1906,6 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
             {
                 moveCount = 0;
                 movement -= taperedTable(state.BishopInValueBlack, piecePoisiion);
-                centerValue -= state.BishopInCenterValueBlack[piecePoisiion];
 
                 for (int direction = 0; direction <= 6; direction += 2)
                 {
@@ -1959,7 +1913,6 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                     {
                         int endPos = PieceMoves::BishopMoves[piecePoisiion][direction][counter]->endPlace;
                         int endPiece = mainBoard[endPos];
-                        centerValue -= state.BishopMoveCenterValueBlack[endPos];
                         if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                         {
                             if ((Option::PowerTwo[endPos] & wpa) == 0)
@@ -2024,7 +1977,6 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
 
                 moveCount = 0;
                 movement -= taperedGroup2Table(state.RookInValueBlack, piecePoisiion);
-                centerValue -= state.RookInCenterValueBlack[piecePoisiion];
 
                 for (int direction = 0; direction <= 6; direction += 2)
                 {
@@ -2032,7 +1984,6 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                     {
                         int endPos = PieceMoves::RookMoves[piecePoisiion][direction][counter]->endPlace;
                         int endPiece = mainBoard[endPos];
-                        centerValue -= state.RookMoveCenterValueBlack[endPos];
                         if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                         {
                             moveCount++;
@@ -2056,7 +2007,6 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
             {
                 moveCount = 0;
                 movement -= taperedGroup2Table(state.QueenInValueBlack, piecePoisiion);
-                centerValue -= state.QueenInCenterValueBlack[piecePoisiion];
                 int qFile = piecePoisiion % 8;
                 unsigned long long qFileMask = 0x0101010101010101ULL << qFile;
                 if ((thisBoard.blackPawns & qFileMask) == 0 && (thisBoard.whitePawns & qFileMask) != 0)
@@ -2090,7 +2040,6 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
                     {
                         int endPos = PieceMoves::QueenMoves[piecePoisiion][direction][counter]->endPlace;
                         int endPiece = mainBoard[endPos];
-                        centerValue -= state.QueenMoveCenterValueBlack[endPos];
                         if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
                         {
                             moveCount++;
@@ -2116,14 +2065,12 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
             {
                 moveCount = 0;
                 movement -= taperedTable(state.KingInValueBlack, piecePoisiion);
-                centerValue -= state.KingInCenterValueBlack[piecePoisiion];
                 for (int i = 0; i < 8; ++i)
                 {
                     int endPlace = piecePoisiion + kingOffsets[i];
                     int dir = kingDirs[i];
                     if (PieceMoves::BlackKingMoves[piecePoisiion][dir] != nullptr)
                     {
-                        centerValue -= state.KingMoveCenterValueBlack[endPlace];
                         if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             moveCount++;
@@ -2440,7 +2387,7 @@ inline std::pair<int, int> PieceMoveCount(Board& thisBoard, int phase, const Tun
         }
     }
 
-    return {movement, centerValue};
+    return movement;
 }
 
 inline int GetPawnStructureValue(Board& thisBoard, int phase, const TunerEvaluationState& state)
@@ -2582,42 +2529,6 @@ inline int GetPawnStructureValue(Board& thisBoard, int phase, const TunerEvaluat
     }
     int blackPawnSum = doubledPawnValueBlack + singlePastBlack + isolatedPawnValueBlack + goForwardPawnBlack + pawnChainBlack;
 
-    if (phase >= 12) {
-        // Space advance for c4 when d4 is present
-        if (thisBoard.mainBoard[26] == 1 && thisBoard.mainBoard[27] == 1 && thisBoard.mainBoard[34] != 9) {
-            whitePawnSum += 20;
-        }
-        if (thisBoard.mainBoard[34] == 9 && thisBoard.mainBoard[35] == 9 && thisBoard.mainBoard[26] != 1) {
-            blackPawnSum += 20;
-        }
-
-        // Flank passer with Rook support
-        for (int sq : thisBoard.pieces[1]) {
-            int f = sq % 8, r = sq / 8;
-            if (r >= 5 && (f <= 1 || f >= 6)) {
-                if ((PassedPawnSetup::WhitePassedMask[sq] & blackPawns) == 0) {
-                    bool rookBehind = false;
-                    for (int rsq : thisBoard.pieces[4]) {
-                        if (rsq % 8 == f && rsq / 8 < r) { rookBehind = true; break; }
-                    }
-                    whitePawnSum += (rookBehind ? 60 : 35);
-                }
-            }
-        }
-        for (int sq : thisBoard.pieces[9]) {
-            int f = sq % 8, r = sq / 8;
-            if (r <= 2 && (f <= 1 || f >= 6)) {
-                if ((PassedPawnSetup::BlackPassedMask[sq] & whitePawns) == 0) {
-                    bool rookBehind = false;
-                    for (int rsq : thisBoard.pieces[12]) {
-                        if (rsq % 8 == f && rsq / 8 > r) { rookBehind = true; break; }
-                    }
-                    blackPawnSum += (rookBehind ? 60 : 35);
-                }
-            }
-        }
-    }
-
     return whitePawnSum - blackPawnSum;
 }
 
@@ -2685,24 +2596,17 @@ public:
         const int bpBonus = std::max(0, state.BishopPairValue - 2 - totalPawns * 3);
         if (pieces[3].size() == 2 && ((pieces[3][0] / 8 + pieces[3][0] % 8) % 2) != ((pieces[3][1] / 8 + pieces[3][1] % 8) % 2))
         {
-            int dev = 0;
-            for (int sq : pieces[3]) if (sq != 2 && sq != 5) dev++;
-            whiteBishopPair = (dev >= 2) ? bpBonus : (dev == 1 ? (bpBonus / 2) : 0);
+            whiteBishopPair = bpBonus;
         }
         if (pieces[11].size() == 2 && ((pieces[11][0] / 8 + pieces[11][0] % 8) % 2) != ((pieces[11][1] / 8 + pieces[11][1] % 8) % 2))
         {
-            int dev = 0;
-            for (int sq : pieces[11]) if (sq != 58 && sq != 61) dev++;
-            blackBishopPair = (dev >= 2) ? bpBonus : (dev == 1 ? (bpBonus / 2) : 0);
+            blackBishopPair = bpBonus;
         }
         int bishopPairValue = whiteBishopPair - blackBishopPair;
 
         int phase = Detail::CalculatePhase(thisBoard);
 
-        // Movement & Center
-        std::pair<int, int> moveAndCenter = Detail::PieceMoveCount(thisBoard, phase, state);
-        int movement = moveAndCenter.first;
-        int center = moveAndCenter.second;
+        int movement = Detail::PieceMoveCount(thisBoard, phase, state);
 
         // King Safety
         Detail::KingDangerResult whiteKingDanger = Detail::EvaluateKingDanger(thisBoard, true);
@@ -2711,64 +2615,12 @@ public:
 
         int whiteKingSq = pieces[6].front();
         int blackKingSq = pieces[14].front();
-        int whiteKingPlacement = (state.WhiteKingPlaceSafetyMiddleGame[whiteKingSq] * phase
-                                  + state.KingInValueWhiteEndGame[whiteKingSq] * (24 - phase)) / 24;
-        int blackKingPlacement = (state.BlackKingPlaceSafetyMiddleGame[blackKingSq] * phase
-                                  + state.KingInValueBlackEndGame[blackKingSq] * (24 - phase)) / 24;
-        int kingPlacementNet = whiteKingPlacement - blackKingPlacement;
         const CentralKingAttackPressure::Result whiteCentralPressure =
             CentralKingAttackPressure::Evaluate(thisBoard, true);
         const CentralKingAttackPressure::Result blackCentralPressure =
             CentralKingAttackPressure::Evaluate(thisBoard, false);
-        const bool whiteCastled = (!thisBoard.whiteSmallCastle && !thisBoard.whiteBigCastle && (whiteKingSq == 6 || whiteKingSq == 2));
-        const bool blackCastled = (!thisBoard.blackSmallCastle && !thisBoard.blackBigCastle && (blackKingSq == 62 || blackKingSq == 58));
-        const int whiteKingR = whiteKingSq / 8, whiteKingC = whiteKingSq % 8;
-        const int blackKingR = blackKingSq / 8, blackKingC = blackKingSq % 8;
-        const bool whiteCentralKing = (!whiteCastled && whiteKingR <= 1 && whiteKingC >= 2 && whiteKingC <= 5);
-        const bool blackCentralKing = (!blackCastled && blackKingR >= 6 && blackKingC >= 2 && blackKingC <= 5);
-
-        int whitePawnShield = 0;
-        int blackPawnShield = 0;
-        if (phase >= 12)
-        {
-            if (whiteCastled)
-            {
-                if (whiteKingDanger.pawnShelter <= 8)
-                    whitePawnShield = (15 * phase) / 24;
-                else
-                    whitePawnShield = - ((whiteKingDanger.pawnShelter - 8) * phase) / 24;
-            }
-            else if (whiteCentralKing && whiteKingDanger.pawnShelter > 8)
-            {
-                whitePawnShield = - ((whiteKingDanger.pawnShelter - 8) * phase) / 48;
-            }
-
-            if (blackCastled)
-            {
-                if (blackKingDanger.pawnShelter <= 8)
-                    blackPawnShield = (15 * phase) / 24;
-                else
-                    blackPawnShield = - ((blackKingDanger.pawnShelter - 8) * phase) / 24;
-            }
-            else if (blackCentralKing && blackKingDanger.pawnShelter > 8)
-            {
-                blackPawnShield = - ((blackKingDanger.pawnShelter - 8) * phase) / 48;
-            }
-        }
-        int pawnShieldNet = whitePawnShield - blackPawnShield;
-
-        int castledSecurityNet = 0;
-        if (phase >= 14)
-        {
-            if (whiteCastled && blackCentralKing)
-                castledSecurityNet += (45 * phase) / 24;
-            else if (blackCastled && whiteCentralKing)
-                castledSecurityNet -= (45 * phase) / 24;
-        }
-
-        int kingSafety = kingDangerNet + kingPlacementNet +
-                         whiteCentralPressure.contribution - blackCentralPressure.contribution +
-                         pawnShieldNet + castledSecurityNet;
+        int kingSafety = kingDangerNet +
+                         whiteCentralPressure.contribution - blackCentralPressure.contribution;
         kingSafety += EvaluationLogic::CentralKingReadinessPenalty(thisBoard, false, phase) -
                       EvaluationLogic::CentralKingReadinessPenalty(thisBoard, true, phase);
 
@@ -2798,7 +2650,7 @@ public:
                                    (state.OppositeColorBishopEndGameScalePermille / 1000.0) * (24 - phase)) / 24;
         }
 
-        int unscaled = pieceEvaluation + bishopPairValue + movement + pawnStructure + kingSafety + rookValue + center + temp;
+        int unscaled = pieceEvaluation + bishopPairValue + movement + pawnStructure + kingSafety + rookValue + temp;
 
         double endgameScaleFactor = oppositeColorBishop;
         if (unscaled > 0)

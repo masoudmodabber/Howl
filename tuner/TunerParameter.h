@@ -105,57 +105,7 @@ public:
             }
         }
 
-        // 5. CenterPresence (384 parameters: 6 pieces * 64 squares)
-        const PstBinding centerPresenceTables[6] = {
-            {"PawnInCenterValueWhite_", Option::PawnInCenterValueWhite},
-            {"KnightInCenterValueWhite_", Option::KnightInCenterValueWhite},
-            {"BishopInCenterValueWhite_", Option::BishopInCenterValueWhite},
-            {"RookInCenterValueWhite_", Option::RookInCenterValueWhite},
-            {"QueenInCenterValueWhite_", Option::QueenInCenterValueWhite},
-            {"KingInCenterValueWhite_", Option::KingInCenterValueWhite}
-        };
-
-        int centerPresenceSemanticIndex = 0;
-        for (const auto& binding : centerPresenceTables)
-        {
-            for (int sq = 0; sq < 64; ++sq)
-            {
-                registry.Add(binding.prefix + std::to_string(sq),
-                             ParameterFamily::CenterPresence, centerPresenceSemanticIndex++,
-                             binding.table[sq]);
-            }
-        }
-
-        // 6. CenterMove (384 parameters: 6 pieces * 64 squares)
-        const PstBinding centerMoveTables[6] = {
-            {"PawnMoveCenterValueWhite_", Option::PawnMoveCenterValueWhite},
-            {"KnightMoveCenterValueWhite_", Option::KnightMoveCenterValueWhite},
-            {"BishopMoveCenterValueWhite_", Option::BishopMoveCenterValueWhite},
-            {"RookMoveCenterValueWhite_", Option::RookMoveCenterValueWhite},
-            {"QueenMoveCenterValueWhite_", Option::QueenMoveCenterValueWhite},
-            {"KingMoveCenterValueWhite_", Option::KingMoveCenterValueWhite}
-        };
-
-        int centerMoveSemanticIndex = 0;
-        for (const auto& binding : centerMoveTables)
-        {
-            for (int sq = 0; sq < 64; ++sq)
-            {
-                registry.Add(binding.prefix + std::to_string(sq),
-                             ParameterFamily::CenterMove, centerMoveSemanticIndex++,
-                             binding.table[sq]);
-            }
-        }
-
-        // 7. KingSafety (64 parameters)
-        for (int sq = 0; sq < 64; ++sq)
-        {
-            registry.Add("WhiteKingPlaceSafetyMiddleGame_" + std::to_string(sq),
-                         ParameterFamily::KingSafety, sq,
-                         Option::WhiteKingPlaceSafetyMiddleGame[sq]);
-        }
-
-        // 8. Mobility v2 (38 structural parameters: base anchor plus non-negative increments)
+        // 5. Mobility v2 (38 structural parameters: base anchor plus non-negative increments)
         const auto addMobilityGroup = [&registry](ParameterFamily family,
                                                    const char* piece,
                                                    const int* mgParameters,
