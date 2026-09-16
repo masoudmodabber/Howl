@@ -137,6 +137,65 @@ namespace
         return std::clamp(CombinedHistoryScore(side, previousMove, move) / 4096, -2, 2);
     }
 
+    bool MatchesPackedMove(const Move& move, uint16_t packedMove)
+    {
+        if (packedMove == 0)
+            return false;
+        return move.beginPlace == TTMoveHelper::UnpackFrom(packedMove) &&
+            move.endPlace == TTMoveHelper::UnpackTo(packedMove) &&
+            (TTMoveHelper::UnpackPromotion(packedMove) == 0
+                ? move.promotionPiece <= 0
+                : move.promotionPiece == TTMoveHelper::UnpackPromotion(packedMove));
+    }
+
+    bool IsKillerMove(int ply, const Move& move)
+    {
+        if (ply < 0 || ply >= PVSSearch::MaxKillerPly)
+            return false;
+        return PVSSearch::killers[ply][0] == move ||
+            PVSSearch::killers[ply][1] == move;
+    }
+
+    int ContextualLMRReduction(int depth, int moveNumber, int childDepth,
+                               int side, const Move& previousMove,
+                               const Move& move, bool isPVNode,
+                               bool cutNode, bool improving,
+                               bool ttPvEvidence, bool escapesThreat,
+                               bool singularMove)
+    {
+        if (childDepth < 1 || singularMove)
+            return 0;
+
+        int reduction = static_cast<int>(std::lround(
+            0.60 * std::log(static_cast<double>(depth)) *
+            std::log(static_cast<double>(moveNumber))));
+
+        if (IsQuietMove(move))
+            reduction -= HistoryReductionAdjustment(side, previousMove, move);
+        if (cutNode)
+            reduction++;
+        if (improving)
+            reduction--;
+        else
+            reduction++;
+        if (isPVNode)
+            reduction--;
+        if (ttPvEvidence)
+            reduction -= 2;
+        if (escapesThreat || move.isRefuteWithoutNullMove)
+            reduction--;
+        if (move.givesCheck)
+            reduction--;
+        if (move.promotionPiece > 0)
+            reduction -= 2;
+        if (move.endPiece > 0 && move.promotionPiece <= 0)
+            reduction += move.value < 0 ? 1 : -1;
+
+        reduction = std::max(0, reduction);
+        const int reducedChildDepth = std::clamp(childDepth - reduction, 1, childDepth);
+        return childDepth - reducedChildDepth;
+    }
+
     constexpr int CheckOrderingBonus = 40;
 
     int BasePvsOrderingScore(const Move *move)
@@ -1511,8 +1570,8 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
 #endif
     MovePicker movePicker(board4, depth, depthGone, turn, prevMove,
                           ttHit ? ttEntry.bestMove : 0);
-    const bool hasTTMove = movePicker.HasTTMove();
 #if HOWL_CORRECTNESS_TESTING
+    const bool hasTTMove = movePicker.HasTTMove();
     if (ttHit && ttEntry.bestMove != 0)
     {
         ttStats.ttMoveFoundNoCutoff++;
@@ -1531,6 +1590,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
     int availMoves = 0;
     int quietMovesSearched = 0;
     int selectedMoveRank = 0;
+    int singularExtension = 0;
     {
         bool firstMove = true;
         if (!isPVNode && !nodeInCheck && !MAtESearch && depth >= 5 &&
@@ -1602,6 +1662,104 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             }
         }
 
+        const uint8_t ttBaseFlag = ttHit ? TTBaseFlag(ttEntry.flag) : TT_NONE;
+        const bool singularCandidate = depthGone > 0 && depth >= 8 &&
+            !MAtESearch && !selectiveSearch && !nodeInCheck &&
+            ttHit && ttEntry.bestMove != 0 && ttEntry.depth >= depth - 3 &&
+            TTFlagIsRigorous(ttEntry.flag) &&
+            (ttEntry.flag & TT_SELECTIVE_FRONTIER) == 0 &&
+            (ttBaseFlag == TT_EXACT || ttBaseFlag == TT_LOWER_BOUND) &&
+            ttEntry.score >= beta && !IsMateScore(ttEntry.score) &&
+            alpha > -159500 && beta < 159500;
+        if (singularCandidate)
+        {
+            const int singularBeta = ttEntry.score - 2 * depth;
+            const int verificationDepth = std::max(1, (depth - 1) / 2);
+            bool alternativesFailLow = true;
+            int alternativeCutoffs = 0;
+            MovePicker verificationPicker(board4, depth, depthGone, turn,
+                                          prevMove, ttEntry.bestMove);
+            for (Move* alternative = verificationPicker.Next(); alternative != nullptr;
+                 alternative = verificationPicker.Next())
+            {
+                if (MatchesPackedMove(*alternative, ttEntry.bestMove))
+                    continue;
+
+                MissingInfoAboutPrevStateFromMove verificationUndo(board4, *alternative);
+                GameLogic::DoMove(board4, *alternative, prevMove, depthGone,
+                                  depthGone, &verificationUndo);
+                if (BoardLogic::UnderAttack(
+                        board4, board4.pieces[turn * 8 + 6].front(),
+                        board4.sideToMove))
+                {
+                    GameLogic::UndoMove(board4, *alternative, verificationUndo);
+                    continue;
+                }
+
+                int alternativeValue = 0;
+                const bool repetition =
+                    RepetitionHistory::IsRepetition(board4.ZobristHashCode);
+                if (!repetition)
+                {
+                    const bool givesCheck = BoardLogic::UnderAttack(
+                        board4,
+                        board4.pieces[board4.sideToMove * 8 + 6].front(),
+                        !board4.sideToMove);
+                    std::unique_ptr<MovePrintValue> verification(PVS(
+                        false, -singularBeta, -singularBeta + 1,
+                        verificationDepth, *alternative, move2, move3,
+                        prevMove, board4, false, true, depthGone + 1,
+                        givesCheck, true, true));
+                    alternativeValue = -verification->value;
+
+                    if (alternativeValue >= singularBeta)
+                    {
+                        alternativesFailLow = false;
+                        if (singularBeta >= beta)
+                        {
+                            alternativeCutoffs++;
+                        }
+                        else
+                        {
+                            std::unique_ptr<MovePrintValue> multiCutProbe(PVS(
+                                false, -beta, -beta + 1, verificationDepth,
+                                *alternative, move2, move3, prevMove, board4,
+                                false, true, depthGone + 1, givesCheck, true,
+                                true));
+                            if (-multiCutProbe->value >= beta)
+                                alternativeCutoffs++;
+                        }
+                    }
+                }
+                else if (alternativeValue >= singularBeta)
+                {
+                    alternativesFailLow = false;
+                    if (alternativeValue >= beta)
+                        alternativeCutoffs++;
+                }
+
+                GameLogic::UndoMove(board4, *alternative, verificationUndo);
+                if (Search::stopRequested.load(std::memory_order_relaxed))
+                {
+                    delete MPValue;
+                    retValue->value = 0;
+                    retValue->bound = SearchBound::Upper;
+                    retValue->MarkSpeculative(SearchProvenance::Aborted);
+                    return retValue;
+                }
+                if (alternativeCutoffs >= 2)
+                {
+                    retValue->value = beta;
+                    retValue->bound = SearchBound::Lower;
+                    retValue->MarkSpeculative(SearchProvenance::ForwardPruning);
+                    delete MPValue;
+                    return retValue;
+                }
+            }
+            if (alternativesFailLow)
+                singularExtension = 1;
+        }
+
         for (int i = 0; ; ++i)
         {
             Move *move = movePicker.Next();
@@ -1619,6 +1777,9 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             const int alphaBeforeMove = alpha;
             int LMRDepth = 0;
             uint8_t moveProof = NoProof;
+            const bool isTTMove = ttHit &&
+                MatchesPackedMove(*move, ttEntry.bestMove);
+            const int moveExtension = isTTMove ? singularExtension : 0;
             if (firstMove)
             {
                 bool firstMoveWasRepetition = false;
@@ -1660,7 +1821,8 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     }
                     delete MPValue;
                     MPValue = PVS(tempPVNode, -beta, -alpha,
-                                  depth - 1, *move, move2, move3, prevMove, board4, MAtESearch, true,
+                                  depth - 1 + moveExtension, *move, move2, move3,
+                                  prevMove, board4, MAtESearch, true,
                                   depthGone + 1, previousMoveWasCheck, nullWindowSearch,
                                   selectiveSearch);
                     bestMoveValue = -MPValue->value;
@@ -1822,38 +1984,24 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
 
                 bool tempRepeat = false;
                 bool trustedValue = false;
-                const int newDepth = depth - 1;
-                if (newDepth >= 1)
-                {
-                    const int moveNumber = i + 1;
-                    LMRDepth = static_cast<int>(std::lround(
-                        0.60 * std::log(static_cast<double>(depth)) *
-                        std::log(static_cast<double>(moveNumber))));
-                    if (IsQuietMove(*move))
-                        LMRDepth -= HistoryReductionAdjustment(turn, prevMove, *move);
-                    if (move->givesCheck)
-                        LMRDepth--;
-                    if (move->promotionPiece > 0)
-                        LMRDepth--;
-                    if (move->endPiece > 0)
-                        LMRDepth--;
-                    LMRDepth = std::max(0, LMRDepth);
-                    const int reducedChildDepth = std::clamp(newDepth - LMRDepth, 1, newDepth);
-                    LMRDepth = newDepth - reducedChildDepth;
-                }
-                if (MAtESearch)
-                    LMRDepth = 0;
-                if (isPVNode)
-                    LMRDepth = 0;
-                const bool isTTMove = ttHit && ttEntry.bestMove != 0 &&
-                    move->beginPlace == TTMoveHelper::UnpackFrom(ttEntry.bestMove) &&
-                    move->endPlace == TTMoveHelper::UnpackTo(ttEntry.bestMove) &&
-                    (TTMoveHelper::UnpackPromotion(ttEntry.bestMove) == 0
-                         ? move->promotionPiece <= 0
-                         : move->promotionPiece == TTMoveHelper::UnpackPromotion(ttEntry.bestMove));
+                const int nominalChildDepth = depth - 1 + moveExtension;
                 const int combinedHistory = IsQuietMove(*move)
                     ? CombinedHistoryScore(turn, prevMove, *move)
                     : 0;
+                const bool cutNode = !isPVNode &&
+                    (nullWindowSearch || beta - alpha <= Option::nullWindowSize);
+                const bool improving = bestMoveValue > origAlpha;
+                const bool ttPvEvidence = isTTMove &&
+                    TTFlagIsRigorous(ttEntry.flag) && ttEntry.depth >= depth - 2;
+                LMRDepth = ContextualLMRReduction(
+                    depth, i + 1, nominalChildDepth, turn, prevMove, *move,
+                    isPVNode, cutNode, improving, ttPvEvidence, nodeInCheck,
+                    moveExtension > 0);
+                if (MAtESearch)
+                    LMRDepth = 0;
+
+                const int expectedReducedDepth = std::max(
+                    1, nominalChildDepth - LMRDepth);
                 const bool pruningContext = !isPVNode && !nodeInCheck &&
                     !MAtESearch && !isTTMove &&
                     alpha > -159800 && beta < 159800;
@@ -1863,31 +2011,40 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     std::clamp(combinedHistory / 4096, 0, 3);
                 const int historyMoveCountAdjustment =
                     positiveHistoryStrength * 3 - negativeHistoryStrength * 3;
+                const bool forcingMove = move->givesCheck ||
+                    move->promotionPiece > 0 || move->isRefuteWithoutNullMove;
+                const bool highConfidenceMove = forcingMove ||
+                    IsKillerMove(depthGone, *move) || combinedHistory >= 4096 ||
+                    (move->endPiece > 0 && move->value >= 0);
                 const int allowedQuietMoves = std::max(
-                    3, 3 + depth * 2 + historyMoveCountAdjustment);
-                const int moveCountDepthLimit =
-                    1 + std::min(2, negativeHistoryStrength);
+                    3, 3 + expectedReducedDepth * 2 +
+                    historyMoveCountAdjustment);
                 const bool moveCountPruningCandidate = pruningContext &&
-                    IsQuietMove(*move) && depth <= moveCountDepthLimit &&
+                    !highConfidenceMove && IsQuietMove(*move) &&
+                    expectedReducedDepth <= 2 &&
                     i >= allowedQuietMoves;
 
                 bool valueFutilityCandidate = false;
                 const int valueFutilityDepthLimit =
                     2 + (negativeHistoryStrength >= 2 ? 1 : 0);
-                if (pruningContext && IsQuietMove(*move) &&
-                    depth <= valueFutilityDepthLimit)
+                if (pruningContext && !highConfidenceMove &&
+                    IsQuietMove(*move) &&
+                    expectedReducedDepth <= valueFutilityDepthLimit)
                 {
                     if (staticEval == -200000)
                         staticEval = EvaluationLogic::Evaluate(board4);
                     const int historyMarginAdjustment =
                         std::clamp(combinedHistory / 64, -240, 180);
                     const int futilityMargin = std::max(
-                        40, 100 + 120 * depth + historyMarginAdjustment);
+                        40, 100 + 120 * expectedReducedDepth +
+                        historyMarginAdjustment);
                     valueFutilityCandidate = staticEval + futilityMargin <= alpha;
                 }
                 const bool seePruningCandidate = pruningContext &&
+                    !highConfidenceMove &&
                     move->endPiece > 0 && move->promotionPiece <= 0 &&
-                    depth <= 1 && move->value <= -150;
+                    expectedReducedDepth <= 2 &&
+                    move->value <= -150 * expectedReducedDepth;
 
                 boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
                 MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
@@ -1954,7 +2111,8 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     delete MPValue;
                     MPValue = PVS(reducedSearch ? false : tempPVNode,
                                   -alpha - Option::nullWindowSize, -alpha,
-                                  depth - 1 - LMRDepth, *move, move2, move3, prevMove, board4, MAtESearch, true,
+                                  nominalChildDepth - LMRDepth, *move, move2,
+                                  move3, prevMove, board4, MAtESearch, true,
                                   depthGone + 1, previousMoveWasCheck, true,
                                   selectiveSearch || reducedSearch);
                     value = -MPValue->value;
@@ -1981,7 +2139,8 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                         const int smallerReduction = LMRDepth / 2;
                         delete MPValue;
                         MPValue = PVS(false, -alpha - Option::nullWindowSize, -alpha,
-                                      depth - 1 - smallerReduction, *move, move2, move3,
+                                      nominalChildDepth - smallerReduction,
+                                      *move, move2, move3,
                                       prevMove, board4, MAtESearch, true, depthGone + 1,
                                       previousMoveWasCheck, true, true);
                         value = -MPValue->value;
@@ -2006,7 +2165,8 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                         int origBetaForLMR = beta;
 #endif
                         delete MPValue;
-                        MPValue = PVS(confirmationPVNode, -beta, -alpha, depth - 1,
+                        MPValue = PVS(confirmationPVNode, -beta, -alpha,
+                                      nominalChildDepth,
                                       *move, move2, move3, prevMove, board4, MAtESearch,
                                       true, depthGone + 1, previousMoveWasCheck,
                                       nullWindowSearch, selectiveSearch);
