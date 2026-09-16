@@ -10,9 +10,9 @@
 
 class PVSSearch {
     static constexpr bool ProductionIGGEnabled = false;
-
 public:
     static MovePrintValue* PVS(bool isPVNode, int alpha, int beta, int depth, Move& prevMove, Move& move1, Move& move2, Move& move3, Board& board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool selectiveSearch = false);
+    // Retained as an unreferenced legacy implementation; production search does not call it.
     static void IGG(bool isPVNode, int alpha, int beta, int depth, Move& prevMove, Move& move1, Move& move2, Move& move3, Board& board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool lastCheck, bool nullWindowSearch, MoveList moveList);
     static void deleteMoveList(MoveList moveList);
     struct KillerMove {
@@ -40,11 +40,11 @@ public:
     static void RecordKiller(int ply, const Move& move);
 
 #if HOWL_CORRECTNESS_TESTING
-    static bool NullMoveMaterialEligibleForTesting(const Board& board);
     static constexpr bool ProductionIGGEnabledForTesting()
     {
         return ProductionIGGEnabled;
     }
+    static bool NullMoveMaterialEligibleForTesting(const Board& board);
     static double NullMoveReductionForTesting(bool isPVNode, int alpha, int beta, int depth, Move& prevMove, Move& move1, Move& move2, Move& move3, Board& board4, bool mateSearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch)
     {
         return NullMoveReduction(isPVNode, alpha, beta, depth, prevMove, move1, move2, move3, board4, mateSearch, isNullMoveAllowed, depthGone, previousMoveWasCheck, nullWindowSearch);

@@ -43,7 +43,6 @@ int Search::maxDepth{-1};
 int64_t Search::maxNodes{-1};
 bool Search::isMoveTime{false};
 
-int Search::overAllIteration = 0;
 int Search::moveCount = 0;
 int64_t Search::searchNodeCount = 0;
 std::atomic<uint64_t> Search::tablebaseHits{0};
@@ -228,8 +227,8 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     int turn = board4.sideToMove ? 1 : 0;
     bool firstAssign = false;
     int recDepth = 1;
-    int alpha = -200000;
-    int beta = 200000;
+    int alpha = FullSearchAlpha;
+    int beta = FullSearchBeta;
     moveCount = 0;
     searchNodeCount = 0;
     tablebaseHits.store(0, std::memory_order_relaxed);
@@ -385,13 +384,14 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             completedPonderMove = ponderMove;
         };
 
-        int aspAlpha = -200000;
-        int aspBeta = +200000;
-        if (Option::MultiPV <= 1 && prevCompletedScore > -159800 && prevCompletedScore < 159800)
+        int aspAlpha = FullSearchAlpha;
+        int aspBeta = FullSearchBeta;
+        if (Option::MultiPV <= 1 && prevCompletedScore > -MateScore::Threshold &&
+            prevCompletedScore < MateScore::Threshold)
         {
-            aspAlpha = std::max(-200000,
+            aspAlpha = std::max(FullSearchAlpha,
                                 prevCompletedScore - InitialAspirationDelta);
-            aspBeta = std::min(200000,
+            aspBeta = std::min(FullSearchBeta,
                                prevCompletedScore + InitialAspirationDelta);
         }
         int aspirationRetriesUsed = 0;
@@ -668,11 +668,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 bool rootMoveExactMate = false;
                 bool rootMoveAuthoritativeResult = false;
                 bool rootMoveRepetitionResult = false;
-                if (recDepth == 2 && move->beginPlace == 17 && move->endPlace == 53)
-                {
-                    overAllIteration++;
-                }
-
                 if (counter < MultiPV)
                 {
                     Board *boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();

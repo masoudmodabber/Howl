@@ -47,6 +47,40 @@ PVSSearch::KillerMove PVSSearch::killers[PVSSearch::MaxKillerPly][2] = {};
 
 namespace
 {
+    constexpr int HistoryReductionUnit = 4096;
+    constexpr int MaxHistoryReductionAdjustment = 2;
+    constexpr double LMRLogReductionScale = 0.60;
+    constexpr int CutNodeReduction = 1;
+    constexpr int ImprovingReduction = 1;
+    constexpr int NonImprovingReduction = 1;
+    constexpr int PVNodeReduction = 1;
+    constexpr int TTPVReduction = 2;
+    constexpr int TacticalRefutationReduction = 1;
+    constexpr int CheckReduction = 1;
+    constexpr int PromotionReduction = 2;
+    constexpr int CaptureReduction = 1;
+    constexpr int StaticPruningMaxDepth = 3;
+    constexpr int RazoringMaxDepth = 2;
+    constexpr int RazoringBaseMargin = 200;
+    constexpr int RazoringDepthMargin = 120;
+    constexpr int ChildFutilityMarginPerDepth = 90;
+    constexpr int NullMoveMinDepth = 3;
+    constexpr int NullMoveEvalUnit = 250;
+    constexpr int NullMoveMaxEvalBonus = 2;
+    constexpr int ProbCutMinDepth = 5;
+    constexpr int ProbCutMargin = 120;
+    constexpr int ProbCutMaxCandidates = 2;
+    constexpr int ProbCutPickerLimit = 6;
+    constexpr int HistoryStrengthUnit = 4096;
+    constexpr int MaxHistoryStrength = 3;
+    constexpr int MinimumQuietMoveBudget = 3;
+    constexpr int QuietMovesPerExpectedDepth = 2;
+    constexpr int FutilityHistoryUnit = 64;
+    constexpr int FutilityHistoryMinimumMargin = 40;
+    constexpr int FutilityBaseMargin = 100;
+    constexpr int FutilityDepthMargin = 120;
+    constexpr int SeePruningMargin = 150;
+
 
 
 
@@ -134,7 +168,10 @@ namespace
 
     int HistoryReductionAdjustment(int side, const Move &previousMove, const Move &move)
     {
-        return std::clamp(CombinedHistoryScore(side, previousMove, move) / 4096, -2, 2);
+        return std::clamp(CombinedHistoryScore(side, previousMove, move) /
+                              HistoryReductionUnit,
+                          -MaxHistoryReductionAdjustment,
+                          MaxHistoryReductionAdjustment);
     }
 
     bool MatchesPackedMove(const Move& move, uint16_t packedMove)
@@ -167,29 +204,29 @@ namespace
             return 0;
 
         int reduction = static_cast<int>(std::lround(
-            0.60 * std::log(static_cast<double>(depth)) *
+            LMRLogReductionScale * std::log(static_cast<double>(depth)) *
             std::log(static_cast<double>(moveNumber))));
 
         if (IsQuietMove(move))
             reduction -= HistoryReductionAdjustment(side, previousMove, move);
         if (cutNode)
-            reduction++;
+            reduction += CutNodeReduction;
         if (improving)
-            reduction--;
+            reduction -= ImprovingReduction;
         else
-            reduction++;
+            reduction += NonImprovingReduction;
         if (isPVNode)
-            reduction--;
+            reduction -= PVNodeReduction;
         if (ttPvEvidence)
-            reduction -= 2;
+            reduction -= TTPVReduction;
         if (escapesThreat || move.isRefuteWithoutNullMove)
-            reduction--;
+            reduction -= TacticalRefutationReduction;
         if (move.givesCheck)
-            reduction--;
+            reduction -= CheckReduction;
         if (move.promotionPiece > 0)
-            reduction -= 2;
+            reduction -= PromotionReduction;
         if (move.endPiece > 0 && move.promotionPiece <= 0)
-            reduction += move.value < 0 ? 1 : -1;
+            reduction += move.value < 0 ? CaptureReduction : -CaptureReduction;
 
         reduction = std::max(0, reduction);
         const int reducedChildDepth = std::clamp(childDepth - reduction, 1, childDepth);
@@ -1311,17 +1348,6 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
 
     bool isNullWindow = (beta - alpha <= 1);
 
-    // Frontier collapse at non-PV depth <= 4:
-    bool allowFrontierCollapse = selectiveSearch || !isNullWindow;
-    if (false && allowFrontierCollapse && !isPVNode && depth <= 4)
-    {
-        delete retValue;
-        retValue = nullptr;
-        delete MPValue;
-        MPValue = nullptr;
-        return StartQSearch(isPVNode, alpha, beta, prevMove, depthGone, move1, move2, move3, board4, nullWindowSearch, previousMoveWasCheck);
-    }
-
     if (BoardLogic::UnderAttack(board4, board4.pieces[(1 - turn) * 8 + 6].front(), board4.sideToMove))
     {
         retValue->value = 160000;
@@ -1438,15 +1464,15 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
         }
     }
     const bool staticPruningContext = !isPVNode && !nodeInCheck &&
-        !MAtESearch && depth <= 3 &&
+        !MAtESearch && depth <= StaticPruningMaxDepth &&
         alpha > -MateScore::Threshold && beta < MateScore::Threshold;
     if (staticPruningContext)
     {
         const int staticValue = EvaluationLogic::Evaluate(board4);
 
-        if (depth <= 2)
+        if (depth <= RazoringMaxDepth)
         {
-            const int razorMargin = 200 + 120 * depth;
+            const int razorMargin = RazoringBaseMargin + RazoringDepthMargin * depth;
             if (staticValue + razorMargin <= alpha)
             {
                 MovePrintValue* razorResult = StartQSearch(
@@ -1462,7 +1488,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             }
         }
 
-        const int reverseFutilityMargin = 90 * depth;
+        const int reverseFutilityMargin = ChildFutilityMarginPerDepth * depth;
         if (staticValue - reverseFutilityMargin >= beta)
         {
             retValue->value = staticValue;
@@ -1474,7 +1500,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
         }
     }
     if (isNullMoveAllowed && prevMove.promotionPiece != -1 && !isPVNode &&
-        !nodeInCheck && !MAtESearch && depth >= 3 &&
+        !nodeInCheck && !MAtESearch && depth >= NullMoveMinDepth &&
         alpha > -159800 && beta < 159800)
     {
         const int nonPawnMaterialCount =
@@ -1496,7 +1522,8 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             int staticEval = EvaluationLogic::Evaluate(board4);
             if (staticEval >= beta)
             {
-                const int evalReduction = std::clamp((staticEval - beta) / 250, 0, 2);
+                const int evalReduction = std::clamp(
+                    (staticEval - beta) / NullMoveEvalUnit, 0, NullMoveMaxEvalBonus);
                 int R = 2 + depth / 2 + evalReduction;
                 R = std::min(R, depth - 1);
                 Move nullMove{};
@@ -1576,12 +1603,6 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             return retValue;
         }
     }
-    if constexpr (ProductionIGGEnabled)
-    {
-        MoveList moveList = MoveLogic::MoveGenerator(board4, depth, depthGone);
-        IGG(isPVNode, alpha, beta, depth, prevMove, move1, move2, move3, board4, MAtESearch, isNullMoveAllowed, depthGone, previousMoveWasCheck, nullWindowSearch, moveList);
-        deleteMoveList(moveList);
-    }
 #if HOWL_CORRECTNESS_TESTING
     {
         MoveList shadowMoveList = MoveLogic::MoveGenerator(board4, depth, depthGone);
@@ -1611,17 +1632,17 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
     int availMoves = 0;
     int quietMovesSearched = 0;
     int selectedMoveRank = 0;
-    int singularExtension = 0;
     {
         bool firstMove = true;
-        if (!isPVNode && !nodeInCheck && !MAtESearch && depth >= 5 &&
+        if (!isPVNode && !nodeInCheck && !MAtESearch && depth >= ProbCutMinDepth &&
             beta < 159500 && alpha > -159500)
         {
-            const int probBeta = beta + 120;
+            const int probBeta = beta + ProbCutMargin;
             int forcingMovesTried = 0;
             MovePicker probPicker(board4, depth, depthGone, turn, prevMove,
                                   ttHit ? ttEntry.bestMove : 0);
-            for (int i = 0; i < 6 && forcingMovesTried < 2; ++i)
+            for (int i = 0; i < ProbCutPickerLimit &&
+                         forcingMovesTried < ProbCutMaxCandidates; ++i)
             {
                 Move* nextProbMove = probPicker.Next();
                 if (nextProbMove == nullptr)
@@ -1683,104 +1704,6 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             }
         }
 
-        const uint8_t ttBaseFlag = ttHit ? TTBaseFlag(ttEntry.flag) : TT_NONE;
-        const bool singularCandidate = depthGone > 0 && depth >= 8 &&
-            !MAtESearch && !selectiveSearch && !nodeInCheck &&
-            ttHit && ttEntry.bestMove != 0 && ttEntry.depth >= depth - 3 &&
-            TTFlagIsRigorous(ttEntry.flag) &&
-            (ttEntry.flag & TT_SELECTIVE_FRONTIER) == 0 &&
-            (ttBaseFlag == TT_EXACT || ttBaseFlag == TT_LOWER_BOUND) &&
-            ttEntry.score >= beta && !IsMateScore(ttEntry.score) &&
-            alpha > -159500 && beta < 159500;
-        if (singularCandidate)
-        {
-            const int singularBeta = ttEntry.score - 2 * depth;
-            const int verificationDepth = std::max(1, (depth - 1) / 2);
-            bool alternativesFailLow = true;
-            int alternativeCutoffs = 0;
-            MovePicker verificationPicker(board4, depth, depthGone, turn,
-                                          prevMove, ttEntry.bestMove);
-            for (Move* alternative = verificationPicker.Next(); alternative != nullptr;
-                 alternative = verificationPicker.Next())
-            {
-                if (MatchesPackedMove(*alternative, ttEntry.bestMove))
-                    continue;
-
-                MissingInfoAboutPrevStateFromMove verificationUndo(board4, *alternative);
-                GameLogic::DoMove(board4, *alternative, prevMove, depthGone,
-                                  depthGone, &verificationUndo);
-                if (BoardLogic::UnderAttack(
-                        board4, board4.pieces[turn * 8 + 6].front(),
-                        board4.sideToMove))
-                {
-                    GameLogic::UndoMove(board4, *alternative, verificationUndo);
-                    continue;
-                }
-
-                int alternativeValue = 0;
-                const bool repetition =
-                    RepetitionHistory::IsRepetition(board4.ZobristHashCode);
-                if (!repetition)
-                {
-                    const bool givesCheck = BoardLogic::UnderAttack(
-                        board4,
-                        board4.pieces[board4.sideToMove * 8 + 6].front(),
-                        !board4.sideToMove);
-                    std::unique_ptr<MovePrintValue> verification(PVS(
-                        false, -singularBeta, -singularBeta + 1,
-                        verificationDepth, *alternative, move2, move3,
-                        prevMove, board4, false, true, depthGone + 1,
-                        givesCheck, true, true));
-                    alternativeValue = -verification->value;
-
-                    if (alternativeValue >= singularBeta)
-                    {
-                        alternativesFailLow = false;
-                        if (singularBeta >= beta)
-                        {
-                            alternativeCutoffs++;
-                        }
-                        else
-                        {
-                            std::unique_ptr<MovePrintValue> multiCutProbe(PVS(
-                                false, -beta, -beta + 1, verificationDepth,
-                                *alternative, move2, move3, prevMove, board4,
-                                false, true, depthGone + 1, givesCheck, true,
-                                true));
-                            if (-multiCutProbe->value >= beta)
-                                alternativeCutoffs++;
-                        }
-                    }
-                }
-                else if (alternativeValue >= singularBeta)
-                {
-                    alternativesFailLow = false;
-                    if (alternativeValue >= beta)
-                        alternativeCutoffs++;
-                }
-
-                GameLogic::UndoMove(board4, *alternative, verificationUndo);
-                if (Search::stopRequested.load(std::memory_order_relaxed))
-                {
-                    delete MPValue;
-                    retValue->value = 0;
-                    retValue->bound = SearchBound::Upper;
-                    retValue->MarkSpeculative(SearchProvenance::Aborted);
-                    return retValue;
-                }
-                if (alternativeCutoffs >= 2)
-                {
-                    retValue->value = beta;
-                    retValue->bound = SearchBound::Lower;
-                    retValue->MarkSpeculative(SearchProvenance::ForwardPruning);
-                    delete MPValue;
-                    return retValue;
-                }
-            }
-            if (alternativesFailLow)
-                singularExtension = 1;
-        }
-
         for (int i = 0; ; ++i)
         {
             Move *move = movePicker.Next();
@@ -1800,7 +1723,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             uint8_t moveProof = NoProof;
             const bool isTTMove = ttHit &&
                 MatchesPackedMove(*move, ttEntry.bestMove);
-            const int moveExtension = isTTMove ? singularExtension : 0;
+            const int moveExtension = 0;
             if (firstMove)
             {
                 bool firstMoveWasRepetition = false;
@@ -1934,75 +1857,6 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             }
             else
             {
-                // Late quiet pruning is enabled for selective searches or at wide-window nodes.
-                bool allowLQP = selectiveSearch || !isNullWindow;
-                if (false && allowLQP && !isPVNode && depth <= 4 && availMoves > 0 && move->endPiece == 0 && move->promotionPiece <= 0 &&
-                    (move->CastleFlag & 15) == 0 &&
-                    alpha > -159800 && beta < 159800)
-                {
-                    if (depth == 1 && quietMovesSearched >= 0) continue;
-                    if (depth == 2 && quietMovesSearched >= 1) continue;
-                    if (depth == 3 && quietMovesSearched >= 2) continue;
-                    if (depth == 4 && quietMovesSearched >= 4) continue;
-                }
-
-                if (false && !isPVNode && depth <= 2 && availMoves > 0 && move->endPiece == 0 && move->promotionPiece <= 0 &&
-                    (move->CastleFlag & 15) == 0 &&
-                    alpha > -159800 && beta < 159800)
-                {
-                    if (staticEval == -200000)
-                    {
-                        if (inCheck < 0)
-                        {
-                            inCheck = BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove) ? 1 : 0;
-                        }
-                        if (inCheck == 0)
-                        {
-                            staticEval = EvaluationLogic::Evaluate(board4);
-                        }
-                    }
-                    if (inCheck == 0 && staticEval != -200000)
-                    {
-                        int futilityMargin = (depth == 1) ? 150 : 300;
-                        if (staticEval + futilityMargin <= alpha)
-                        {
-#if HOWL_CORRECTNESS_TESTING
-                            g_futilityPruningSkippedQuietMoves++;
-
-                            // Measure futility pruning safety in instrumentation mode:
-                            MissingInfoAboutPrevStateFromMove *diagMissing = new MissingInfoAboutPrevStateFromMove(board4, *move);
-                            GameLogic::DoMove(board4, *move, prevMove, depth, depthGone, diagMissing);
-                            int diagValue = 0;
-                            if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
-                            {
-                                diagValue = 0;
-                            }
-                            else
-                            {
-                                bool oppInCheck = BoardLogic::UnderAttack(board4, board4.pieces[(!board4.sideToMove) * 8 + 6].front(), board4.sideToMove);
-                                MovePrintValue *diagMP = PVS(false, -alpha - Option::nullWindowSize, -alpha, depth - 1, *move, move2, move3, prevMove, board4, MAtESearch, true, depthGone + 1, oppInCheck, true);
-                                diagValue = -diagMP->value;
-                                std::string pvStr = diagMP->printString;
-                                if (diagValue > alpha)
-                                {
-                                    delete diagMP;
-                                    diagMP = PVS(false, -beta, -alpha, depth - 1, *move, move2, move3, prevMove, board4, MAtESearch, true, depthGone + 1, oppInCheck, nullWindowSearch);
-                                    diagValue = -diagMP->value;
-                                    pvStr = diagMP->printString;
-                                }
-                                delete diagMP;
-                            }
-                            bool givesCheck = BoardLogic::UnderAttack(board4, board4.pieces[(!board4.sideToMove) * 8 + 6].front(), board4.sideToMove);
-                            GameLogic::UndoMove(board4, *move, *diagMissing);
-                            delete diagMissing;
-
-                            RecordFutilityCandidate(i, depth, depthGone, *move, staticEval, alpha, beta, diagValue, givesCheck);
-#endif
-                            continue;
-                        }
-                    }
-                }
-
                 bool tempRepeat = false;
                 bool trustedValue = false;
                 const int nominalChildDepth = depth - 1 + moveExtension;
@@ -2027,9 +1881,9 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     !MAtESearch && !isTTMove &&
                     alpha > -159800 && beta < 159800;
                 const int negativeHistoryStrength =
-                    std::clamp(-combinedHistory / 4096, 0, 3);
+                    std::clamp(-combinedHistory / HistoryStrengthUnit, 0, MaxHistoryStrength);
                 const int positiveHistoryStrength =
-                    std::clamp(combinedHistory / 4096, 0, 3);
+                    std::clamp(combinedHistory / HistoryStrengthUnit, 0, MaxHistoryStrength);
                 const int historyMoveCountAdjustment =
                     positiveHistoryStrength * 3 - negativeHistoryStrength * 3;
                 const bool forcingMove = move->givesCheck ||
@@ -2038,7 +1892,8 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     IsKillerMove(depthGone, *move) || combinedHistory >= 4096 ||
                     (move->endPiece > 0 && move->value >= 0);
                 const int allowedQuietMoves = std::max(
-                    3, 3 + expectedReducedDepth * 2 +
+                    MinimumQuietMoveBudget,
+                    MinimumQuietMoveBudget + expectedReducedDepth * QuietMovesPerExpectedDepth +
                     historyMoveCountAdjustment);
                 const bool moveCountPruningCandidate = pruningContext &&
                     !highConfidenceMove && IsQuietMove(*move) &&
@@ -2055,9 +1910,10 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     if (staticEval == -200000)
                         staticEval = EvaluationLogic::Evaluate(board4);
                     const int historyMarginAdjustment =
-                        std::clamp(combinedHistory / 64, -240, 180);
+                        std::clamp(combinedHistory / FutilityHistoryUnit, -240, 180);
                     const int futilityMargin = std::max(
-                        40, 100 + 120 * expectedReducedDepth +
+                        FutilityHistoryMinimumMargin,
+                        FutilityBaseMargin + FutilityDepthMargin * expectedReducedDepth +
                         historyMarginAdjustment);
                     valueFutilityCandidate = staticEval + futilityMargin <= alpha;
                 }
@@ -2065,7 +1921,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     !highConfidenceMove &&
                     move->endPiece > 0 && move->promotionPiece <= 0 &&
                     expectedReducedDepth <= 2 &&
-                    move->value <= -150 * expectedReducedDepth;
+                    move->value <= -SeePruningMargin * expectedReducedDepth;
 
                 boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
                 MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
