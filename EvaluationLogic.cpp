@@ -2173,15 +2173,11 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     const int bpBonus = std::max(0, 48 - totalPawns * 3);
     if (pieces[3].size() == 2 && ((pieces[3][0] / 8 + pieces[3][0] % 8) % 2) != ((pieces[3][1] / 8 + pieces[3][1] % 8) % 2))    
     {
-        int dev = 0;
-        for (int sq : pieces[3]) if (sq != 2 && sq != 5) dev++;
-        whiteBishopPair = (dev >= 2) ? bpBonus : (dev == 1 ? (bpBonus / 2) : 0);
+        whiteBishopPair = bpBonus;
     }
     if (pieces[11].size() == 2 && ((pieces[11][0] / 8 + pieces[11][0] % 8) % 2) != ((pieces[11][1] / 8 + pieces[11][1] % 8) % 2))
     {
-        int dev = 0;
-        for (int sq : pieces[11]) if (sq != 58 && sq != 61) dev++;
-        blackBishopPair = (dev >= 2) ? bpBonus : (dev == 1 ? (bpBonus / 2) : 0);
+        blackBishopPair = bpBonus;
     }
     int bishopPairVaue = whiteBishopPair - blackBishopPair;
 
@@ -2194,7 +2190,6 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     int piecePlacement = moveRes.placement;
     int pieceActivity = moveRes.activity;
     int threats = moveRes.threats;
-    int space = moveRes.space;
     int rookFileNet = moveRes.rookFileNet;
     int whiteRookFile = moveRes.whiteRookFile;
     int blackRookFile = moveRes.blackRookFile;
@@ -2308,11 +2303,12 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     const int loneKingMateGuidance = LoneKingMateGuidance(thisBoard);
     // Each existing score now has one explicit conceptual owner.  The
     // components are unchanged; only the aggregation is made explicit.
-    const int material = pieceEvaluation + bishopPairVaue;
+    const int basePosition = pieceEvaluation + bishopPairVaue + piecePlacement;
+    const int pawns = pawnStructure + passedPawns;
     pieceActivity += rookFileNet + rookValue;
     const int endgame = loneKingMateGuidance;
-    int unscaled = material + piecePlacement + pieceActivity + threats + pawnStructure +
-                   kingSafety + passedPawns + space + temp + endgame;
+    int unscaled = basePosition + pawns + pieceActivity + kingSafety +
+                   threats + endgame + temp;
 
     double endgameScaleFactor = oppositeColorBishop;
     if (unscaled > 0)
@@ -2370,6 +2366,12 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     if (breakdown != nullptr)
     {
         breakdown->phase = phase;
+        breakdown->basePositionTotal = basePosition;
+        breakdown->pawnsTotal = pawns;
+        breakdown->piecesTotal = pieceActivity;
+        breakdown->kingTotal = kingSafety;
+        breakdown->threatsTotal = threats;
+        breakdown->endgameTotal = endgame;
         breakdown->whiteMaterial = whitePieceEvaluation;
         breakdown->blackMaterial = blackPieceEvaluation;
         breakdown->materialNet = whitePieceEvaluation - blackPieceEvaluation;
@@ -2386,7 +2388,7 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
         breakdown->whiteRookFileBonus = whiteRookFile;
         breakdown->blackRookFileBonus = blackRookFile;
         breakdown->rookFileBonusNet = rookFileNet;
-        breakdown->centerNet = space;
+        breakdown->centerNet = 0;
 
         breakdown->kingAttackNet = kingDangerNet;
         breakdown->whiteKingPlacement = whiteKingPlacement;
@@ -2612,14 +2614,6 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase, 
     int activity = 0;
     int threatValue = 0;
     int kingSafetyPressure = 0;
-    int spaceValue = 0;
-    if (phase >= 12)
-    {
-        if (mainBoard[26] == 1 && mainBoard[27] == 1 && mainBoard[34] != 9)
-            spaceValue += 20;
-        if (mainBoard[34] == 9 && mainBoard[35] == 9 && mainBoard[26] != 1)
-            spaceValue -= 20;
-    }
     int whiteAttackValue = 0;
     int blackAttackValue = 0;
     int whiteRookFileBonus = 0;
@@ -2627,17 +2621,6 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase, 
     int moveCount;
     const long long bpa = ctx.pawnAttacks[1];
     const long long wpa = ctx.pawnAttacks[0];
-    const auto centerSum = [](uint64_t attacks, bool black, int type, const int* values) {
-        attacks &= Option::MoveCenterNonzero[black ? 1 : 0][type];
-        int sum = 0;
-        while (attacks)
-        {
-            const int square = __builtin_ctzll(attacks);
-            attacks &= attacks - 1;
-            sum += values[square];
-        }
-        return sum;
-    };
     const auto taperedTable = [phase](const auto& values, int index)
     {
         return TaperEvaluationValue(values[0][index], values[2][index], phase);
@@ -2707,7 +2690,6 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase, 
                 break;
             case 2:
             {
-                uint64_t whiteOutpostHolesAwarded = 0;
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
                     moveCount = 0;
@@ -2715,18 +2697,6 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase, 
                     activity += KnightOutpostValue(thisBoard, piecePoisiion, true, phase);
                     const uint64_t attacks = ctx.attacks[piecePoisiion];
                     moveCount = __builtin_popcountll(attacks & ~wholeBoard & ~bpa);
-                    uint64_t holes = attacks & ~wholeBoard & ~whiteOutpostHolesAwarded;
-                    while (holes)
-                    {
-                        const int endPlace = __builtin_ctzll(holes);
-                        holes &= holes - 1;
-                        if (KnightOutpostAdvanced[1][endPlace] &&
-                            (KnightOutpostChallengeMask[1][endPlace] & thisBoard.blackPawns) == 0 &&
-                            (KnightOutpostSupportMask[1][endPlace] & thisBoard.whitePawns) != 0)
-                        {
-                            whiteOutpostHolesAwarded |= Option::PowerTwo[endPlace];
-                        }
-                    }
                     uint64_t captures = attacks & blackPieces;
                     while (captures)
                     {
@@ -2918,7 +2888,6 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase, 
                 break;
             case 10:
             {
-                uint64_t blackOutpostHolesAwarded = 0;
                 for (int piecePoisiion : thisBoard.pieces[piece])
                 {
                     moveCount = 0;
@@ -2926,18 +2895,6 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase, 
                     activity -= KnightOutpostValue(thisBoard, piecePoisiion, false, phase);
                     const uint64_t attacks = ctx.attacks[piecePoisiion];
                     moveCount = __builtin_popcountll(attacks & ~wholeBoard & ~wpa);
-                    uint64_t holes = attacks & ~wholeBoard & ~blackOutpostHolesAwarded;
-                    while (holes)
-                    {
-                        const int endPlace = __builtin_ctzll(holes);
-                        holes &= holes - 1;
-                        if (KnightOutpostAdvanced[0][endPlace] &&
-                            (KnightOutpostChallengeMask[0][endPlace] & thisBoard.whitePawns) == 0 &&
-                            (KnightOutpostSupportMask[0][endPlace] & thisBoard.blackPawns) != 0)
-                        {
-                            blackOutpostHolesAwarded |= Option::PowerTwo[endPlace];
-                        }
-                    }
                     uint64_t captures = attacks & whitePieces;
                     while (captures)
                     {
@@ -3296,10 +3253,9 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase, 
     result.activity = activity;
     result.threats = threatValue + scaledAttackNet;
     result.kingSafetyPressure = kingSafetyPressure;
-    result.space = spaceValue;
     result.movement = placement + activity + result.threats + kingSafetyPressure;
     result.attackNet = scaledAttackNet;
-    result.center = spaceValue;
+    result.center = 0;
     result.rookFileNet = rookFileNet;
     result.whiteRookFile = whiteRookFileBonus;
     result.blackRookFile = blackRookFileBonus;
