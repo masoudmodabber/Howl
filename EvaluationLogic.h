@@ -116,6 +116,12 @@ struct EvaluationBreakdown
 
 struct MovementResult
 {
+    int placement = 0;
+    int activity = 0;
+    int threats = 0;
+    int kingSafetyPressure = 0;
+    int space = 0;
+    // Compatibility aggregate for detailed diagnostics and legacy callers.
     int movement = 0;
     int attackNet = 0;
     int center = 0;
