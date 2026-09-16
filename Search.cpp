@@ -24,6 +24,7 @@
 #include "PieceMoves.h"
 #include "DiagnosticLogger.h"
 #include "MateScore.h"
+#include "TranspositionTable.h"
 
 
 std::atomic<bool> Search::active{false};
@@ -1043,6 +1044,10 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             {
                 completedInfo += " tbhits " + std::to_string(
                     tablebaseHits.load(std::memory_order_relaxed));
+                const QSearchTTStats qTTStats = TranspositionTable::QSearchStats();
+                completedInfo += " qttprobes " + std::to_string(qTTStats.probes) +
+                    " qttcutoffs " + std::to_string(qTTStats.usableCutoffs) +
+                    " qttstores " + std::to_string(qTTStats.stores);
                 DiagnosticLogger::Log("EMIT_INFO", completedInfo, DiagnosticLogger::currentSearchId.load());
                 std::cout << completedInfo << '\n';
             }

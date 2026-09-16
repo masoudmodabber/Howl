@@ -3,8 +3,11 @@
 #include <cstdio>
 
 std::vector<TTEntry> TranspositionTable::entries{};
+std::array<QSearchTTEntry, TranspositionTable::qSearchEntryCount>
+    TranspositionTable::qSearchEntries{};
 std::size_t TranspositionTable::entryMask = 0;
 TTStats TranspositionTable::stats{};
+QSearchTTStats TranspositionTable::qSearchStats{};
 bool TranspositionTable::cutoffsEnabled = true;
 #if HOWL_CORRECTNESS_TESTING
 std::size_t TranspositionTable::failureThreshold = 0;
@@ -52,6 +55,7 @@ bool TranspositionTable::Resize(std::size_t targetBytes)
 void TranspositionTable::Clear()
 {
     std::fill(entries.begin(), entries.end(), TTEntry{});
+    std::fill(qSearchEntries.begin(), qSearchEntries.end(), QSearchTTEntry{});
     ResetStats();
 }
 
@@ -321,6 +325,51 @@ void TranspositionTable::Store(uint64_t key, int32_t score, int8_t depth, uint8_
     }
 }
 
+bool TranspositionTable::ProbeQSearch(uint64_t key, QSearchTTEntry& entry)
+{
+    qSearchStats.probes++;
+    const QSearchTTEntry& candidate = qSearchEntries[key & (qSearchEntryCount - 1)];
+    if (candidate.key != key || candidate.flag == TT_NONE)
+        return false;
+    entry = candidate;
+    return true;
+}
+
+void TranspositionTable::StoreQSearch(uint64_t key, int32_t score, int8_t depth,
+    uint8_t state, uint8_t flag, uint16_t bestMove,
+    int32_t staticEval, bool staticEvalValid)
+{
+    if (key == 0 || flag == TT_NONE)
+        return;
+
+    QSearchTTEntry& entry = qSearchEntries[key & (qSearchEntryCount - 1)];
+    if (entry.key != 0 && entry.key != key && entry.depth > depth)
+        return;
+    if (entry.key == key && entry.state == state && entry.depth > depth &&
+        TTFlagIsRigorous(entry.flag) && !TTFlagIsRigorous(flag))
+        return;
+
+    entry.key = key;
+    entry.score = score;
+    entry.depth = depth;
+    entry.state = state;
+    entry.flag = flag;
+    entry.bestMove = bestMove;
+    entry.staticEval = staticEval;
+    entry.staticEvalValid = staticEvalValid;
+    qSearchStats.stores++;
+}
+
+void TranspositionTable::RecordQSearchCutoff()
+{
+    qSearchStats.usableCutoffs++;
+}
+
+QSearchTTStats TranspositionTable::QSearchStats()
+{
+    return qSearchStats;
+}
+
 TTStats TranspositionTable::Stats()
 {
     return stats;
@@ -329,6 +378,7 @@ TTStats TranspositionTable::Stats()
 void TranspositionTable::ResetStats()
 {
     stats = TTStats{};
+    qSearchStats = QSearchTTStats{};
 }
 
 void TranspositionTable::RecordHitStats(bool usableBestMove, bool alreadyFirst)

@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <array>
 #include <vector>
 #include <algorithm>
 #include "Move.h"
@@ -107,6 +108,35 @@ struct TTStats
     long long cutoffs = 0;
 };
 
+enum QSearchTTState : uint8_t
+{
+    QTT_NONE = 0,
+    QTT_CAPTURE_ONLY = 1,
+    QTT_CHECK_SEQUENCE = 2,
+    QTT_EVASION = 3
+};
+
+#pragma pack(push, 1)
+struct QSearchTTEntry
+{
+    uint64_t key = 0;
+    int32_t score = 0;
+    int32_t staticEval = 0;
+    int8_t depth = 0;
+    uint8_t flag = TT_NONE;
+    uint16_t bestMove = 0;
+    uint8_t state = QTT_NONE;
+    bool staticEvalValid = false;
+};
+#pragma pack(pop)
+
+struct QSearchTTStats
+{
+    uint64_t probes = 0;
+    uint64_t usableCutoffs = 0;
+    uint64_t stores = 0;
+};
+
 #if HOWL_CORRECTNESS_TESTING
 struct TTTelemetryBucket
 {
@@ -195,6 +225,13 @@ public:
     static bool Probe(uint64_t key, TTEntry& entry);
     static void Store(uint64_t key, int32_t score, int8_t depth, uint8_t flag, uint16_t bestMove);
 
+    static bool ProbeQSearch(uint64_t key, QSearchTTEntry& entry);
+    static void StoreQSearch(uint64_t key, int32_t score, int8_t depth,
+        uint8_t state, uint8_t flag, uint16_t bestMove,
+        int32_t staticEval, bool staticEvalValid);
+    static void RecordQSearchCutoff();
+    static QSearchTTStats QSearchStats();
+
     static TTStats Stats();
     static void ResetStats();
     static void RecordHitStats(bool usableBestMove, bool alreadyFirst);
@@ -213,8 +250,11 @@ public:
 
 private:
     static std::vector<TTEntry> entries;
+    static constexpr std::size_t qSearchEntryCount = 1U << 15;
+    static std::array<QSearchTTEntry, qSearchEntryCount> qSearchEntries;
     static std::size_t entryMask;
     static TTStats stats;
+    static QSearchTTStats qSearchStats;
     static bool cutoffsEnabled;
 #if HOWL_CORRECTNESS_TESTING
     static std::size_t failureThreshold;
