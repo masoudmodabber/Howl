@@ -239,6 +239,13 @@ int main(int argc, char* argv[])
               << std::setw(10) << "-" 
               << std::setw(10) << bd.tempoNet << "\n";
     std::cout << "--------------------------------------------------------\n";
+    std::cout << "Owners: Base=" << bd.basePositionTotal
+              << " Pawns=" << bd.pawnsTotal
+              << " Pieces=" << bd.piecesTotal
+              << " King=" << bd.kingTotal
+              << " Threats=" << bd.threatsTotal
+              << " Endgame=" << bd.endgameTotal
+              << " Tempo=" << bd.tempoNet << "\n";
     std::cout << std::left << std::setw(22) << "Unscaled Total" 
               << std::right << std::setw(10) << "-" 
               << std::setw(10) << "-" 

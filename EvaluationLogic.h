@@ -9,6 +9,13 @@ struct EvaluationBreakdown
 {
     int phase = 0;
 
+    int basePositionTotal = 0;
+    int pawnsTotal = 0;
+    int piecesTotal = 0;
+    int kingTotal = 0;
+    int threatsTotal = 0;
+    int endgameTotal = 0;
+
     int whiteMaterial = 0;
     int blackMaterial = 0;
     int materialNet = 0;
@@ -120,7 +127,6 @@ struct MovementResult
     int activity = 0;
     int threats = 0;
     int kingSafetyPressure = 0;
-    int space = 0;
     // Compatibility aggregate for detailed diagnostics and legacy callers.
     int movement = 0;
     int attackNet = 0;
