@@ -583,6 +583,8 @@ def _run_single_game_worker(task: SingleGameTask) -> SingleGameOutput:
 # Parameter Discovery and Code Generation
 # =============================================================================
 
+CANONICAL_PARAMETER_COUNT = 908
+
 def discover_parameters_from_option_cpp(option_cpp_path: str = "Option.cpp") -> Dict[str, Parameter]:
     """Extracts all tunable evaluation parameters from Option.cpp with sensible bounds and scales."""
     with open(option_cpp_path, "r", encoding="utf-8") as f:
@@ -597,7 +599,6 @@ def discover_parameters_from_option_cpp(option_cpp_path: str = "Option.cpp") -> 
         "BishopValue": (365, 150, 600, 2.0),
         "RookValue": (515, 250, 900, 2.0),
         "QueenValue": (1020, 600, 1600, 5.0),
-        "KingValue": (1200, 800, 2000, 5.0),
     }
     for name, (def_val, min_v, max_v, sc) in piece_defaults.items():
         m = re.search(rf'int Option::{name}\s*=\s*([0-9-]+);', content)
@@ -607,7 +608,6 @@ def discover_parameters_from_option_cpp(option_cpp_path: str = "Option.cpp") -> 
     # 2. Pawn Structure & End Pawn
     structure_defaults = {
         "DoubledPawnValue": (-20, -100, 0, 1.0),
-        "EndPawnValue": (-20, -100, 100, 1.0),
         "IsolatedPawnMiddleGame": (-10, -60, 0, 1.0),
         "IsolatedPawnEndGame": (-8, -60, 0, 1.0),
     }
@@ -655,29 +655,98 @@ def discover_parameters_from_option_cpp(option_cpp_path: str = "Option.cpp") -> 
             high = max(default_max, val + 40)
             params[pname] = Parameter(pname, val, low, high, scale, enabled=True)
 
+    def extract_semantic_array(arr_name: str, names: List[str], default_min: int,
+                               default_max: int, scale: float = 1.0) -> None:
+        pat = rf'int Option::{arr_name}(?:\[[0-9]*\])?\s*=\s*\{{([^}}]+)\}};'
+        match = re.search(pat, content, re.MULTILINE | re.DOTALL)
+        if not match:
+            raise RuntimeError(f"Canonical SPSA source array not found: {arr_name}")
+        values = [int(token.strip()) for token in match.group(1).split(',') if token.strip()]
+        if len(values) < len(names):
+            raise RuntimeError(f"Canonical SPSA source array is too short: {arr_name}")
+        for name, value in zip(names, values):
+            params[name] = Parameter(
+                name, value, min(default_min, value - 40),
+                max(default_max, value + 40), scale, enabled=True)
+
     # 4. Passed Pawn Parameters
-    extract_array("PassedPawnMiddleGameParameters", 6, 0, 50, 1.0)
-    extract_array("PassedPawnEndGameParameters", 6, 0, 100, 1.0)
+    extract_semantic_array(
+        "PassedPawnMiddleGameParameters",
+        ["PassedPawnMiddleGameBase", *[f"PassedPawnMiddleGameIncrement_{i}" for i in range(1, 6)]],
+        0, 50)
+    extract_semantic_array(
+        "PassedPawnEndGameParameters",
+        ["PassedPawnEndGameBase", *[f"PassedPawnEndGameIncrement_{i}" for i in range(1, 6)]],
+        0, 100)
 
     # 5. Mobility Parameters
-    extract_array("KnightMobilityMiddleGameParameters", 4, -50, 50, 1.0)
-    extract_array("KnightMobilityEndGameParameters", 4, -50, 50, 1.0)
-    extract_array("BishopMobilityMiddleGameParameters", 5, -50, 50, 1.0)
-    extract_array("BishopMobilityEndGameParameters", 5, -50, 50, 1.0)
-    extract_array("RookMobilityMiddleGameParameters", 5, -50, 50, 1.0)
-    extract_array("RookMobilityEndGameParameters", 5, -50, 50, 1.0)
-    extract_array("QueenMobilityMiddleGameParameters", 5, -50, 50, 1.0)
-    extract_array("QueenMobilityEndGameParameters", 5, -50, 50, 1.0)
+    for piece, count in (("Knight", 4), ("Bishop", 5), ("Rook", 5), ("Queen", 5)):
+        for phase_name in ("MiddleGame", "EndGame"):
+            extract_semantic_array(
+                f"{piece}Mobility{phase_name}Parameters",
+                [f"{piece}Mobility{phase_name}Base",
+                 *[f"{piece}Mobility{phase_name}Increment_{i}" for i in range(1, count)]],
+                -50, 50)
 
     # 6. Piece Square Tables (White MG and EG)
     for piece in ["Pawn", "Knight", "Bishop", "Rook", "Queen", "King"]:
         extract_array(f"{piece}InValueWhiteMiddleGame", 64, -150, 150, 1.0)
         extract_array(f"{piece}InValueWhiteEndGame", 64, -150, 150, 1.0)
 
-    # 7. Attack Tables
-    for piece in ["Pawn", "Knight", "Bishop", "Rook", "Queen"]:
-        extract_array(f"{piece}AttackValueMiddleGame", 16, -50, 200, 1.0)
-        extract_array(f"{piece}AttackValueEndGame", 16, -50, 200, 1.0)
+    # 7. Attack Tables: canonical victim slots 1..5 only, for all six attackers.
+    victim_names = ["Pawn", "Knight", "Bishop", "Rook", "Queen"]
+    for attacker in ["Pawn", "Knight", "Bishop", "Rook", "Queen", "King"]:
+        for phase_name in ("MiddleGame", "EndGame"):
+            arr_name = f"{attacker}AttackValue{phase_name}"
+            match = re.search(
+                rf'int Option::{arr_name}(?:\[[0-9]*\])?\s*=\s*\{{([^}}]+)\}};',
+                content, re.MULTILINE | re.DOTALL)
+            if not match:
+                raise RuntimeError(f"Canonical SPSA source array not found: {arr_name}")
+            values = [int(token.strip()) for token in match.group(1).split(',') if token.strip()]
+            for victim_slot, victim in enumerate(victim_names, 1):
+                name = f"{attacker}Attack{victim}_{phase_name}"
+                value = values[victim_slot]
+                params[name] = Parameter(name, value, min(-50, value - 40),
+                                         max(200, value + 40), 1.0, enabled=True)
+
+    # 8. Inline production evaluator parameters, read from their production source.
+    evaluation_logic_path = os.path.join(os.path.dirname(os.path.abspath(option_cpp_path)), "EvaluationLogic.cpp")
+    with open(evaluation_logic_path, "r", encoding="utf-8") as f:
+        evaluation_content = f.read()
+
+    def inline_match(pattern: str, transform=lambda value: int(value)) -> int:
+        match = re.search(pattern, evaluation_content, re.DOTALL)
+        if not match:
+            raise RuntimeError(f"Canonical inline SPSA source pattern not found: {pattern}")
+        return transform(match.group(1))
+
+    inline = {
+        "BishopPairValue": (inline_match(r"bpBonus = std::max\(0, ([0-9-]+) - totalPawns") + 2, 0, 100, 1.0),
+        "BishopOpenFilePawnScale": (inline_match(r"pieces\[9\]\.size\(\)\)\) \* ([0-9-]+)"), 0, 10, 1.0),
+        "TempoMiddleGame": (inline_match(r"TaperGroup1Value\(([0-9-]+), [0-9-]+, phase\)"), -20, 60, 1.0),
+        "TempoEndGame": (inline_match(r"TaperGroup1Value\([0-9-]+, ([0-9-]+), phase\)"), -20, 60, 1.0),
+        "OppositeColorBishopMiddleGameScalePermille": (
+            inline_match(r"oppositeColorBishop = \(([0-9.]+) \* phase", lambda value: int(float(value) * 1000)), 500, 1100, 5.0),
+        "OppositeColorBishopEndGameScalePermille": (
+            inline_match(r"phase \+ ([0-9.]+) \* \(24 - phase\)", lambda value: int(float(value) * 1000)), 400, 1100, 5.0),
+        "MaterialBalanceOffset": (inline_match(r"whitePieceEvaluation \+ ([0-9-]+)\) /"), 500, 3000, 10.0),
+        "PawnDeficitZeroPawnMultiplierPermille": (
+            inline_match(r"pieceBalance \*= \.([0-9]+);", lambda value: int(value) * 100), 300, 1100, 5.0),
+        "PawnDeficitOnePawnMultiplierPermille": (
+            inline_match(r"pieceBalance \*= \.7;.*?pieceBalance \*= \.([0-9]+);", lambda value: int(value) * 100), 500, 1100, 5.0),
+        "EndgamePawnAdvancementRankMultiplier": (
+            inline_match(r"endGameValue = \(pawnPlace / 8\) \* ([0-9-]+);"), 0, 10, 1.0),
+        "PieceAttackScalePercent": (
+            inline_match(r"whiteAttackValue - blackAttackValue\) \* ([0-9-]+)\) / 100"), 50, 250, 1.0),
+    }
+    for name, (value, low, high, scale) in inline.items():
+        params[name] = Parameter(name, value, low, high, scale, enabled=True)
+
+    if len(params) != CANONICAL_PARAMETER_COUNT:
+        raise RuntimeError(
+            f"Canonical SPSA parameter mismatch: discovered {len(params)}, "
+            f"expected {CANONICAL_PARAMETER_COUNT}")
 
     return params
 
@@ -687,8 +756,38 @@ def generate_option_cpp(overrides: Dict[str, float], base_source_path: str = "Op
     with open(base_source_path, "r", encoding="utf-8") as f:
         res = f.read()
 
+    inline_names = {
+        "BishopPairValue", "BishopOpenFilePawnScale", "TempoMiddleGame", "TempoEndGame",
+        "OppositeColorBishopMiddleGameScalePermille", "OppositeColorBishopEndGameScalePermille",
+        "MaterialBalanceOffset", "PawnDeficitZeroPawnMultiplierPermille",
+        "PawnDeficitOnePawnMultiplierPermille", "EndgamePawnAdvancementRankMultiplier",
+        "PieceAttackScalePercent",
+    }
+    source_overrides: Dict[str, float] = {}
+    victims = {"Pawn": 1, "Knight": 2, "Bishop": 3, "Rook": 4, "Queen": 5}
+    for name, value in overrides.items():
+        if name in inline_names:
+            continue
+        match = re.fullmatch(r"PassedPawn(MiddleGame|EndGame)(Base|Increment_([1-5]))", name)
+        if match:
+            index = 0 if match.group(2) == "Base" else int(match.group(3))
+            source_overrides[f"PassedPawn{match.group(1)}Parameters_{index}"] = value
+            continue
+        match = re.fullmatch(r"(Knight|Bishop|Rook|Queen)Mobility(MiddleGame|EndGame)(Base|Increment_([1-4]))", name)
+        if match:
+            index = 0 if match.group(3) == "Base" else int(match.group(4))
+            source_overrides[f"{match.group(1)}Mobility{match.group(2)}Parameters_{index}"] = value
+            continue
+        match = re.fullmatch(
+            r"(Pawn|Knight|Bishop|Rook|Queen|King)Attack(Pawn|Knight|Bishop|Rook|Queen)_(MiddleGame|EndGame)",
+            name)
+        if match:
+            source_overrides[f"{match.group(1)}AttackValue{match.group(3)}_{victims[match.group(2)]}"] = value
+            continue
+        source_overrides[name] = value
+
     # 1. Scalar replacements
-    for name, val in overrides.items():
+    for name, val in source_overrides.items():
         if "_" not in name:
             pattern = rf'(int Option::{name}\s*=\s*)[0-9-]+;'
             if re.search(pattern, res):
@@ -696,7 +795,7 @@ def generate_option_cpp(overrides: Dict[str, float], base_source_path: str = "Op
 
     # 2. Array replacements
     arr_overrides: Dict[str, Dict[int, int]] = {}
-    for name, val in overrides.items():
+    for name, val in source_overrides.items():
         if "_" in name:
             arr_name, idx_str = name.rsplit("_", 1)
             try:
@@ -738,6 +837,45 @@ def generate_option_cpp(overrides: Dict[str, float], base_source_path: str = "Op
     return res
 
 
+def generate_evaluation_logic_cpp(
+    overrides: Dict[str, float], base_source_path: str = "EvaluationLogic.cpp"
+) -> str:
+    """Produces EvaluationLogic.cpp with the canonical inline parameters materialized."""
+    with open(base_source_path, "r", encoding="utf-8") as f:
+        res = f.read()
+
+    def value(name: str) -> int:
+        return int(round(overrides[name]))
+
+    replacements = [
+        (r"const int bpBonus = std::max\(0, 48 - totalPawns \* 3\);",
+         f"const int bpBonus = std::max(0, {value('BishopPairValue') - 2} - totalPawns * 3);"),
+        (r"\(8 - \(pieces\[1\]\.size\(\) \+ pieces\[9\]\.size\(\)\)\) \* 2",
+         f"(8 - (pieces[1].size() + pieces[9].size())) * {value('BishopOpenFilePawnScale')}"),
+        (r"TaperGroup1Value\(24, 11, phase\)",
+         f"TaperGroup1Value({value('TempoMiddleGame')}, {value('TempoEndGame')}, phase)"),
+        (r"\(0\.9 \* phase \+ 0\.75 \* \(24 - phase\)\) / 24",
+         f"(({value('OppositeColorBishopMiddleGameScalePermille')} / 1000.0) * phase + "
+         f"({value('OppositeColorBishopEndGameScalePermille')} / 1000.0) * (24 - phase)) / 24"),
+        (r"\+ 1500\)", f"+ {value('MaterialBalanceOffset')})"),
+        (r"pieceBalance \*= \.7;",
+         f"pieceBalance *= ({value('PawnDeficitZeroPawnMultiplierPermille')} / 1000.0);"),
+        (r"pieceBalance \*= \.9;",
+         f"pieceBalance *= ({value('PawnDeficitOnePawnMultiplierPermille')} / 1000.0);"),
+        (r"const int endGameValue = \(pawnPlace / 8\) \* 2;",
+         f"const int endGameValue = (pawnPlace / 8) * {value('EndgamePawnAdvancementRankMultiplier')};"),
+        (r"const int endGameValue = \(7 - \(pawnPlace / 8\)\) \* 2;",
+         f"const int endGameValue = (7 - (pawnPlace / 8)) * {value('EndgamePawnAdvancementRankMultiplier')};"),
+        (r"\(\(whiteAttackValue - blackAttackValue\) \* 135\) / 100",
+         f"((whiteAttackValue - blackAttackValue) * {value('PieceAttackScalePercent')}) / 100"),
+    ]
+    for pattern, replacement in replacements:
+        res, count = re.subn(pattern, replacement, res)
+        if count == 0:
+            raise RuntimeError(f"Inline SPSA production source pattern not found: {pattern}")
+    return res
+
+
 def build_engine_variant(
     overrides: Dict[str, float],
     out_binary_path: str,
@@ -746,17 +884,23 @@ def build_engine_variant(
     repo_root: str = ".",
     build_dir: str = "build",
 ) -> str:
-    """Compiles Option.cpp with custom parameter overrides and links an isolated Howl executable."""
+    """Compiles canonical parameter overrides and links an isolated Howl executable."""
     os.makedirs(work_dir, exist_ok=True)
     out_binary_path = os.path.abspath(out_binary_path)
     base_option_path = os.path.join(repo_root, "Option.cpp")
     gen_cpp_path = os.path.join(work_dir, f"Option_{variant_name}.cpp")
     gen_obj_path = os.path.join(work_dir, f"Option_{variant_name}.o")
+    gen_eval_cpp_path = os.path.join(work_dir, f"EvaluationLogic_{variant_name}.cpp")
+    gen_eval_obj_path = os.path.join(work_dir, f"EvaluationLogic_{variant_name}.o")
 
     # Generate source
     src = generate_option_cpp(overrides, base_source_path=base_option_path)
     with open(gen_cpp_path, "w", encoding="utf-8") as f:
         f.write(src)
+    eval_src = generate_evaluation_logic_cpp(
+        overrides, base_source_path=os.path.join(repo_root, "EvaluationLogic.cpp"))
+    with open(gen_eval_cpp_path, "w", encoding="utf-8") as f:
+        f.write(eval_src)
 
     # Compile Option.cpp
     fathom_include = os.path.abspath(os.path.join(repo_root, "third_party/fathom/src"))
@@ -768,6 +912,12 @@ def build_engine_variant(
         "-o", gen_obj_path,
     ]
     subprocess.check_call(compile_cmd)
+    eval_compile_cmd = [
+        "c++", "-O3", "-DNDEBUG", "-std=gnu++17",
+        f"-I{fathom_include}", f"-I{os.path.abspath(repo_root)}",
+        "-c", gen_eval_cpp_path, "-o", gen_eval_obj_path,
+    ]
+    subprocess.check_call(eval_compile_cmd)
 
     # Collect existing precompiled object files
     objs_dir = os.path.join(repo_root, build_dir, "CMakeFiles/howl.dir")
@@ -778,7 +928,7 @@ def build_engine_variant(
     existing_objs = [
         os.path.join(objs_dir, f)
         for f in os.listdir(objs_dir)
-        if f.endswith(".o") and f != "Option.cpp.o"
+        if f.endswith(".o") and f not in {"Option.cpp.o", "EvaluationLogic.cpp.o"}
     ]
     fathom_lib = os.path.join(repo_root, build_dir, "libfathom.a")
 
@@ -786,6 +936,7 @@ def build_engine_variant(
         "c++", "-O3", "-DNDEBUG",
         *existing_objs,
         gen_obj_path,
+        gen_eval_obj_path,
         fathom_lib,
         "-o", out_binary_path,
     ]
@@ -872,8 +1023,20 @@ class SPSATuner:
         # Load or discover parameters
         if os.path.isfile(self.params_file):
             self.params = self._load_params(self.params_file)
+            expected_names = set(baseline_params)
+            persisted_names = set(self.params)
+            if (len(self.params) != CANONICAL_PARAMETER_COUNT or
+                    persisted_names != expected_names or
+                    any(not parameter.enabled for parameter in self.params.values())):
+                missing = sorted(expected_names - persisted_names)
+                extra = sorted(persisted_names - expected_names)
+                raise RuntimeError(
+                    "Persisted SPSA parameters are incompatible with the canonical "
+                    f"{CANONICAL_PARAMETER_COUNT}-parameter evaluator set "
+                    f"(found {len(self.params)}; missing={missing[:5]}; extra={extra[:5]}). "
+                    "Start with a fresh --state-dir; automatic migration is intentionally disabled.")
         else:
-            self.params = discover_parameters_from_option_cpp(os.path.join(config.repo_root, "Option.cpp"))
+            self.params = baseline_params
             self._save_params(self.params, self.params_file)
 
         self.theta: Dict[str, float] = {p.name: float(p.current_value) for p in self.params.values()}
@@ -914,6 +1077,10 @@ class SPSATuner:
         self.current_iteration = ckpt.get("current_iteration", 1)
         self.completed_iterations = ckpt.get("completed_iterations", self.current_iteration - 1 if self.current_iteration > 1 else 0)
         saved_theta = ckpt.get("theta", {})
+        if set(saved_theta) != set(self.params):
+            raise RuntimeError(
+                "Persisted SPSA checkpoint parameter names do not match the canonical evaluator set. "
+                "Start with a fresh --state-dir; automatic migration is intentionally disabled.")
         for k, v in saved_theta.items():
             if k in self.params:
                 self.theta[k] = float(v)
