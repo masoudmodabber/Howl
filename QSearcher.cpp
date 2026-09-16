@@ -13,6 +13,7 @@
 #include "RepetitionHistory.h"
 #include "ChessStringManipulation.h"
 #include "MateScore.h"
+#include "TranspositionTable.h"
 
 namespace {
 thread_local int qSearchPoolDepth = 0;
@@ -106,7 +107,15 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         extention = Option::checkExtension;
     }
 
-    const auto evaluate = [&]() { return EvaluationLogic::Evaluate(board4); };
+    int staticEval = 0;
+    bool staticEvalKnown = false;
+    const auto evaluate = [&]() {
+        if (!staticEvalKnown) {
+            staticEval = EvaluationLogic::Evaluate(board4);
+            staticEvalKnown = true;
+        }
+        return staticEval;
+    };
     
     MovePrintValue* retValue = new MovePrintValue();
     retValue->printString = "";
@@ -129,16 +138,6 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
     if (BoardLogic::UnderAttack(board4, board4.pieces[(1 - turn) * 8 + 6].front(), board4.sideToMove)) {
         retValue->value = 160000;
         retValue->MarkSpeculative(SearchProvenance::InvalidMove);
-        delete MPValue;
-        MPValue = nullptr;
-        return retValue;
-    }
-    
-    if (depth == 0 && lastCheck == 0 && !kick && !currentSideInCheck) {
-        retValue->value = evaluate();
-        retValue->bound = retValue->value <= origAlpha ? SearchBound::Upper
-            : (retValue->value >= origBeta ? SearchBound::Lower : SearchBound::Exact);
-        retValue->selective = true;
         delete MPValue;
         MPValue = nullptr;
         return retValue;
@@ -177,23 +176,86 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         MPValue = nullptr;
         return QSearch(isPVNode, alpha, beta, prevMove, depthGone, 0, false, 1, move1, move2, move3, board4, MAtESearch, depthQuisStarted, nullWindowSearch);
     }
+
+    const bool frontierPhase = qsearchDistance <= 1;
+    const bool deepResolutionPhase = qsearchDistance >= 5;
+    const uint8_t phaseState = frontierPhase ? 0 : (deepResolutionPhase ? 2 : 1);
+    const uint8_t modeState = currentSideInCheck ? QTT_EVASION
+        : (checkChecked ? QTT_CHECK_SEQUENCE : QTT_CAPTURE_ONLY);
+    const uint8_t qSearchState = static_cast<uint8_t>(
+        modeState | (phaseState << 2) | (isPVNode ? 0x10 : 0));
+
+    QSearchTTEntry qTTEntry;
+    const bool qTTHit = TranspositionTable::ProbeQSearch(
+        board4.ZobristHashCode, qTTEntry);
+    if (qTTHit && qTTEntry.staticEvalValid) {
+        staticEval = qTTEntry.staticEval;
+        staticEvalKnown = true;
+    }
+
+    const bool qTTCompatible = qTTHit && qTTEntry.state == qSearchState &&
+        qTTEntry.depth >= depth;
+    int qTTScore = 0;
+    uint8_t qTTBase = TT_NONE;
+    if (qTTCompatible) {
+        qTTScore = MateScore::FromTranspositionTable(qTTEntry.score, depthGone);
+        qTTBase = TTBaseFlag(qTTEntry.flag);
+    }
+
+    if (!isPVNode && qTTCompatible && TTFlagIsRigorous(qTTEntry.flag) &&
+        TranspositionTable::CutoffsEnabled() &&
+        (qTTBase == TT_EXACT ||
+         (qTTBase == TT_LOWER_BOUND && qTTScore >= beta) ||
+         (qTTBase == TT_UPPER_BOUND && qTTScore <= alpha))) {
+        retValue->value = qTTScore;
+        retValue->bound = qTTBase == TT_LOWER_BOUND ? SearchBound::Lower
+            : (qTTBase == TT_UPPER_BOUND ? SearchBound::Upper : SearchBound::Exact);
+        retValue->SetProof(qTTBase != TT_UPPER_BOUND, qTTBase != TT_LOWER_BOUND);
+        retValue->selective = true;
+        TranspositionTable::RecordQSearchCutoff();
+        return retValue;
+    }
+
+    const auto storeQResult = [&](const MovePrintValue& result, uint16_t bestMove) {
+        constexpr uint16_t unsafeProvenance =
+            static_cast<uint16_t>(SearchProvenance::Repetition) |
+            static_cast<uint16_t>(SearchProvenance::Aborted) |
+            static_cast<uint16_t>(SearchProvenance::InvalidMove);
+        if ((result.provenance & unsafeProvenance) != 0)
+            return;
+        TranspositionTable::StoreQSearch(
+            board4.ZobristHashCode,
+            MateScore::ToTranspositionTable(result.value, depthGone),
+            static_cast<int8_t>(std::max(-128, std::min(127, depth))),
+            qSearchState, TTFlagForResult(result), bestMove,
+            staticEval, staticEvalKnown);
+    };
+
     if (depth == 0) {
         retValue->value = evaluate();
         retValue->bound = retValue->value <= origAlpha ? SearchBound::Upper
             : (retValue->value >= origBeta ? SearchBound::Lower : SearchBound::Exact);
         retValue->selective = true;
+        storeQResult(*retValue, 0);
         delete MPValue;
         MPValue = nullptr;
         return retValue;
     }
     int valueTemp2 = -200000;
+    bool standPatUsesTTLower = false;
     if (!checkChecked && !currentSideInCheck) {
         valueTemp2 = evaluate();
+        if (qTTCompatible && TTFlagIsRigorous(qTTEntry.flag) &&
+            (qTTBase == TT_EXACT || qTTBase == TT_LOWER_BOUND)) {
+            standPatUsesTTLower = qTTBase == TT_LOWER_BOUND && qTTScore > valueTemp2;
+            valueTemp2 = std::max(valueTemp2, qTTScore);
+        }
         if (valueTemp2 >= beta) {
             retValue->value = valueTemp2;
             retValue->bound = SearchBound::Lower;
             retValue->proof = LowerProof;
             retValue->selective = true;
+            storeQResult(*retValue, 0);
             delete MPValue;
             MPValue = nullptr;
             return retValue;
@@ -203,15 +265,12 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
     // A wider window must preserve the lower bound returned by a stand-pat cutoff.
     const bool canStandPat = !checkChecked && !currentSideInCheck;
     int bestMoveValue = canStandPat ? valueTemp2 : -200000;
-    bool allUpperProof = true;
+    bool allUpperProof = !standPatUsesTTLower;
     bool bestLowerProof = canStandPat;
     if (canStandPat && valueTemp2 > alpha) alpha = valueTemp2;
     DeferredMove deferredMoves[256];
     int deferredCount = 0;
     bool hasDeferredStage2 = false;
-    const bool frontierPhase = qsearchDistance <= 1;
-    const bool deepResolutionPhase = qsearchDistance >= 5;
-
     if (!currentSideInCheck) {
         moveList = MoveLogic::QSearchStage1Generator(
             board4, depth, depthGone, deferredMoves, deferredCount, prevMove,
@@ -388,6 +447,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                         retValue->bound = SearchBound::Lower;
                         retValue->SetProof((moveProof & LowerProof) != 0, false);
                         retValue->selective = true;
+                        storeQResult(*retValue, TTMoveHelper::PackMove(*move));
                         deleteMoveList(moveList);
                         if (hasDeferredStage2 && currentStage == 1) {
                             for (int d = 0; d < deferredCount; ++d) {
@@ -488,6 +548,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
                         retValue->bound = SearchBound::Lower;
                         retValue->SetProof((moveProof & LowerProof) != 0, false);
                         retValue->selective = true;
+                        storeQResult(*retValue, TTMoveHelper::PackMove(*move));
                         deleteMoveList(moveList);
                         if (hasDeferredStage2 && currentStage == 1) {
                             for (int d = 0; d < deferredCount; ++d) {
@@ -534,6 +595,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         retValue->bound = retValue->value <= origAlpha ? SearchBound::Upper
             : (retValue->value >= origBeta ? SearchBound::Lower : SearchBound::Exact);
         retValue->selective = true;
+        storeQResult(*retValue, 0);
         deleteMoveList(moveList);
         delete MPValue;
         MPValue = nullptr;
@@ -542,6 +604,7 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
         Move mateMove;
         mateMove.value = MateScore::MatedAtPly(depthGone);
         retValue->value = MateScore::MatedAtPly(depthGone);
+        storeQResult(*retValue, 0);
         deleteMoveList(moveList);
         delete MPValue;
         MPValue = nullptr;
@@ -553,6 +616,9 @@ MovePrintValue* QSearcher::QSearch(bool isPVNode, int alpha, int beta, Move& pre
             : (bestMoveValue >= origBeta ? SearchBound::Lower : SearchBound::Exact);
         retValue->selective = true;
         retValue->printString = (SelectedMove != nullptr) ? (ChessStringManipulation::PVToString(*SelectedMove, 0, false, board4) + ' ' + SelectedPV) : "";
+        const uint16_t packedBestMove = SelectedMove != nullptr
+            ? TTMoveHelper::PackMove(*SelectedMove) : 0;
+        storeQResult(*retValue, packedBestMove);
         deleteMoveList(moveList);
         delete MPValue;
         MPValue = nullptr;

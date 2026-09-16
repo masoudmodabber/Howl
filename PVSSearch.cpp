@@ -1437,10 +1437,31 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             return retValue;
         }
     }
-    if (!isPVNode && !nodeInCheck && !MAtESearch && depth <= 3 &&
-        beta < 159800 && alpha > -159800)
+    const bool staticPruningContext = !isPVNode && !nodeInCheck &&
+        !MAtESearch && depth <= 3 &&
+        alpha > -MateScore::Threshold && beta < MateScore::Threshold;
+    if (staticPruningContext)
     {
         const int staticValue = EvaluationLogic::Evaluate(board4);
+
+        if (depth <= 2)
+        {
+            const int razorMargin = 200 + 120 * depth;
+            if (staticValue + razorMargin <= alpha)
+            {
+                MovePrintValue* razorResult = StartQSearch(
+                    false, alpha, beta, prevMove, depthGone, move1, move2,
+                    move3, board4, nullWindowSearch, previousMoveWasCheck);
+                if (razorResult->ProvesUpper(alpha))
+                {
+                    delete retValue;
+                    delete MPValue;
+                    return razorResult;
+                }
+                delete razorResult;
+            }
+        }
+
         const int reverseFutilityMargin = 90 * depth;
         if (staticValue - reverseFutilityMargin >= beta)
         {
