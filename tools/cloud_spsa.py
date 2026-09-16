@@ -36,6 +36,7 @@ class Runner:
         self.repo = Path(args.repo_root).resolve()
         self.metadata_path = self.repo / args.metadata
         self.metadata = self._load_metadata()
+        self._spsa_started = False
 
     def _load_metadata(self) -> Dict[str, Any]:
         if self.metadata_path.is_file():
@@ -194,6 +195,18 @@ class Runner:
         ])
 
     def launch(self) -> None:
+        try:
+            self._launch()
+        except (RuntimeError, subprocess.CalledProcessError):
+            if not self._spsa_started and not self.args.dry_run and self._vm_exists():
+                print("Launch failed before SPSA started; deallocating the VM.", file=sys.stderr)
+                self._az(
+                    "vm", "deallocate", "--resource-group", self.resource_group,
+                    "--name", self.vm_name, check=False,
+                )
+            raise
+
+    def _launch(self) -> None:
         self._validate_local()
         group_result = self._az(
             "group", "exists", "--name", self.resource_group,
@@ -259,6 +272,7 @@ class Runner:
 
         running = self._ssh(f"tmux has-session -t {TMUX_SESSION}", capture=True, check=False)
         if running.returncode == 0 and not self.args.dry_run:
+            self._spsa_started = True
             self._ssh("sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y curl")
             self._configure_runtime_guards(vm_id)
             print(f"SPSA session '{TMUX_SESSION}' is already running; runtime guards were refreshed.")
@@ -271,14 +285,58 @@ class Runner:
             "python3 -m pip install --user chess"
         )
         self._ssh(f"mkdir -p {DEFAULT_REMOTE_REPO} {DEFAULT_REMOTE_SYZYGY}")
+        preserve_state = "! -name spsa_state" if self.args.resume else ""
+        self._ssh(
+            f"find {DEFAULT_REMOTE_REPO} -mindepth 1 -maxdepth 1 {preserve_state} "
+            "-exec rm -rf -- {} +"
+        )
+        repo_excludes = [
+            "--exclude", ".git/",
+            "--exclude", "build*/",
+            "--exclude", "spsa_state/",
+            "--exclude", "spsa_state_*/",
+            "--exclude", "match-engines/",
+            "--exclude", "*.log",
+            "--exclude", "*.pgn",
+            "--exclude", "core",
+            "--exclude", "core.*",
+            "--exclude", ".cloud_spsa.json",
+            "--exclude", "__pycache__/",
+            "--exclude", "*.py[cod]",
+            "--exclude", ".venv/",
+            "--exclude", "venv/",
+            "--exclude", "Testing/",
+            "--exclude", "diagnostics/",
+            "--exclude", "scratch/",
+            "--exclude", "tuner-corpus/",
+            "--exclude", "*.tsv",
+            "--exclude", "benchmarks/results.md",
+            "--exclude", ".DS_Store",
+            "--exclude", "howl",
+            "--exclude", "howl2",
+            "--exclude", "a.out",
+            "--exclude", "*.dSYM/",
+            "--exclude", "Howl.zip",
+            "--exclude", ".codex/",
+            "--exclude", ".vscode/",
+        ]
+        if self.args.metadata != ".cloud_spsa.json":
+            repo_excludes.extend(["--exclude", self.args.metadata])
         self._rsync(
             f"{self.repo}/", f"{DEFAULT_REMOTE_REPO}/",
-            ["--exclude", ".git/", "--exclude", "build/", "--exclude", "spsa_state/",
-             "--exclude", self.args.metadata],
+            repo_excludes,
         )
         local_state = self.repo / "spsa_state"
-        if local_state.is_dir():
+        if self.args.resume and local_state.is_dir():
             self._rsync(f"{local_state}/", f"{DEFAULT_REMOTE_REPO}/spsa_state/")
+        elif self.args.resume:
+            remote_state = self._ssh(
+                f"test -f {DEFAULT_REMOTE_REPO}/spsa_state/spsa_checkpoint.json",
+                capture=True, check=False,
+            )
+            if remote_state.returncode != 0 and not self.args.dry_run:
+                raise RuntimeError(
+                    "--resume requested, but no local or remote SPSA checkpoint state exists")
         local_syzygy = Path(self.args.local_syzygy).expanduser().resolve()
         if local_syzygy.is_dir():
             self._rsync(f"{local_syzygy}/", f"{DEFAULT_REMOTE_SYZYGY}/")
@@ -297,7 +355,16 @@ class Runner:
         )
         self._ssh(f"tmux new-session -d -s {TMUX_SESSION} bash -lc {shlex.quote(spsa)}")
 
-        self._configure_runtime_guards(vm_id)
+        try:
+            self._configure_runtime_guards(vm_id)
+        except (RuntimeError, subprocess.CalledProcessError):
+            self._ssh(
+                f"tmux send-keys -t {TMUX_SESSION} C-c 2>/dev/null || true; sleep 3; "
+                f"tmux kill-session -t {TMUX_SESSION} 2>/dev/null || true; sync",
+                check=False,
+            )
+            raise
+        self._spsa_started = True
         print(f"SPSA launched on {self.vm_name}.")
 
     def status(self) -> None:
@@ -329,8 +396,9 @@ class Runner:
                 checkpoint = json.loads(checkpoint_text)
             except json.JSONDecodeError:
                 pass
-        completed = checkpoint.get("completed_iterations", 0)
-        current = checkpoint.get("current_iteration", completed + 1)
+        valid_state = bool(checkpoint) and "completed_iterations" in checkpoint and "current_iteration" in checkpoint
+        completed = checkpoint.get("completed_iterations", 0) if valid_state else 0
+        current: Any = checkpoint.get("current_iteration") if valid_state else "unavailable"
         started = self.metadata.get("started_at")
         elapsed = "unknown"
         if started:
@@ -339,7 +407,7 @@ class Runner:
         score = "unavailable"
         l1 = "unavailable"
         match = re.search(r"Plus ([0-9.]+) Minus ([0-9.]+).*theta dL1=([0-9.]+)", latest)
-        if match:
+        if valid_state and match:
             score = f"plus {match.group(1)}, minus {match.group(2)}"
             l1 = match.group(3)
         print(f"VM state: {normalized_state}")
@@ -411,7 +479,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--metadata", default=DEFAULT_METADATA)
     parser.add_argument("--dry-run", action="store_true", help="Print commands without creating Azure resources")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for command in ("launch", "status", "logs", "download-state", "stop", "destroy"):
+    launch_parser = subparsers.add_parser("launch")
+    launch_parser.add_argument(
+        "--resume", action="store_true",
+        help="preserve compatible remote state and upload local spsa_state when present",
+    )
+    for command in ("status", "logs", "download-state", "stop", "destroy"):
         subparsers.add_parser(command)
     return parser
 
