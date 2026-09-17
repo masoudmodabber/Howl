@@ -1481,8 +1481,8 @@ int CountNonKingSideAttacks(Board& board, bool white, int target)
 
 int UndefendedKingZoneDanger(Board& board, bool whiteKing, int kingSquare)
 {
-    constexpr int UndefendedSquareDanger = 2;
-    constexpr int AdditionalAttackerDanger = 1;
+    const int UndefendedSquareDanger = Option::KingUndefendedZoneDanger;
+    const int AdditionalAttackerDanger = Option::KingAdditionalZoneAttackerDanger;
     const bool attackingWhite = !whiteKing;
     const PrecomputedKingZone& zone = KingZonesData.zones[kingSquare];
     int danger = 0;
@@ -1575,7 +1575,9 @@ int ShelterDanger(Board& board, bool whiteKing, int kingSquare, const Evaluation
         {
             continue;
         }
-        danger += secondRankPawn ? 5 : (fartherPawn ? 10 : 16);
+        danger += secondRankPawn ? Option::KingShelterSecondRankDanger
+                                 : (fartherPawn ? Option::KingShelterAdvancedPawnDanger
+                                               : Option::KingShelterMissingPawnDanger);
 
         bool fileHasEnemyPawn = false;
         if (ctx)
@@ -1591,7 +1593,7 @@ int ShelterDanger(Board& board, bool whiteKing, int kingSquare, const Evaluation
         }
         if (!secondRankPawn && !fartherPawn && !fileHasEnemyPawn)
         {
-            danger += 7;
+            danger += Option::KingShelterOpenFileDanger;
         }
     }
     return danger;
@@ -1606,8 +1608,12 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const Evaluati
         local.InitializeAttacks();
         return EvaluateKingDanger(board, whiteKing, &local, needDetails);
     }
-    static constexpr int attackerWeight[7] = {0, 2, 5, 5, 8, 12, 0};
-    static constexpr int defenderWeight[7] = {0, 2, 4, 4, 5, 7, 0};
+    const int attackerWeight[7] = {0, Option::KingAttackerPawnWeight,
+        Option::KingAttackerMinorWeight, Option::KingAttackerMinorWeight,
+        Option::KingAttackerRookWeight, Option::KingAttackerQueenWeight, 0};
+    const int defenderWeight[7] = {0, Option::KingDefenderPawnWeight,
+        Option::KingDefenderMinorWeight, Option::KingDefenderMinorWeight,
+        Option::KingDefenderRookWeight, Option::KingDefenderQueenWeight, 0};
     const int kingSquare = whiteKing ? ctx->whiteKingSq : ctx->blackKingSq;
     const bool attackingWhite = !whiteKing;
     const PrecomputedKingZone& zone = KingZonesData.zones[kingSquare];
@@ -1663,13 +1669,14 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const Evaluati
                     restrictedBetweenSquares |= AttackPlaces::BetweenMask[square][target] & attackingPawnAttacks;
                 }
                 if ((type == 3 || type == 5) && (hits & Option::PowerTwo[kingSquare]))
-                    diagonalPressure += 9;
+                    diagonalPressure += Option::KingDiagonalLineDanger;
             }
             if (type >= 4)
             {
                 for (int file = minFile; file <= maxFile; ++file)
                     if (fileOpenness[file] && (hits & (0x0101010101010101ULL << file)))
-                        filePressure += fileOpenness[file] == 2 ? 10 : 6;
+                        filePressure += fileOpenness[file] == 2
+                            ? Option::KingOpenLineDanger : Option::KingSemiOpenLineDanger;
                 if (type == 4) rookHits |= hits;
                 else queenHits |= hits;
             }
@@ -1692,8 +1699,9 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const Evaluati
     const int edgeDirections = 9 - zone.count;
     const int phaseVal = ctx->phase;
     const bool hasHeavyMatingBattery = phaseVal >= 12 && (queenHits & rookHits & undefended) != 0;
-    const int escapeDanger = controlledEscapes * 6 + occupiedEscapes * 2 +
-                             edgeDirections * 2 + std::max(0, 3 - safeEscapes) * 8;
+    const int escapeDanger = controlledEscapes * Option::KingControlledEscapeDanger
+                           + (occupiedEscapes + edgeDirections) * Option::KingBlockedEscapeDanger
+                           + std::max(0, 3 - safeEscapes) * Option::KingTrappedEscapeDanger;
     const int balanceDanger = std::max(0, attackerParticipation - defenderParticipation) +
                               std::max(0, attackerCount - defenderCount) * 4;
     const int shelterDanger = ShelterDanger(board, whiteKing, kingSquare, ctx);
@@ -1701,7 +1709,7 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const Evaluati
     const int defensiveRestriction = __builtin_popcountll(restrictedBetweenSquares) * 6;
     int rawDanger = attackerParticipation * 2 + escapeDanger +
                     lineDanger + shelterDanger + balanceDanger + undefendedKingZoneDanger +
-                    defensiveRestriction + (hasHeavyMatingBattery ? 140 : 0);
+                    defensiveRestriction + (hasHeavyMatingBattery ? Option::KingHeavyBatteryDanger : 0);
 
     const int queenCount = board.pieces[attackingWhite ? 5 : 13].size();
     const int rookCount = board.pieces[attackingWhite ? 4 : 12].size();
@@ -1765,8 +1773,14 @@ EvaluationChessCache EvaluationLogic::EvalCache;
 PawnCache EvaluationLogic::PawnEvalCache;
 
 int EvaluationLogic::CentralKingReadinessPenalty(Board& board, bool whiteKing, int phase,
-                                                const EvaluationContext* ctx)
+                                                const EvaluationContext* ctx,
+                                                int coordinationWeight,
+                                                int latentWeight,
+                                                int shelterWingWeight)
 {
+    if (coordinationWeight < 0) coordinationWeight = Option::KingUnreadyCoordinationWeight;
+    if (latentWeight < 0) latentWeight = Option::KingLatentActivationWeight;
+    if (shelterWingWeight < 0) shelterWingWeight = Option::KingFutureShelterWingWeight;
     const int king = board.pieces[whiteKing ? 6 : 14].front();
     const int home = whiteKing ? 0 : 56;
     const int forward = whiteKing ? 8 : -8;
@@ -1860,15 +1874,15 @@ int EvaluationLogic::CentralKingReadinessPenalty(Board& board, bool whiteKing, i
 
     // Direct centipawn terms: coordination <=64, latent reinforcement <=24,
     // future shelter <=48. Developed coverage reduces the unresolved liability.
-    const int coordination = 16 * std::min(4, unready + blockedBishops);
-    const int latent = reinforcement ? 24 : 0;
+    const int coordination = coordinationWeight * std::min(4, unready + blockedBishops);
+    const int latent = reinforcement ? latentWeight : 0;
     int shelter = 0;
     if (reinforcement && (whiteKing ? board.whiteSmallCastle : board.blackSmallCastle) &&
         board.mainBoard[home + 7] == own + 4)
     {
         for (int file = 5; file <= 7; ++file)
             if (board.mainBoard[home + forward + file] != own + 1)
-                shelter += file == 6 ? 32 : 16;
+                shelter += file == 6 ? 2 * shelterWingWeight : shelterWingWeight;
         shelter = std::min(48, shelter);
     }
     const int penalty = (coordination + latent + shelter) / (developedCover ? 4 : 1);
@@ -3112,7 +3126,7 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase, 
                     } else if (attackers > defenders) {
                         threatValue -= 24;
                     } else if (whiteCentralKing && (c == 3 || c == 4) && !pawnDefended) {
-                        kingSafetyPressure -= 12;
+                        kingSafetyPressure -= Option::KingPinnedShelterPawnWeight;
                     }
                 }
                 break;
@@ -3180,7 +3194,7 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase, 
                     } else if (attackers > defenders) {
                         threatValue += 24;
                     } else if (blackCentralKing && (c == 3 || c == 4) && !pawnDefended) {
-                        kingSafetyPressure += 12;
+                        kingSafetyPressure += Option::KingPinnedShelterPawnWeight;
                     }
                 }
                 break;
@@ -3204,13 +3218,13 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase, 
         for (int qSq : thisBoard.pieces[13]) {
             int qr = qSq / 8;
             if (qr <= 1 && wKr <= 1 && wKf >= 2 && wKf <= 5) {
-                kingSafetyPressure -= 85;
+                kingSafetyPressure -= Option::KingInfiltratedQueenWeight;
             }
         }
         for (int qSq : thisBoard.pieces[5]) {
             int qr = qSq / 8;
             if (qr >= 6 && bKr >= 6 && bKf >= 2 && bKf <= 5) {
-                kingSafetyPressure += 85;
+                kingSafetyPressure += Option::KingInfiltratedQueenWeight;
             }
         }
     }

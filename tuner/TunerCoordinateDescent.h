@@ -241,6 +241,10 @@ public:
               (parameter.semanticIndex == 4 || parameter.semanticIndex == 5))))
             return true;
 
+        if (selected(ParameterFamily::King) &&
+            parameter.family == ParameterFamily::KingSafety)
+            return true;
+
         if (selected(ParameterFamily::BaseScalars))
         {
             if (parameter.family == ParameterFamily::PieceValue) return true;
@@ -461,6 +465,7 @@ public:
         case ParameterFamily::Pieces: return "Pieces";
         case ParameterFamily::Threats: return "Threats";
         case ParameterFamily::Endgame: return "Endgame";
+        case ParameterFamily::King: return "King";
         case ParameterFamily::PST: return "PST";
         default: return "Unknown";
         }
@@ -481,7 +486,7 @@ public:
             ParameterFamily::EndgameWeights,
             ParameterFamily::BaseScalars, ParameterFamily::Pawns,
             ParameterFamily::Pieces, ParameterFamily::Threats,
-            ParameterFamily::Endgame, ParameterFamily::PST
+            ParameterFamily::Endgame, ParameterFamily::King, ParameterFamily::PST
         };
         for (ParameterFamily candidate : families)
         {
@@ -546,10 +551,13 @@ public:
                 if (!targetPtr) continue;
 
                 const int currentValue = *targetPtr;
-                const int candidates[5] = {
+                int candidates[5] = {
                     currentValue - 2 * delta, currentValue - delta, currentValue,
                     currentValue + delta, currentValue + 2 * delta
                 };
+                if (param.minValue != param.maxValue)
+                    for (int& candidate : candidates)
+                        candidate = std::clamp(candidate, param.minValue, param.maxValue);
                 double candidateLosses[5];
                 for (int c = 0; c < 5; ++c)
                 {

@@ -76,6 +76,36 @@ public:
     static int LoneKingConfinementWeight;
     static int LoneKingRestrictedNeighbourWeight;
     static int LowMaterialScalePermille;
+    static int KingAttackerPawnWeight;
+    static int KingAttackerMinorWeight;
+    static int KingAttackerRookWeight;
+    static int KingAttackerQueenWeight;
+    static int KingDefenderPawnWeight;
+    static int KingDefenderMinorWeight;
+    static int KingDefenderRookWeight;
+    static int KingDefenderQueenWeight;
+    static int KingShelterSecondRankDanger;
+    static int KingShelterAdvancedPawnDanger;
+    static int KingShelterMissingPawnDanger;
+    static int KingShelterOpenFileDanger;
+    static int KingUndefendedZoneDanger;
+    static int KingAdditionalZoneAttackerDanger;
+    static int KingSemiOpenLineDanger;
+    static int KingOpenLineDanger;
+    static int KingDiagonalLineDanger;
+    static int KingControlledEscapeDanger;
+    static int KingBlockedEscapeDanger;
+    static int KingTrappedEscapeDanger;
+    static int KingHeavyBatteryDanger;
+    static int CentralKingInnerMinorPressure;
+    static int CentralKingOuterMinorPressure;
+    static int CentralKingReadinessLagWeight;
+    static int CentralKingPressureScale;
+    static int KingUnreadyCoordinationWeight;
+    static int KingLatentActivationWeight;
+    static int KingFutureShelterWingWeight;
+    static int KingPinnedShelterPawnWeight;
+    static int KingInfiltratedQueenWeight;
 
     // Changeable
     static int pieceMovement[2][7][120];

@@ -11,7 +11,21 @@
 
 namespace CentralKingAttackPressure
 {
-constexpr int FinalMultiplier = 2;
+struct Weights
+{
+    int innerMinorPressure;
+    int outerMinorPressure;
+    int readinessLagWeight;
+    int pressureScale;
+};
+
+inline Weights ProductionWeights()
+{
+    return {Option::CentralKingInnerMinorPressure,
+            Option::CentralKingOuterMinorPressure,
+            Option::CentralKingReadinessLagWeight,
+            Option::CentralKingPressureScale};
+}
 
 struct Result
 {
@@ -224,8 +238,11 @@ inline bool MinorAttacksLayerFast(long long occupancy, int pieceType, int from, 
 }
 
 inline Result Evaluate(Board& board, bool whiteKing, uint8_t whitePawnFiles, uint8_t blackPawnFiles,
-                       const uint64_t* pieceAttacks = nullptr, const uint64_t* legacyAttacks = nullptr)
+                       const uint64_t* pieceAttacks = nullptr, const uint64_t* legacyAttacks = nullptr,
+                       const Weights* suppliedWeights = nullptr)
 {
+    const Weights productionWeights = ProductionWeights();
+    const Weights& weights = suppliedWeights ? *suppliedWeights : productionWeights;
     Result result;
     result.generalCentreOpenness = MissingPawnPresences(whitePawnFiles, blackPawnFiles, 2, 5);
     result.dFileExposure = MissingPawnPresences(whitePawnFiles, blackPawnFiles, 3, 3);
@@ -339,8 +356,8 @@ inline Result Evaluate(Board& board, bool whiteKing, uint8_t whitePawnFiles, uin
             }
         }
     }
-    result.innerAttackContribution = result.innerAttackers * 12;
-    result.outerAttackContribution = result.outerAttackers * 6;
+    result.innerAttackContribution = result.innerAttackers * weights.innerMinorPressure;
+    result.outerAttackContribution = result.outerAttackers * weights.outerMinorPressure;
 
     const int attackerCount = result.innerAttackers + result.outerAttackers;
     if ((result.heavyLinePressure > 0 || result.bishopDiagonalPressure > 0) &&
@@ -385,7 +402,7 @@ inline Result Evaluate(Board& board, bool whiteKing, uint8_t whitePawnFiles, uin
         const bool queenInCorridor = (board.mainBoard[whiteKing ? 3 : 59] == (whiteKing ? 5 : 13));
 
         const int readinessLag = evacuationObstruction + minorLag + (queenInCorridor && evacuationObstruction > 0 ? 1 : 0);
-        result.readinessPressure = readinessLag * 6;
+        result.readinessPressure = readinessLag * weights.readinessLagWeight;
     }
 
     const int rawPressure = result.heavyLinePressure +
@@ -401,7 +418,7 @@ inline Result Evaluate(Board& board, bool whiteKing, uint8_t whitePawnFiles, uin
         result.castlingMitigation = pressure - mitigated;
         pressure = mitigated;
     }
-    result.contribution = -pressure * FinalMultiplier;
+    result.contribution = -pressure * weights.pressureScale;
     return result;
 }
 
@@ -412,6 +429,15 @@ inline Result Evaluate(Board& board, bool whiteKing)
     for (int square : board.pieces[1]) whitePawnFiles |= static_cast<uint8_t>(1 << (square % 8));
     for (int square : board.pieces[9]) blackPawnFiles |= static_cast<uint8_t>(1 << (square % 8));
     return Evaluate(board, whiteKing, whitePawnFiles, blackPawnFiles);
+}
+
+inline Result Evaluate(Board& board, bool whiteKing, const Weights& weights)
+{
+    uint8_t whitePawnFiles = 0;
+    uint8_t blackPawnFiles = 0;
+    for (int square : board.pieces[1]) whitePawnFiles |= static_cast<uint8_t>(1 << (square % 8));
+    for (int square : board.pieces[9]) blackPawnFiles |= static_cast<uint8_t>(1 << (square % 8));
+    return Evaluate(board, whiteKing, whitePawnFiles, blackPawnFiles, nullptr, nullptr, &weights);
 }
 }
 
