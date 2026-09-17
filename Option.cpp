@@ -5,6 +5,7 @@
 #include "Option.h"
 #include "MobilityV2.h"
 #include "PassedPawnV2.h"
+#include "PieceSquareModel.h"
 
 char Option::charPowerTwo[8] = {};
 char Option::charPowerTwoC[8] = {};
@@ -19,86 +20,63 @@ int Option::reductiondepth = 4;
 int Option::futilityMargin = 20;
 int Option::extendedFutilityMargin = 40;
 int Option::superExtendedFutilityMargin = 80;
-int Option::PawnValue = 110;
-int Option::KnightValue = 325;
-int Option::BishopValue = 365;
-int Option::RookValue = 515;
-int Option::QueenValue = 1020;
+int Option::PawnValue = 120;
+int Option::KnightValue = 320;
+int Option::BishopValue = 375;
+int Option::RookValue = 545;
+int Option::QueenValue = 1135;
 int Option::KingValue = 1200;
 int Option::EndPawnValue = -20;
 int Option::DoubledPawnValue = -20;
 int Option::IsolatedPawnMiddleGame = -10;
 int Option::IsolatedPawnEndGame = -8;
-int Option::RookOpenFileMiddleGame = 18;
-int Option::RookOpenFileEndGame = 12;
-int Option::RookSemiOpenFileMiddleGame = 10;
-int Option::RookSemiOpenFileEndGame = 6;
-int Option::KnightOutpostMiddleGame = 12;
-int Option::KnightOutpostEndGame = 3;
-int Option::KnightSupportedOutpostMiddleGame = 8;
-int Option::KnightSupportedOutpostEndGame = 2;
+int Option::RookOpenFileMiddleGame = 12;
+int Option::RookOpenFileEndGame = 2;
+int Option::RookSemiOpenFileMiddleGame = -4;
+int Option::RookSemiOpenFileEndGame = -26;
+int Option::KnightOutpostMiddleGame = 18;
+int Option::KnightOutpostEndGame = -3;
+int Option::KnightSupportedOutpostMiddleGame = 44;
+int Option::KnightSupportedOutpostEndGame = 48;
 int Option::RookBehindPassedPawnMiddleGame = 4;
 int Option::RookBehindPassedPawnEndGame = 12;
+int Option::BishopPairValue = 132;
+int Option::BishopOpenFilePawnScale = 2;
+int Option::TempoMiddleGame = 16;
+int Option::TempoEndGame = 41;
+int Option::OppositeColorBishopMiddleGameScalePermille = 940;
+int Option::OppositeColorBishopEndGameScalePermille = 794;
+int Option::MaterialBalanceOffset = 1480;
+int Option::PawnDeficitZeroPawnMultiplierPermille = 364;
+int Option::PawnDeficitOnePawnMultiplierPermille = 808;
+int Option::EndgamePawnAdvancementRankMultiplier = 2;
+int Option::PieceAttackScalePercent = 135;
+int Option::LoneKingBase = 36;
+int Option::LoneKingEdgeWeight = -72;
+int Option::LoneKingCornerWeight = 22;
+int Option::LoneKingConfinementWeight = -10;
+int Option::LoneKingRestrictedNeighbourWeight = -26;
+int Option::LowMaterialScalePermille = -26;
 int Option::pieceMovement[2][7][120] = {};
 
-int Option::PassedPawnMiddleGameParameters[6] = {9, 2, 3, 2, 3, 2};
-int Option::PassedPawnEndGameParameters[6] = {15, 10, 15, 20, 35, 55};
+int Option::PassedPawnMiddleGameParameters[] = {9, 2, 3, 2, 3, 2};
+int Option::PassedPawnEndGameParameters[] = {15, 10, 15, 20, 35, 55};
 int Option::PassedPawnMiddleGameFileAmplitude = 7;
 int Option::WhitePassedPawnValueMiddleGam[64] = {};
 
-int Option::PawnInValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
-                                            -20, 0, 0, 0, 0, 0, 0, -20,
-                                            -20, 0, 0, 0, 0, 0, 0, -20,
-                                            -20, 0, 0, 0, 0, 0, 0, -20,
-                                            -20, 0, 0, 0, 0, 0, 0, -20,
-                                            -20, 0, 0, 0, 0, 0, 0, -20,
-                                            -20, 0, 0, 0, 0, 0, 0, -20,
-                                            0, 0, 0, 0, 0, 0, 0, 0};
+int Option::PawnPieceSquareMiddleGameParameters[] = {-52, 6, 0, 14, -28, 6, 0};
+int Option::KnightPieceSquareMiddleGameParameters[] = {-2, 0, 0, 0, -5, -3, -2, 4, 4, -14, 29};
+int Option::BishopPieceSquareMiddleGameParameters[] = {-49, -8, -5, -1, -12, -77, 0, -2, 12, 24, 29};
+int Option::RookPieceSquareMiddleGameParameters[] = {-108, 6, 0, 10, 10, 2};
+int Option::QueenPieceSquareMiddleGameParameters[] = {18, 0, 0, -6, 14, -19};
+int Option::KingPieceSquareMiddleGameParameters[] = {18, 38, 16, 28, 2, -30, -26};
 
-int Option::KnightInValueWhiteMiddleGame[] = {0, 0, 0, -8, -12, 0, 0, 0,
-                                              0, 0, 0, 4, 4, 0, 0, 0,
-                                              0, 0, 14, 0, 0, 14, 0, 0,
-                                              0, 0, 4, 8, 8, 4, 0, 0,
-                                              0, 4, 17, 26, 26, 17, 4, 0,
-                                              0, 8, 26, 35, 35, 26, 8, 0,
-                                              0, 4, 17, 17, 17, 17, 4, 0,
-                                              0, 0, 0, 0, 0, 0, 0, 0};
-
-int Option::BishopInValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
-                                              0, 0, 0, 0, 0, 0, 0, 0,
-                                              0, 0, 0, 0, 0, 0, 0, 0,
-                                              0, 0, 5, 5, 5, 5, 0, 0,
-                                              0, 5, 10, 10, 10, 10, 5, 0,
-                                              0, 10, 21, 21, 21, 21, 10, 0,
-                                              0, 5, 8, 8, 8, 8, 5, 0,
-                                              0, 0, 0, 0, 0, 0, 0, 0};
-
-int Option::RookInValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            40, 40, 40, 40, 40, 40, 40, 40,
-                                            0, 0, 0, 0, 0, 0, 0, 0};
-
-int Option::QueenInValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
-                                             0, 0, 0, 0, 0, 0, 0, 0,
-                                             0, 0, 0, 0, 0, 0, 0, 0,
-                                             0, 0, 0, 0, 0, 0, 0, 0,
-                                             0, 0, 0, 0, 0, 0, 0, 0,
-                                             0, 0, 0, 0, 0, 0, 0, 0,
-                                             27, 27, 27, 27, 27, 27, 27, 27,
-                                             0, 0, 0, 0, 0, 0, 0, 0};
-
-int Option::KingInValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0};
+int Option::PawnInValueWhiteMiddleGame[64] = {};
+int Option::KnightInValueWhiteMiddleGame[64] = {};
+int Option::BishopInValueWhiteMiddleGame[64] = {};
+int Option::RookInValueWhiteMiddleGame[64] = {};
+int Option::QueenInValueWhiteMiddleGame[64] = {};
+int Option::KingInValueWhiteMiddleGame[64] = {};
 
 int Option::PawnMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
@@ -404,36 +382,36 @@ int Option::KingMoveValueBlackMiddleGame[64] = {};
 int Option::PawnMoveCountValueMiddleGame[3] = {0, 0, 0};
 int Option::PawnMoveCountValue[3][3] = {};
 
-int Option::KnightMobilityMiddleGameParameters[4] = {-12, 12, 24, 14};
-int Option::KnightMobilityEndGameParameters[4] = {-11, 8, 20, 10};
+int Option::KnightMobilityMiddleGameParameters[] = {-46, 26, 10, 12};
+int Option::KnightMobilityEndGameParameters[] = {21, 24, 20, 0};
 int Option::KnightMoveCountValueMiddleGame[9] = {};
 int Option::KnightMoveCountValue[3][9] = {};
-int Option::BishopMobilityMiddleGameParameters[5] = {-30, 26, 4, 9, 17};
-int Option::BishopMobilityEndGameParameters[5] = {-35, 29, 6, 13, 17};
+int Option::BishopMobilityMiddleGameParameters[] = {-60, 28, 14, -1, 37};
+int Option::BishopMobilityEndGameParameters[] = {-25, 61, 12, 25, 3};
 int Option::BishopMoveCountValueMiddleGame[14] = {};
 int Option::BishopMoveCountValue[3][14] = {};
-int Option::RookMobilityMiddleGameParameters[5] = {-16, 20, 17, 6, 3};
-int Option::RookMobilityEndGameParameters[5] = {-25, 36, 36, 16, 3};
+int Option::RookMobilityMiddleGameParameters[] = {-30, 14, 25, 8, -1};
+int Option::RookMobilityEndGameParameters[] = {13, 62, 30, 34, 3};
 int Option::RookMoveCountValueMiddleGame[15] = {};
 int Option::RookMoveCountValue[3][15] = {};
-int Option::QueenMobilityMiddleGameParameters[5] = {-10, 9, 9, 8, 4};
-int Option::QueenMobilityEndGameParameters[5] = {-18, 16, 15, 15, 7};
+int Option::QueenMobilityMiddleGameParameters[] = {-6, 3, 15, 4, 4};
+int Option::QueenMobilityEndGameParameters[] = {10, 30, 33, 31, 27};
 int Option::QueenMoveCountValueMiddleGame[28] = {};
 int Option::QueenMoveCountValue[3][28] = {};
 int Option::KingMoveCountValueMiddleGame[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 int Option::KingMoveCountValue[3][9] = {};
 
-int Option::PawnAttackValueMiddleGame[16] = {0, 0, 20, 20, 76, 86, 0, 0, 0, 0, 20, 20, 76, 86, 0, 0};
+int Option::PawnAttackValueMiddleGame[] = {0, 0, 20, 20, 76, 86, 0, 0, 0, 0, 20, 20, 76, 86, 0, 0};
 int Option::PawnAttackValue[3][16] = {};
-int Option::KnightAttackValueMiddleGame[16] = {0, 7, 0, 24, 41, 41, 0, 0, 0, 7, 0, 24, 41, 41, 0, 0};
+int Option::KnightAttackValueMiddleGame[] = {0, 7, 0, 24, 41, 41, 0, 0, 0, 7, 0, 24, 41, 41, 0, 0};
 int Option::KnightAttackValue[3][16] = {};
-int Option::BishopAttackValueMiddleGame[16] = {0, 7, 24, 0, 41, 41, 0, 0, 0, 7, 24, 0, 41, 41, 0, 0};
+int Option::BishopAttackValueMiddleGame[] = {0, 7, 24, 0, 41, 41, 0, 0, 0, 7, 24, 0, 41, 41, 0, 0};
 int Option::BishopAttackValue[3][16] = {};
-int Option::RookAttackValueMiddleGame[16] = {0, -1, 15, 15, 0, 24, 0, 0, 0, -1, 15, 15, 0, 24, 0, 0};
+int Option::RookAttackValueMiddleGame[] = {0, -1, 15, 15, 0, 24, 0, 0, 0, -1, 15, 15, 0, 24, 0, 0};
 int Option::RookAttackValue[3][16] = {};
-int Option::QueenAttackValueMiddleGame[16] = {0, 3, 8, 8, 16, 0, 0, 0, 0, 3, 8, 8, 16, 0, 0, 0};
+int Option::QueenAttackValueMiddleGame[] = {0, 3, 8, 8, 16, 0, 0, 0, 0, 3, 8, 8, 16, 0, 0, 0};
 int Option::QueenAttackValue[3][16] = {};
-int Option::KingAttackValueMiddleGame[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int Option::KingAttackValueMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int Option::KingAttackValue[3][16] = {};
 
 int Option::WhitePawnAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 35, 10, 10, 20, 40, 0, 0};
@@ -452,59 +430,19 @@ int Option::BlackKingAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 
 int Option::WhitePassedPawnValueEndGame[64] = {};
 
-int Option::PawnInValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
-                                         -20, 0, 0, 0, 0, 0, 0, -20,
-                                         -20, 0, 0, 0, 0, 0, 0, -20,
-                                         -20, 0, 0, 0, 0, 0, 0, -20,
-                                         -20, 0, 0, 0, 0, 0, 0, -20,
-                                         -20, 0, 0, 0, 0, 0, 0, -20,
-                                         -20, 0, 0, 0, 0, 0, 0, -20,
-                                         0, 0, 0, 0, 0, 0, 0, 0};
+int Option::PawnPieceSquareEndGameParameters[] = {40, 6, 0, -16, -18, 20, 0};
+int Option::KnightPieceSquareEndGameParameters[] = {58, 14, 4, 0, -2, 9, 12, 24, 12, 20, -24};
+int Option::BishopPieceSquareEndGameParameters[] = {83, 4, 9, -1, 18, 93, 10, 2, 12, 10, -33};
+int Option::RookPieceSquareEndGameParameters[] = {126, 10, 0, -6, 32, -8};
+int Option::QueenPieceSquareEndGameParameters[] = {26, 8, 0, 28, -58, 12};
+int Option::KingPieceSquareEndGameParameters[] = {1, 42, 46, 62, 48, 64, 96};
 
-int Option::KnightInValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
-                                           0, 0, 0, 0, 0, 0, 0, 0,
-                                           0, 0, 0, 0, 0, 0, 0, 0,
-                                           0, 0, 4, 8, 8, 4, 0, 0,
-                                           0, 4, 17, 26, 26, 17, 4, 0,
-                                           0, 8, 26, 35, 35, 26, 8, 0,
-                                           0, 4, 17, 17, 17, 17, 4, 0,
-                                           0, 0, 0, 0, 0, 0, 0, 0};
-
-int Option::BishopInValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
-                                           0, 0, 0, 0, 0, 0, 0, 0,
-                                           0, 0, 0, 0, 0, 0, 0, 0,
-                                           0, 0, 5, 5, 5, 5, 0, 0,
-                                           0, 5, 10, 10, 10, 10, 5, 0,
-                                           0, 10, 21, 21, 21, 21, 10, 0,
-                                           0, 5, 8, 8, 8, 8, 5, 0,
-                                           0, 0, 0, 0, 0, 0, 0, 0};
-
-int Option::RookInValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
-                                         0, 0, 0, 0, 0, 0, 0, 0,
-                                         0, 0, 0, 0, 0, 0, 0, 0,
-                                         0, 0, 0, 0, 0, 0, 0, 0,
-                                         0, 0, 0, 0, 0, 0, 0, 0,
-                                         0, 0, 0, 0, 0, 0, 0, 0,
-                                          8, 8, 8, 8, 8, 8, 8, 8,
-                                         0, 0, 0, 0, 0, 0, 0, 0};
-
-int Option::QueenInValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
-                                          0, 0, 0, 0, 0, 0, 0, 0,
-                                          0, 0, 0, 0, 0, 0, 0, 0,
-                                          0, 0, 0, 0, 0, 0, 0, 0,
-                                          0, 0, 0, 0, 0, 0, 0, 0,
-                                          0, 0, 0, 0, 0, 0, 0, 0,
-                                          54, 54, 54, 54, 54, 54, 54, 54,
-                                          0, 0, 0, 0, 0, 0, 0, 0};
-
-int Option::KingInValueWhiteEndGame[] = { 0,  8, 16, 20, 20, 16,  8,  0,
-                                         8, 16, 24, 28, 28, 24, 16,  8,
-                                        16, 24, 28, 32, 32, 28, 24, 16,
-                                        20, 28, 32, 36, 36, 32, 28, 20,
-                                        20, 28, 32, 36, 36, 32, 28, 20,
-                                        16, 24, 28, 32, 32, 28, 24, 16,
-                                         8, 16, 24, 28, 28, 24, 16,  8,
-                                         0,  8, 16, 20, 20, 16,  8,  0};
+int Option::PawnInValueWhiteEndGame[64] = {};
+int Option::KnightInValueWhiteEndGame[64] = {};
+int Option::BishopInValueWhiteEndGame[64] = {};
+int Option::RookInValueWhiteEndGame[64] = {};
+int Option::QueenInValueWhiteEndGame[64] = {};
+int Option::KingInValueWhiteEndGame[64] = {};
 
 int Option::PawnMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                    -20, 0, 0, 0, 0, 0, 0, -20,
@@ -771,12 +709,12 @@ int Option::RookMoveCountValueEndGame[15] = {};
 int Option::QueenMoveCountValueEndGame[28] = {};
 int Option::KingMoveCountValueEndGame[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::PawnAttackValueEndGame[16] = {0, 0, 20, 20, 99, 118, 0, 0, 0, 0, 20, 20, 99, 118, 0, 0};
-int Option::KnightAttackValueEndGame[16] = {0, 10, 0, 39, 49, 49, 0, 0, 0, 10, 0, 39, 49, 49, 0, 0};
-int Option::BishopAttackValueEndGame[16] = {0, 10, 39, 0, 49, 49, 0, 0, 0, 10, 39, 0, 49, 49, 0, 0};
-int Option::RookAttackValueEndGame[16] = {0, 29, 49, 49, 0, 49, 0, 0, 0, 29, 49, 49, 0, 49, 0, 0};
-int Option::QueenAttackValueEndGame[16] = {0, 6, 15, 15, 30, 0, 0, 0, 0, 6, 15, 15, 30, 0, 0, 0};
-int Option::KingAttackValueEndGame[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int Option::PawnAttackValueEndGame[] = {0, 0, 20, 20, 99, 118, 0, 0, 0, 0, 20, 20, 99, 118, 0, 0};
+int Option::KnightAttackValueEndGame[] = {0, 10, 0, 39, 49, 49, 0, 0, 0, 10, 0, 39, 49, 49, 0, 0};
+int Option::BishopAttackValueEndGame[] = {0, 10, 39, 0, 49, 49, 0, 0, 0, 10, 39, 0, 49, 49, 0, 0};
+int Option::RookAttackValueEndGame[] = {0, 29, 49, 49, 0, 49, 0, 0, 0, 29, 49, 49, 0, 49, 0, 0};
+int Option::QueenAttackValueEndGame[] = {0, 6, 15, 15, 30, 0, 0, 0, 0, 6, 15, 15, 30, 0, 0, 0};
+int Option::KingAttackValueEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 int Option::PieceArroundTheKingMiddleGame[16] = {0, 5, 10, 10, 12, 25, 0, 0, 0, 5, 10, 10, 12, 25, 0, 0};
 int Option::PieceArroundTheKing[3][16] = {{0}};
@@ -852,6 +790,19 @@ void Option::Initialize()
         MobilityV2::GenerateRook(RookMobilityEndGameParameters, RookMoveCountValueEndGame);
         MobilityV2::GenerateQueenMiddleGame(QueenMobilityMiddleGameParameters, QueenMoveCountValueMiddleGame);
         MobilityV2::GenerateQueenEndGame(QueenMobilityEndGameParameters, QueenMoveCountValueEndGame);
+
+        PieceSquareModel::GeneratePawn(PawnPieceSquareMiddleGameParameters, PawnInValueWhiteMiddleGame);
+        PieceSquareModel::GenerateMinor(KnightPieceSquareMiddleGameParameters, KnightInValueWhiteMiddleGame);
+        PieceSquareModel::GenerateMinor(BishopPieceSquareMiddleGameParameters, BishopInValueWhiteMiddleGame);
+        PieceSquareModel::GenerateMajor(RookPieceSquareMiddleGameParameters, RookInValueWhiteMiddleGame);
+        PieceSquareModel::GenerateMajor(QueenPieceSquareMiddleGameParameters, QueenInValueWhiteMiddleGame);
+        PieceSquareModel::GenerateKing(KingPieceSquareMiddleGameParameters, KingInValueWhiteMiddleGame);
+        PieceSquareModel::GeneratePawn(PawnPieceSquareEndGameParameters, PawnInValueWhiteEndGame);
+        PieceSquareModel::GenerateMinor(KnightPieceSquareEndGameParameters, KnightInValueWhiteEndGame);
+        PieceSquareModel::GenerateMinor(BishopPieceSquareEndGameParameters, BishopInValueWhiteEndGame);
+        PieceSquareModel::GenerateMajor(RookPieceSquareEndGameParameters, RookInValueWhiteEndGame);
+        PieceSquareModel::GenerateMajor(QueenPieceSquareEndGameParameters, QueenInValueWhiteEndGame);
+        PieceSquareModel::GenerateKing(KingPieceSquareEndGameParameters, KingInValueWhiteEndGame);
 
         charPowerTwo[0] = (char)1;
         charPowerTwo[1] = (char)2;

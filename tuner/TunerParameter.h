@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include "Option.h"
+#include "PieceSquareModel.h"
 
 namespace Tuner
 {
@@ -26,7 +27,16 @@ enum class ParameterFamily
     RookFile,
     KnightOutpost,
     IsolatedPawn,
-    RookBehindPassedPawn
+    RookBehindPassedPawn,
+    EndgameWeights,
+
+    // Conceptual selection groups. Registry entries retain their low-level family.
+    BaseScalars,
+    Pawns,
+    Pieces,
+    Threats,
+    Endgame,
+    PST
 };
 
 struct TunerParameter
@@ -72,36 +82,37 @@ public:
         registry.Add("PassedPawnMiddleGameFileAmplitude", ParameterFamily::PassedPawnV2, 12,
                      Option::PassedPawnMiddleGameFileAmplitude);
 
-        // 4. PieceSquare (768 parameters: 6 pieces * 2 phases * 64 squares)
+        // 4. Compact PieceSquare model (96 parameters)
         struct PstBinding
         {
             const char* prefix;
-            const int* table;
+            const int* parameters;
+            int count;
         };
 
         const PstBinding pstTables[12] = {
-            {"PawnInValueWhiteMiddleGame_", Option::PawnInValueWhiteMiddleGame},
-            {"KnightInValueWhiteMiddleGame_", Option::KnightInValueWhiteMiddleGame},
-            {"BishopInValueWhiteMiddleGame_", Option::BishopInValueWhiteMiddleGame},
-            {"RookInValueWhiteMiddleGame_", Option::RookInValueWhiteMiddleGame},
-            {"QueenInValueWhiteMiddleGame_", Option::QueenInValueWhiteMiddleGame},
-            {"KingInValueWhiteMiddleGame_", Option::KingInValueWhiteMiddleGame},
-            {"PawnInValueWhiteEndGame_", Option::PawnInValueWhiteEndGame},
-            {"KnightInValueWhiteEndGame_", Option::KnightInValueWhiteEndGame},
-            {"BishopInValueWhiteEndGame_", Option::BishopInValueWhiteEndGame},
-            {"RookInValueWhiteEndGame_", Option::RookInValueWhiteEndGame},
-            {"QueenInValueWhiteEndGame_", Option::QueenInValueWhiteEndGame},
-            {"KingInValueWhiteEndGame_", Option::KingInValueWhiteEndGame}
+            {"PawnPieceSquareMiddleGame_", Option::PawnPieceSquareMiddleGameParameters, PieceSquareModel::PawnParameterCount},
+            {"KnightPieceSquareMiddleGame_", Option::KnightPieceSquareMiddleGameParameters, PieceSquareModel::MinorParameterCount},
+            {"BishopPieceSquareMiddleGame_", Option::BishopPieceSquareMiddleGameParameters, PieceSquareModel::MinorParameterCount},
+            {"RookPieceSquareMiddleGame_", Option::RookPieceSquareMiddleGameParameters, PieceSquareModel::MajorParameterCount},
+            {"QueenPieceSquareMiddleGame_", Option::QueenPieceSquareMiddleGameParameters, PieceSquareModel::MajorParameterCount},
+            {"KingPieceSquareMiddleGame_", Option::KingPieceSquareMiddleGameParameters, PieceSquareModel::KingParameterCount},
+            {"PawnPieceSquareEndGame_", Option::PawnPieceSquareEndGameParameters, PieceSquareModel::PawnParameterCount},
+            {"KnightPieceSquareEndGame_", Option::KnightPieceSquareEndGameParameters, PieceSquareModel::MinorParameterCount},
+            {"BishopPieceSquareEndGame_", Option::BishopPieceSquareEndGameParameters, PieceSquareModel::MinorParameterCount},
+            {"RookPieceSquareEndGame_", Option::RookPieceSquareEndGameParameters, PieceSquareModel::MajorParameterCount},
+            {"QueenPieceSquareEndGame_", Option::QueenPieceSquareEndGameParameters, PieceSquareModel::MajorParameterCount},
+            {"KingPieceSquareEndGame_", Option::KingPieceSquareEndGameParameters, PieceSquareModel::KingParameterCount}
         };
 
         int pstSemanticIndex = 0;
         for (const auto& binding : pstTables)
         {
-            for (int sq = 0; sq < 64; ++sq)
+            for (int index = 0; index < binding.count; ++index)
             {
-                registry.Add(binding.prefix + std::to_string(sq),
+                registry.Add(binding.prefix + std::to_string(index),
                              ParameterFamily::PieceSquare, pstSemanticIndex++,
-                             binding.table[sq]);
+                             binding.parameters[index]);
             }
         }
 
@@ -180,17 +191,17 @@ public:
         }
 
         // 10. Inline (11 parameters)
-        registry.Add("BishopPairValue", ParameterFamily::Inline, 0, 50);
-        registry.Add("BishopOpenFilePawnScale", ParameterFamily::Inline, 1, 2);
-        registry.Add("TempoMiddleGame", ParameterFamily::Inline, 2, 24);
-        registry.Add("TempoEndGame", ParameterFamily::Inline, 3, 11);
-        registry.Add("OppositeColorBishopMiddleGameScalePermille", ParameterFamily::Inline, 4, 900); // 0.9 * 1000
-        registry.Add("OppositeColorBishopEndGameScalePermille", ParameterFamily::Inline, 5, 750);   // 0.75 * 1000
-        registry.Add("MaterialBalanceOffset", ParameterFamily::Inline, 6, 1500);
-        registry.Add("PawnDeficitZeroPawnMultiplierPermille", ParameterFamily::Inline, 7, 700);    // 0.7 * 1000
-        registry.Add("PawnDeficitOnePawnMultiplierPermille", ParameterFamily::Inline, 8, 900);     // 0.9 * 1000
-        registry.Add("EndgamePawnAdvancementRankMultiplier", ParameterFamily::Inline, 9, 2);
-        registry.Add("PieceAttackScalePercent", ParameterFamily::Inline, 10, 135);
+        registry.Add("BishopPairValue", ParameterFamily::Inline, 0, Option::BishopPairValue);
+        registry.Add("BishopOpenFilePawnScale", ParameterFamily::Inline, 1, Option::BishopOpenFilePawnScale);
+        registry.Add("TempoMiddleGame", ParameterFamily::Inline, 2, Option::TempoMiddleGame);
+        registry.Add("TempoEndGame", ParameterFamily::Inline, 3, Option::TempoEndGame);
+        registry.Add("OppositeColorBishopMiddleGameScalePermille", ParameterFamily::Inline, 4, Option::OppositeColorBishopMiddleGameScalePermille);
+        registry.Add("OppositeColorBishopEndGameScalePermille", ParameterFamily::Inline, 5, Option::OppositeColorBishopEndGameScalePermille);
+        registry.Add("MaterialBalanceOffset", ParameterFamily::Inline, 6, Option::MaterialBalanceOffset);
+        registry.Add("PawnDeficitZeroPawnMultiplierPermille", ParameterFamily::Inline, 7, Option::PawnDeficitZeroPawnMultiplierPermille);
+        registry.Add("PawnDeficitOnePawnMultiplierPermille", ParameterFamily::Inline, 8, Option::PawnDeficitOnePawnMultiplierPermille);
+        registry.Add("EndgamePawnAdvancementRankMultiplier", ParameterFamily::Inline, 9, Option::EndgamePawnAdvancementRankMultiplier);
+        registry.Add("PieceAttackScalePercent", ParameterFamily::Inline, 10, Option::PieceAttackScalePercent);
 
         // 11. RookFile (4 parameters)
         registry.Add("RookOpenFileMiddleGame", ParameterFamily::RookFile, 0, Option::RookOpenFileMiddleGame);
@@ -211,6 +222,13 @@ public:
         // 14. RookBehindPassedPawn (2 parameters)
         registry.Add("RookBehindPassedPawnMiddleGame", ParameterFamily::RookBehindPassedPawn, 0, Option::RookBehindPassedPawnMiddleGame);
         registry.Add("RookBehindPassedPawnEndGame", ParameterFamily::RookBehindPassedPawn, 1, Option::RookBehindPassedPawnEndGame);
+
+        registry.Add("LoneKingBase", ParameterFamily::EndgameWeights, 0, Option::LoneKingBase);
+        registry.Add("LoneKingEdgeWeight", ParameterFamily::EndgameWeights, 1, Option::LoneKingEdgeWeight);
+        registry.Add("LoneKingCornerWeight", ParameterFamily::EndgameWeights, 2, Option::LoneKingCornerWeight);
+        registry.Add("LoneKingConfinementWeight", ParameterFamily::EndgameWeights, 3, Option::LoneKingConfinementWeight);
+        registry.Add("LoneKingRestrictedNeighbourWeight", ParameterFamily::EndgameWeights, 4, Option::LoneKingRestrictedNeighbourWeight);
+        registry.Add("LowMaterialScalePermille", ParameterFamily::EndgameWeights, 5, Option::LowMaterialScalePermille);
 
         return registry;
     }

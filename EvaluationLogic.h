@@ -173,6 +173,9 @@ class EvaluationLogic
 {
 public:
     static int CalculatePhase(const Board& thisBoard);
+    static int LoneKingMateGuidance(Board& board, int base, int edgeWeight,
+                                    int cornerWeight, int confinementWeight,
+                                    int restrictedNeighbourWeight);
     static int Evaluate(Board& thisBoard);
     static EvaluationBreakdown EvaluateDetailed(Board& thisBoard);
     static int CentralKingReadinessPenalty(Board& board, bool whiteKing, int phase,
