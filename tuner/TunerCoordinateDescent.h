@@ -14,9 +14,11 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 #include "Board.h"
 #include "BoardMaker.h"
+#include "EvaluationLogic.h"
 #include "Option.h"
 #include "tuner/TunerEvaluationState.h"
 #include "tuner/TunerEvaluator.h"
@@ -29,7 +31,13 @@ namespace Tuner
 struct TunerPosition
 {
     std::unique_ptr<Board> board;
-    double result = 0.5;
+    std::string positionKey;
+    double gameResult = 0.5;
+    int baselineHowlScoreCp = 0;
+    double baselineHowlProbability = 0.5;
+    int teacherScoreCp = 0;
+    double teacherProbability = 0.5;
+    bool hasTeacherScore = false;
 };
 
 struct ChangedParameter
@@ -48,6 +56,10 @@ struct CoordinateDescentResult
     double baselineValLoss = 0.0;
     double finalTrainLoss = 0.0;
     double finalValLoss = 0.0;
+    HybridLossComponents baselineTrainComponents;
+    HybridLossComponents baselineValComponents;
+    HybridLossComponents finalTrainComponents;
+    HybridLossComponents finalValComponents;
     int parametersExamined = 0;
     int parametersChanged = 0;
     int sweeps = 0;
@@ -69,7 +81,7 @@ public:
         lut_.resize(65536);
         for (int s = -32768; s < 32768; ++s)
         {
-            lut_[s + 32768] = 1.0 / (1.0 + std::pow(10.0, -static_cast<double>(s) / scale_));
+            lut_[s + 32768] = TunerLossEvaluator::ScoreToProbability(s, scale_);
         }
 
         threadErrors_.resize(numThreads_, 0.0);
@@ -149,12 +161,14 @@ private:
             for (std::size_t i = startIdx; i < endIdx; ++i)
             {
                 int stmScore = TunerEvaluator::Evaluate(*dataset_[i].board, localState);
-                int whiteScore = (!dataset_[i].board->sideToMove) ? stmScore : -stmScore;
-                if (whiteScore < -32768) whiteScore = -32768;
-                else if (whiteScore > 32767) whiteScore = 32767;
-                double expected = lut_[whiteScore + 32768];
-                double diff = dataset_[i].result - expected;
-                localSqError += diff * diff;
+                if (stmScore < -32768) stmScore = -32768;
+                else if (stmScore > 32767) stmScore = 32767;
+                const double probability = lut_[stmScore + 32768];
+                localSqError += TunerLossEvaluator::PositionLoss(
+                    probability, dataset_[i].gameResult,
+                    dataset_[i].baselineHowlProbability,
+                    dataset_[i].hasTeacherScore,
+                    dataset_[i].teacherProbability).combined;
             }
 
             threadErrors_[threadId] = localSqError;
@@ -305,10 +319,114 @@ public:
             Board* b = BoardMaker::MakeInitialBoard(fen);
             if (b)
             {
-                positions.push_back({std::unique_ptr<Board>(b), res});
+                const double sideToMoveResult = b->sideToMove ? 1.0 - res : res;
+                TunerPosition position;
+                position.board.reset(b);
+                position.positionKey = fen;
+                position.gameResult = sideToMoveResult;
+                positions.push_back(std::move(position));
             }
         }
         return true;
+    }
+
+    static bool LoadScoreFile(const std::string& filepath,
+                              std::unordered_map<std::string, int>& scores,
+                              std::size_t& malformedRows,
+                              const char* description)
+    {
+        malformedRows = 0;
+        if (filepath.empty()) return true;
+        std::ifstream file(filepath);
+        if (!file.is_open())
+        {
+            std::cerr << "Could not open " << description << " score file: " << filepath << "\n";
+            return false;
+        }
+        std::string line;
+        while (std::getline(file, line))
+        {
+            const auto tab = line.rfind('\t');
+            if (tab == std::string::npos || tab == 0 || tab + 1 >= line.size())
+            {
+                ++malformedRows;
+                continue;
+            }
+            try
+            {
+                std::size_t consumed = 0;
+                const int score = std::stoi(line.substr(tab + 1), &consumed);
+                if (consumed != line.size() - tab - 1) throw std::invalid_argument("suffix");
+                scores[line.substr(0, tab)] = score;
+            }
+            catch (...)
+            {
+                ++malformedRows;
+            }
+        }
+        return true;
+    }
+
+    static void PrepareTargets(std::vector<TunerPosition>& positions,
+                               const std::unordered_map<std::string, int>& teacherScores,
+                               const std::unordered_map<std::string, int>* anchorScores,
+                               double scale)
+    {
+        for (auto& position : positions)
+        {
+            if (anchorScores)
+            {
+                const auto anchor = anchorScores->find(position.positionKey);
+                if (anchor == anchorScores->end())
+                    throw std::runtime_error("Anchor score missing for position: " + position.positionKey);
+                position.baselineHowlScoreCp = anchor->second;
+            }
+            else
+                position.baselineHowlScoreCp = EvaluationLogic::Evaluate(*position.board);
+            position.baselineHowlProbability = TunerLossEvaluator::ScoreToProbability(
+                position.baselineHowlScoreCp, scale);
+            const auto teacher = teacherScores.find(position.positionKey);
+            if (teacher != teacherScores.end())
+            {
+                position.teacherScoreCp = teacher->second;
+                position.teacherProbability = TunerLossEvaluator::ScoreToProbability(
+                    position.teacherScoreCp, scale);
+                position.hasTeacherScore = true;
+            }
+        }
+    }
+
+    static HybridLossComponents ComputeLossComponents(
+        const std::vector<TunerPosition>& dataset,
+        const TunerEvaluationState& state,
+        double scale,
+        int numThreads = 8)
+    {
+        if (dataset.empty()) return {};
+        Detail::InitializeKnightDistance();
+        std::vector<HybridLossComponents> threadLosses(numThreads);
+        std::vector<std::thread> workers;
+        workers.reserve(numThreads);
+        for (int t = 0; t < numThreads; ++t)
+            workers.emplace_back([&, t]() {
+                TunerEvaluationState localState = state;
+                const std::size_t begin = (t * dataset.size()) / numThreads;
+                const std::size_t end = ((t + 1) * dataset.size()) / numThreads;
+                for (std::size_t i = begin; i < end; ++i)
+                {
+                    const int score = TunerEvaluator::Evaluate(*dataset[i].board, localState);
+                    const double probability = TunerLossEvaluator::ScoreToProbability(score, scale);
+                    threadLosses[t] += TunerLossEvaluator::PositionLoss(
+                        probability, dataset[i].gameResult,
+                        dataset[i].baselineHowlProbability,
+                        dataset[i].hasTeacherScore, dataset[i].teacherProbability);
+                }
+            });
+        for (auto& worker : workers) worker.join();
+        HybridLossComponents total;
+        for (const auto& loss : threadLosses) total += loss;
+        total.Divide(static_cast<double>(dataset.size()));
+        return total;
     }
 
     static double ComputeLoss(const std::vector<TunerPosition>& dataset,
@@ -337,10 +455,12 @@ public:
                 for (std::size_t i = startIdx; i < endIdx; ++i)
                 {
                     int stmScore = TunerEvaluator::Evaluate(*dataset[i].board, localState);
-                    int whiteScore = (!dataset[i].board->sideToMove) ? stmScore : -stmScore;
-                    double expected = TunerLossEvaluator::CentipawnsToExpectedWhiteScore(whiteScore, scale);
-                    double diff = dataset[i].result - expected;
-                    localSqError += diff * diff;
+                    double probability = TunerLossEvaluator::ScoreToProbability(stmScore, scale);
+                    localSqError += TunerLossEvaluator::PositionLoss(
+                        probability, dataset[i].gameResult,
+                        dataset[i].baselineHowlProbability,
+                        dataset[i].hasTeacherScore,
+                        dataset[i].teacherProbability).combined;
                 }
                 threadErrors[t] = localSqError;
             });
@@ -521,8 +641,10 @@ public:
             initialValues[i] = ptr ? *ptr : registry[i].currentValue;
         }
 
-        result.baselineTrainLoss = ComputeLoss(trainPositions, state, scale, numThreads);
-        result.baselineValLoss = ComputeLoss(valPositions, state, scale, numThreads);
+        result.baselineTrainComponents = ComputeLossComponents(trainPositions, state, scale, numThreads);
+        result.baselineValComponents = ComputeLossComponents(valPositions, state, scale, numThreads);
+        result.baselineTrainLoss = result.baselineTrainComponents.combined;
+        result.baselineValLoss = result.baselineValComponents.combined;
         TunerThreadPoolEvaluator pool(trainPositions, scale, numThreads);
         auto startTime = std::chrono::high_resolution_clock::now();
 
@@ -601,8 +723,10 @@ public:
 
         result.totalRuntimeSeconds = std::chrono::duration<double>(
             std::chrono::high_resolution_clock::now() - startTime).count();
-        result.finalTrainLoss = ComputeLoss(trainPositions, state, scale, numThreads);
-        result.finalValLoss = ComputeLoss(valPositions, state, scale, numThreads);
+        result.finalTrainComponents = ComputeLossComponents(trainPositions, state, scale, numThreads);
+        result.finalValComponents = ComputeLossComponents(valPositions, state, scale, numThreads);
+        result.finalTrainLoss = result.finalTrainComponents.combined;
+        result.finalValLoss = result.finalValComponents.combined;
 
         for (std::size_t i = 0; i < registry.Size(); ++i)
         {
@@ -625,7 +749,9 @@ public:
         const std::string& valPath,
         const std::vector<ParameterFamily>& tunableFamilies,
         double scale = 554.17,
-        int numThreads = 8)
+        int numThreads = 8,
+        const std::string& teacherScoresPath = "",
+        const std::string& anchorScoresPath = "")
     {
         CoordinateDescentResult result;
         std::vector<TunerPosition> trainPositions;
@@ -641,6 +767,32 @@ public:
         TunerRegistry registry = TunerRegistry::CreateRegistry();
         TunerEvaluationState state;
         state.LoadFromRegistry(registry);
+        std::unordered_map<std::string, int> teacherScores;
+        std::size_t malformedTeacherRows = 0;
+        if (!LoadScoreFile(teacherScoresPath, teacherScores, malformedTeacherRows, "teacher"))
+            return result;
+        if (!teacherScoresPath.empty())
+            std::cout << "Malformed teacher rows skipped: " << malformedTeacherRows << '\n';
+        std::unordered_map<std::string, int> anchorScores;
+        std::size_t malformedAnchorRows = 0;
+        if (!LoadScoreFile(anchorScoresPath, anchorScores, malformedAnchorRows, "anchor"))
+            return result;
+        if (!anchorScoresPath.empty() && malformedAnchorRows != 0)
+        {
+            std::cerr << "Malformed anchor rows: " << malformedAnchorRows << '\n';
+            return result;
+        }
+        const auto* anchors = anchorScoresPath.empty() ? nullptr : &anchorScores;
+        try
+        {
+            PrepareTargets(trainPositions, teacherScores, anchors, scale);
+            PrepareTargets(valPositions, teacherScores, anchors, scale);
+        }
+        catch (const std::exception& error)
+        {
+            std::cerr << error.what() << '\n';
+            return result;
+        }
         return Tune(trainPositions, valPositions, state, registry, tunableFamilies, scale, numThreads);
     }
 

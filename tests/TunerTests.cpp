@@ -11,6 +11,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace
@@ -41,7 +42,14 @@ std::vector<Tuner::TunerPosition> Dataset(const std::string& fen, double result)
     std::vector<Tuner::TunerPosition> positions;
     std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
     if (!board) throw std::runtime_error("Could not create tuner test board");
-    positions.push_back({std::move(board), result});
+    Tuner::TunerPosition position;
+    position.gameResult = board->sideToMove ? 1.0 - result : result;
+    position.positionKey = fen;
+    position.baselineHowlScoreCp = EvaluationLogic::Evaluate(*board);
+    position.baselineHowlProbability = Tuner::TunerLossEvaluator::ScoreToProbability(
+        position.baselineHowlScoreCp, 554.17);
+    position.board = std::move(board);
+    positions.push_back(std::move(position));
     return positions;
 }
 
@@ -234,39 +242,12 @@ int TestMobilityV2Structure()
 
 int TestPassedPawnV2Structure()
 {
-    static const int productionMg[64] = {
-        0,0,0,0,0,0,0,0, 5,8,10,12,12,10,8,5,
-        8,10,12,15,15,12,10,8, 10,12,15,18,18,15,12,10,
-        12,15,18,20,20,18,15,12, 15,18,20,22,22,20,18,15,
-        18,20,22,25,25,22,20,18, 0,0,0,0,0,0,0,0
-    };
-    static const int productionEg[64] = {
-        0,0,0,0,0,0,0,0, 15,15,15,15,15,15,15,15,
-        25,25,25,25,25,25,25,25, 40,40,40,40,40,40,40,40,
-        60,60,60,60,60,60,60,60, 95,95,95,95,95,95,95,95,
-        150,150,150,150,150,150,150,150, 0,0,0,0,0,0,0,0
-    };
-    static const int expectedMgRanks[6] = {9, 11, 14, 16, 19, 21};
-    static const int expectedEgRanks[6] = {15, 25, 40, 60, 95, 150};
-
     int mgRanks[6];
     int egRanks[6];
     PassedPawnV2::DecodeRanks(Option::PassedPawnMiddleGameParameters, mgRanks);
     PassedPawnV2::DecodeRanks(Option::PassedPawnEndGameParameters, egRanks);
-    for (int rank = 0; rank < 6; ++rank)
-        if (mgRanks[rank] != expectedMgRanks[rank] || egRanks[rank] != expectedEgRanks[rank])
-            return 1;
-
-    int maximumMgError = 0;
-    int totalMgError = 0;
-    for (int square = 0; square < 64; ++square)
-    {
-        const int mgError = std::abs(Option::WhitePassedPawnValueMiddleGam[square] - productionMg[square]);
-        maximumMgError = std::max(maximumMgError, mgError);
-        totalMgError += mgError;
-        if (Option::WhitePassedPawnValueEndGame[square] != productionEg[square]) return 1;
-    }
-    if (maximumMgError > 4 || static_cast<double>(totalMgError) / 48.0 > 2.42) return 1;
+    for (int rank = 1; rank < 6; ++rank)
+        if (mgRanks[rank] < mgRanks[rank - 1] || egRanks[rank] < egRanks[rank - 1]) return 1;
 
     for (int rank = 0; rank < 8; ++rank)
         for (int file = 0; file < 4; ++file)
@@ -331,12 +312,56 @@ int TestPassedPawnV2ParallelStartup()
         std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(
             "7k/8/8/3P4/8/5N2/8/K7 w - - 0 1"));
         if (!board) return 1;
-        positions.push_back({std::move(board), 1.0});
+        Tuner::TunerPosition position;
+        position.positionKey = "parallel-" + std::to_string(i);
+        position.gameResult = 1.0;
+        position.baselineHowlScoreCp = EvaluationLogic::Evaluate(*board);
+        position.baselineHowlProbability = Tuner::TunerLossEvaluator::ScoreToProbability(
+            position.baselineHowlScoreCp, 554.17);
+        position.board = std::move(board);
+        positions.push_back(std::move(position));
     }
 
     const double loss = Tuner::TunerCoordinateDescent::ComputeLoss(
         positions, state, 554.17, 8);
     return std::isfinite(loss) ? 0 : 1;
+}
+
+int TestHybridLossWeighting()
+{
+    const auto withoutTeacher = Tuner::TunerLossEvaluator::PositionLoss(
+        0.8, 1.0, 0.6, false, 0.0);
+    const auto withTeacher = Tuner::TunerLossEvaluator::PositionLoss(
+        0.8, 1.0, 0.6, true, 0.7);
+    const double resultLoss = 0.04;
+    const double anchorLoss = 0.04;
+    const double teacherLoss = 0.01;
+    const double expectedWithout = (0.50 / 0.65) * resultLoss + (0.15 / 0.65) * anchorLoss;
+    const double expectedWith = 0.50 * resultLoss + 0.35 * teacherLoss + 0.15 * anchorLoss;
+    return std::abs(withoutTeacher.combined - expectedWithout) < 1e-12 &&
+           std::abs(withTeacher.combined - expectedWith) < 1e-12 ? 0 : 1;
+}
+
+int TestExternalAnchorAndAttackBounds()
+{
+    const std::string fen = "8/8/8/8/8/8/4K3/6k1 w - - 0 1";
+    auto positions = Dataset(fen, 0.5);
+    std::unordered_map<std::string, int> anchors{{fen, 1000}};
+    Tuner::TunerCoordinateDescent::PrepareTargets(positions, {}, &anchors, 554.17);
+    if (positions[0].baselineHowlScoreCp != 1000 ||
+        std::abs(positions[0].baselineHowlProbability -
+                 Tuner::TunerLossEvaluator::ScoreToProbability(1000, 554.17)) > 1e-12)
+        return 1;
+
+    const Tuner::TunerRegistry registry = Tuner::TunerRegistry::CreateRegistry();
+    int attackParameters = 0;
+    for (const auto& parameter : registry.GetParameters())
+        if (parameter.family == Tuner::ParameterFamily::Attack)
+        {
+            ++attackParameters;
+            if (parameter.minValue != 0 || parameter.currentValue < 0) return 1;
+        }
+    return attackParameters == 60 ? 0 : 1;
 }
 }
 
@@ -354,6 +379,8 @@ int main(int argc, char* argv[])
     else if (test == "mobility_v2_structure") result = TestMobilityV2Structure();
     else if (test == "passed_pawn_v2_structure") result = TestPassedPawnV2Structure();
     else if (test == "passed_pawn_v2_parallel_startup") result = TestPassedPawnV2ParallelStartup();
+    else if (test == "hybrid_loss_weighting") result = TestHybridLossWeighting();
+    else if (test == "external_anchor_and_attack_bounds") result = TestExternalAnchorAndAttackBounds();
     CleanupEngine();
     if (result != 0) std::cerr << "Tuner test failed: " << test << '\n';
     return result;

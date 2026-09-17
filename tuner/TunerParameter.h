@@ -2,6 +2,7 @@
 #define HOWL_TUNER_PARAMETER_H
 
 #include <string>
+#include <limits>
 #include <vector>
 #include "Option.h"
 #include "PieceSquareModel.h"
@@ -180,24 +181,24 @@ public:
                 int victimId = victimPieceIds[v];
                 registry.Add(std::string(binding.attackerName) + "Attack" + victimNames[v] + "_MiddleGame",
                              ParameterFamily::Attack, attackSemanticIndex++,
-                             binding.mgTable[victimId]);
+                             binding.mgTable[victimId], 0, std::numeric_limits<int>::max());
             }
             for (int v = 0; v < 5; ++v)
             {
                 int victimId = victimPieceIds[v];
                 registry.Add(std::string(binding.attackerName) + "Attack" + victimNames[v] + "_EndGame",
                              ParameterFamily::Attack, attackSemanticIndex++,
-                             binding.egTable[victimId]);
+                             binding.egTable[victimId], 0, std::numeric_limits<int>::max());
             }
         }
 
         // 10. Inline (8 parameters)
-        registry.Add("BishopPairValue", ParameterFamily::Inline, 0, Option::BishopPairValue);
+        registry.Add("BishopPairValue", ParameterFamily::Inline, 0, Option::BishopPairValue, 0, 10000);
         registry.Add("BishopOpenFilePawnScale", ParameterFamily::Inline, 1, Option::BishopOpenFilePawnScale);
         registry.Add("TempoMiddleGame", ParameterFamily::Inline, 2, Option::TempoMiddleGame);
         registry.Add("TempoEndGame", ParameterFamily::Inline, 3, Option::TempoEndGame);
-        registry.Add("OppositeColorBishopMiddleGameScalePermille", ParameterFamily::Inline, 4, Option::OppositeColorBishopMiddleGameScalePermille);
-        registry.Add("OppositeColorBishopEndGameScalePermille", ParameterFamily::Inline, 5, Option::OppositeColorBishopEndGameScalePermille);
+        registry.Add("OppositeColorBishopMiddleGameScalePermille", ParameterFamily::Inline, 4, Option::OppositeColorBishopMiddleGameScalePermille, 0, 1000);
+        registry.Add("OppositeColorBishopEndGameScalePermille", ParameterFamily::Inline, 5, Option::OppositeColorBishopEndGameScalePermille, 0, 1000);
         registry.Add("EndgamePawnAdvancementRankMultiplier", ParameterFamily::Inline, 6, Option::EndgamePawnAdvancementRankMultiplier);
         registry.Add("PieceAttackScalePercent", ParameterFamily::Inline, 7, Option::PieceAttackScalePercent);
 
