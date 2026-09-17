@@ -62,7 +62,7 @@ if(BUILD_TESTING)
     target_include_directories(howl_tuner_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(howl_tuner_tests PRIVATE fathom)
 
-    foreach(TUNER_CASE piece_value_only other_family_freezes_piece_value refine1_unchanged parity_regression stops_after_unchanged_sweep mobility_v2_structure passed_pawn_v2_structure passed_pawn_v2_parallel_startup)
+    foreach(TUNER_CASE piece_value_only other_family_freezes_piece_value refine1_unchanged parity_regression stops_after_unchanged_sweep mobility_v2_structure passed_pawn_v2_structure passed_pawn_v2_parallel_startup hybrid_loss_weighting external_anchor_and_attack_bounds)
         add_test(
             NAME tuner_${TUNER_CASE}
             COMMAND howl_tuner_tests ${TUNER_CASE}

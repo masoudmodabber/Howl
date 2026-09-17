@@ -20,6 +20,36 @@ struct TunerDatasetEntry
     double result = 0.5; // 1.0 = White win, 0.5 = draw, 0.0 = Black win
 };
 
+struct HybridLossComponents
+{
+    double result = 0.0;
+    double teacher = 0.0;
+    double anchor = 0.0;
+    double combined = 0.0;
+    std::size_t positions = 0;
+    std::size_t teacherPositions = 0;
+
+    HybridLossComponents& operator+=(const HybridLossComponents& other)
+    {
+        result += other.result;
+        teacher += other.teacher;
+        anchor += other.anchor;
+        combined += other.combined;
+        positions += other.positions;
+        teacherPositions += other.teacherPositions;
+        return *this;
+    }
+
+    void Divide(double divisor)
+    {
+        if (divisor == 0.0) return;
+        result /= divisor;
+        teacher /= divisor;
+        anchor /= divisor;
+        combined /= divisor;
+    }
+};
+
 class TunerDataset
 {
 public:
@@ -55,13 +85,45 @@ private:
 class TunerLossEvaluator
 {
 public:
-    // Fixed logistic scale constant (Texel standard scale: 400.0)
-    static constexpr double FixedLogisticScale = 400.0;
+    static constexpr double FixedLogisticScale = 554.17;
 
     // Convert centipawns (from White's perspective) to expected White score in [0.0, 1.0]
+    static double ScoreToProbability(double sideToMoveScoreCp, double scale = FixedLogisticScale)
+    {
+        return 1.0 / (1.0 + std::pow(10.0, -sideToMoveScoreCp / scale));
+    }
+
     static double CentipawnsToExpectedWhiteScore(double whiteScoreCp, double scale = FixedLogisticScale)
     {
-        return 1.0 / (1.0 + std::pow(10.0, -whiteScoreCp / scale));
+        return ScoreToProbability(whiteScoreCp, scale);
+    }
+
+    static HybridLossComponents PositionLoss(double candidateProbability,
+                                             double gameResult,
+                                             double baselineProbability,
+                                             bool hasTeacherScore,
+                                             double teacherProbability)
+    {
+        const double resultDiff = candidateProbability - gameResult;
+        const double anchorDiff = candidateProbability - baselineProbability;
+        HybridLossComponents loss;
+        loss.result = resultDiff * resultDiff;
+        loss.anchor = anchorDiff * anchorDiff;
+        loss.positions = 1;
+        if (hasTeacherScore)
+        {
+            const double teacherDiff = candidateProbability - teacherProbability;
+            loss.teacher = teacherDiff * teacherDiff;
+            loss.combined = 0.50 * loss.result + 0.35 * loss.teacher + 0.15 * loss.anchor;
+            loss.teacherPositions = 1;
+        }
+        else
+        {
+            constexpr double survivingWeight = 0.50 + 0.15;
+            loss.combined = (0.50 / survivingWeight) * loss.result +
+                            (0.15 / survivingWeight) * loss.anchor;
+        }
+        return loss;
     }
 
     // Convert side-to-move evaluation score to White perspective score

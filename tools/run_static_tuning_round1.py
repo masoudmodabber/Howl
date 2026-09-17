@@ -167,6 +167,8 @@ def main():
                         help="run only selected conceptual blocks")
     parser.add_argument("--dry-run", action="store_true",
                         help="build and validate orchestration without tuning or changing production values")
+    parser.add_argument("--teacher-scores", type=Path,
+                        help="optional TSV of side-to-move teacher scores")
     args = parser.parse_args()
     if args.round < 1:
         parser.error("--round must be a positive integer")
@@ -212,6 +214,10 @@ def main():
         (ARTIFACTS / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
         return
 
+    anchor_scores = ARTIFACTS / "anchor-scores.tsv"
+    if not anchor_scores.exists():
+        run([str(BUILD / "howl_tuner"), "--write-anchor-scores", str(anchor_scores)])
+
     before = ROOT / "match-engines" / f"howl-before-static-round{args.round}"
     after = ROOT / "match-engines" / f"howl-static-round{args.round}"
     before.parent.mkdir(exist_ok=True)
@@ -220,7 +226,11 @@ def main():
     summary["blocks"] = []
     for slug, (block_name, groups) in enumerate(selected_blocks, 1):
         state_path = ARTIFACTS / f"{slug}-{block_name.lower().replace(' ', '-')}.tsv"
-        result = run([str(BUILD / "howl_tuner"), "--state-out", str(state_path), *groups], capture=True)
+        command = [str(BUILD / "howl_tuner"), "--state-out", str(state_path),
+                   "--anchor-scores", str(anchor_scores)]
+        if args.teacher_scores:
+            command += ["--teacher-scores", str(args.teacher_scores)]
+        result = run([*command, *groups], capture=True)
         print(result.stdout, end="")
         metrics = parse_metrics(result.stdout)
         accepted = metrics["tuned_validation_loss"] < metrics["baseline_validation_loss"]
