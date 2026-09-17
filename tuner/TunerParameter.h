@@ -191,18 +191,15 @@ public:
             }
         }
 
-        // 10. Inline (11 parameters)
+        // 10. Inline (8 parameters)
         registry.Add("BishopPairValue", ParameterFamily::Inline, 0, Option::BishopPairValue);
         registry.Add("BishopOpenFilePawnScale", ParameterFamily::Inline, 1, Option::BishopOpenFilePawnScale);
         registry.Add("TempoMiddleGame", ParameterFamily::Inline, 2, Option::TempoMiddleGame);
         registry.Add("TempoEndGame", ParameterFamily::Inline, 3, Option::TempoEndGame);
         registry.Add("OppositeColorBishopMiddleGameScalePermille", ParameterFamily::Inline, 4, Option::OppositeColorBishopMiddleGameScalePermille);
         registry.Add("OppositeColorBishopEndGameScalePermille", ParameterFamily::Inline, 5, Option::OppositeColorBishopEndGameScalePermille);
-        registry.Add("MaterialBalanceOffset", ParameterFamily::Inline, 6, Option::MaterialBalanceOffset);
-        registry.Add("PawnDeficitZeroPawnMultiplierPermille", ParameterFamily::Inline, 7, Option::PawnDeficitZeroPawnMultiplierPermille);
-        registry.Add("PawnDeficitOnePawnMultiplierPermille", ParameterFamily::Inline, 8, Option::PawnDeficitOnePawnMultiplierPermille);
-        registry.Add("EndgamePawnAdvancementRankMultiplier", ParameterFamily::Inline, 9, Option::EndgamePawnAdvancementRankMultiplier);
-        registry.Add("PieceAttackScalePercent", ParameterFamily::Inline, 10, Option::PieceAttackScalePercent);
+        registry.Add("EndgamePawnAdvancementRankMultiplier", ParameterFamily::Inline, 6, Option::EndgamePawnAdvancementRankMultiplier);
+        registry.Add("PieceAttackScalePercent", ParameterFamily::Inline, 7, Option::PieceAttackScalePercent);
 
         // 11. RookFile (4 parameters)
         registry.Add("RookOpenFileMiddleGame", ParameterFamily::RookFile, 0, Option::RookOpenFileMiddleGame);
@@ -229,7 +226,6 @@ public:
         registry.Add("LoneKingCornerWeight", ParameterFamily::EndgameWeights, 2, Option::LoneKingCornerWeight);
         registry.Add("LoneKingConfinementWeight", ParameterFamily::EndgameWeights, 3, Option::LoneKingConfinementWeight);
         registry.Add("LoneKingRestrictedNeighbourWeight", ParameterFamily::EndgameWeights, 4, Option::LoneKingRestrictedNeighbourWeight);
-        registry.Add("LowMaterialScalePermille", ParameterFamily::EndgameWeights, 5, Option::LowMaterialScalePermille);
 
         const auto addKing = [&registry](const char* name, int index, int value)
         {
@@ -256,15 +252,8 @@ public:
         addKing("KingBlockedEscapeDanger", 18, Option::KingBlockedEscapeDanger);
         addKing("KingTrappedEscapeDanger", 19, Option::KingTrappedEscapeDanger);
         addKing("KingHeavyBatteryDanger", 20, Option::KingHeavyBatteryDanger);
-        addKing("CentralKingInnerMinorPressure", 21, Option::CentralKingInnerMinorPressure);
-        addKing("CentralKingOuterMinorPressure", 22, Option::CentralKingOuterMinorPressure);
-        addKing("CentralKingReadinessLagWeight", 23, Option::CentralKingReadinessLagWeight);
-        addKing("CentralKingPressureScale", 24, Option::CentralKingPressureScale);
-        addKing("KingUnreadyCoordinationWeight", 25, Option::KingUnreadyCoordinationWeight);
-        addKing("KingLatentActivationWeight", 26, Option::KingLatentActivationWeight);
-        addKing("KingFutureShelterWingWeight", 27, Option::KingFutureShelterWingWeight);
-        addKing("KingPinnedShelterPawnWeight", 28, Option::KingPinnedShelterPawnWeight);
-        addKing("KingInfiltratedQueenWeight", 29, Option::KingInfiltratedQueenWeight);
+        addKing("KingPinnedShelterPawnWeight", 21, Option::KingPinnedShelterPawnWeight);
+        addKing("KingInfiltratedQueenWeight", 22, Option::KingInfiltratedQueenWeight);
 
         return registry;
     }

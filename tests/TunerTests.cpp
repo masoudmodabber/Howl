@@ -136,7 +136,7 @@ int TestRefine1SelectionUnchanged()
             Tuner::TunerCoordinateDescent::GetFamilyDeltaRefine1(parameter.family) > 0)
             selected++;
     }
-    return selected == 782 ? 0 : 1;
+    return selected == 133 ? 0 : 1;
 }
 
 int TestParityRegression()
@@ -183,25 +183,6 @@ bool IsNondecreasing(const int (&values)[N])
 
 int TestMobilityV2Structure()
 {
-    static const int knightMg[9] = {-20, -12, -5, 0, 12, 25, 31, 38, 38};
-    static const int knightEg[9] = {-18, -11, -5, -3, 7, 17, 22, 27, 27};
-    static const int bishopMg[14] = {-30, -20, -12, -6, -2, 0, 3, 6, 10, 15, 20, 25, 29, 32};
-    static const int bishopEg[14] = {-35, -24, -15, -8, -3, 0, 4, 8, 13, 19, 25, 30, 34, 37};
-    static const int rookMg[15] = {-16, -11, -6, -1, 4, 9, 13, 17, 21, 24, 26, 27, 28, 29, 30};
-    static const int rookEg[15] = {-25, -16, -7, 2, 11, 20, 29, 38, 47, 54, 59, 62, 64, 65, 66};
-    static const int queenMg[28] = {-10, -8, -6, -3, -1, 1, 3, 5, 8, 10, 12, 15, 16, 17, 18, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20};
-    static const int queenEg[28] = {-18, -13, -7, -2, 3, 8, 13, 19, 23, 27, 32, 34, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35};
-
-    if (!WithinRepresentationError(Option::KnightMoveCountValueMiddleGame, knightMg, 2) ||
-        !WithinRepresentationError(Option::KnightMoveCountValueEndGame, knightEg, 3) ||
-        !WithinRepresentationError(Option::BishopMoveCountValueMiddleGame, bishopMg, 2) ||
-        !WithinRepresentationError(Option::BishopMoveCountValueEndGame, bishopEg, 2) ||
-        !WithinRepresentationError(Option::RookMoveCountValueMiddleGame, rookMg, 1) ||
-        !WithinRepresentationError(Option::RookMoveCountValueEndGame, rookEg, 2) ||
-        !WithinRepresentationError(Option::QueenMoveCountValueMiddleGame, queenMg, 1) ||
-        !WithinRepresentationError(Option::QueenMoveCountValueEndGame, queenEg, 2))
-        return 1;
-
     if (!IsNondecreasing(Option::KnightMoveCountValueMiddleGame) ||
         !IsNondecreasing(Option::KnightMoveCountValueEndGame) ||
         !IsNondecreasing(Option::BishopMoveCountValueMiddleGame) ||

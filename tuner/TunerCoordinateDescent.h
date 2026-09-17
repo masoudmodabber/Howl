@@ -217,7 +217,7 @@ public:
                 parameter.family == ParameterFamily::IsolatedPawn ||
                 parameter.family == ParameterFamily::RookBehindPassedPawn)
                 return true;
-            if (parameter.family == ParameterFamily::Inline && parameter.semanticIndex == 9)
+            if (parameter.family == ParameterFamily::Inline && parameter.semanticIndex == 6)
                 return true;
         }
 
@@ -232,7 +232,7 @@ public:
 
         if (selected(ParameterFamily::Threats) &&
             (parameter.family == ParameterFamily::Attack ||
-             (parameter.family == ParameterFamily::Inline && parameter.semanticIndex == 10)))
+             (parameter.family == ParameterFamily::Inline && parameter.semanticIndex == 7)))
             return true;
 
         if (selected(ParameterFamily::Endgame) &&
@@ -252,7 +252,7 @@ public:
             {
                 switch (parameter.semanticIndex)
                 {
-                case 0: case 1: case 2: case 3: case 6: case 7: case 8:
+                case 0: case 1: case 2: case 3:
                     return true;
                 default:
                     break;

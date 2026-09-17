@@ -162,6 +162,20 @@ struct EvaluationContext
     uint64_t nonKingAttacks[2] = {0, 0};
     uint64_t legacyAttacks[2] = {0, 0}; // BoardLogic::UnderAttack semantics.
     uint64_t pawnAttacks[2] = {0, 0};
+    uint64_t doubleAttacks[2] = {0, 0};
+    uint64_t supportedPawns[2] = {0, 0};
+    uint64_t phalanxPawns[2] = {0, 0};
+    uint64_t opposedPawns[2] = {0, 0};
+    uint64_t blockedPawns[2] = {0, 0};
+    uint64_t leverPawns[2] = {0, 0};
+    uint64_t leverPushPawns[2] = {0, 0};
+    uint64_t backwardPawns[2] = {0, 0};
+    uint64_t strictPassedPawns[2] = {0, 0};
+    uint64_t mobilityArea[2] = {0, 0};
+    uint64_t stronglyProtectedPieces[2] = {0, 0};
+    uint64_t weakPieces[2] = {0, 0};
+    uint64_t hangingPieces[2] = {0, 0};
+    uint64_t absolutelyPinnedPieces[2] = {0, 0};
     uint8_t pawnFileCounts[2][8] = {};
     bool attacksReady = false;
 
@@ -178,11 +192,6 @@ public:
                                     int restrictedNeighbourWeight);
     static int Evaluate(Board& thisBoard);
     static EvaluationBreakdown EvaluateDetailed(Board& thisBoard);
-    static int CentralKingReadinessPenalty(Board& board, bool whiteKing, int phase,
-                                           const EvaluationContext* ctx = nullptr,
-                                           int coordinationWeight = -1,
-                                           int latentWeight = -1,
-                                           int shelterWingWeight = -1);
     static int GetPawnStructureValue(Board& thisBoard, int phase, const EvaluationContext* ctx = nullptr);
     static int* PieceMoveCount(Board& thisBoard, int phase);
     static MovementResult PieceMoveCountFast(Board& thisBoard, int phase);
@@ -197,7 +206,6 @@ public:
     static std::size_t PawnEvalCacheSize();
 #if HOWL_CORRECTNESS_TESTING
     static void ClearEvalCacheForTesting();
-    static int RookConnectionValueForTesting(Board& board);
     static int TaperEvaluationValueForTesting(int middleGameValue,
                                               int endGameValue, int phase);
     static int TaperGroup1ValueForTesting(int middleGameValue,
