@@ -13,7 +13,7 @@
 x64/
 build/
 build*/
-.static-tuning-round1/
+.static-tuning-round*/
 bld/
 [Bb]in/
 [Oo]bj/

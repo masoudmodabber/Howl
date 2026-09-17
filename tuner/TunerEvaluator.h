@@ -372,10 +372,11 @@ inline int CountNonKingSideAttacks(Board& board, bool white, int target)
     return attackers;
 }
 
-inline int UndefendedKingZoneDanger(Board& board, bool whiteKing, int kingSquare)
+inline int UndefendedKingZoneDanger(Board& board, bool whiteKing, int kingSquare,
+                                    const TunerEvaluationState& state)
 {
-    constexpr int UndefendedSquareDanger = 2;
-    constexpr int AdditionalAttackerDanger = 1;
+    const int UndefendedSquareDanger = state.KingUndefendedZoneDanger;
+    const int AdditionalAttackerDanger = state.KingAdditionalZoneAttackerDanger;
     const bool attackingWhite = !whiteKing;
     const PrecomputedKingZone& zone = KingZonesData.zones[kingSquare];
     int danger = 0;
@@ -435,7 +436,8 @@ inline bool PieceParticipatesInZone(Board& board, int boardPiece, int square,
     return false;
 }
 
-inline int ShelterDanger(Board& board, bool whiteKing, int kingSquare)
+inline int ShelterDanger(Board& board, bool whiteKing, int kingSquare,
+                         const TunerEvaluationState& state)
 {
     const int direction = whiteKing ? 1 : -1;
     const int kingRank = kingSquare / 8;
@@ -464,7 +466,9 @@ inline int ShelterDanger(Board& board, bool whiteKing, int kingSquare)
         {
             continue;
         }
-        danger += secondRankPawn ? 5 : (fartherPawn ? 10 : 16);
+        danger += secondRankPawn ? state.KingShelterSecondRankDanger
+                                 : (fartherPawn ? state.KingShelterAdvancedPawnDanger
+                                               : state.KingShelterMissingPawnDanger);
 
         bool fileHasEnemyPawn = false;
         for (int pawn : enemyPawns)
@@ -473,7 +477,7 @@ inline int ShelterDanger(Board& board, bool whiteKing, int kingSquare)
         }
         if (!secondRankPawn && !fartherPawn && !fileHasEnemyPawn)
         {
-            danger += 7;
+            danger += state.KingShelterOpenFileDanger;
         }
     }
     return danger;
@@ -487,10 +491,15 @@ inline int CalculatePhase(const Board& thisBoard)
     return std::clamp(phase, 0, 24);
 }
 
-inline KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
+inline KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing,
+                                           const TunerEvaluationState& state)
 {
-    static constexpr int attackerWeight[7] = {0, 2, 5, 5, 8, 12, 0};
-    static constexpr int defenderWeight[7] = {0, 2, 4, 4, 5, 7, 0};
+    const int attackerWeight[7] = {0, state.KingAttackerPawnWeight,
+        state.KingAttackerMinorWeight, state.KingAttackerMinorWeight,
+        state.KingAttackerRookWeight, state.KingAttackerQueenWeight, 0};
+    const int defenderWeight[7] = {0, state.KingDefenderPawnWeight,
+        state.KingDefenderMinorWeight, state.KingDefenderMinorWeight,
+        state.KingDefenderRookWeight, state.KingDefenderQueenWeight, 0};
     const int kingSquare = board.pieces[whiteKing ? 6 : 14].front();
     const bool attackingWhite = !whiteKing;
     const PrecomputedKingZone& zone = KingZonesData.zones[kingSquare];
@@ -589,7 +598,8 @@ inline KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
                     const int target = zone.squares[i];
                     if (target % 8 == file && PieceAttacksSquareFast(occupiedSquares, pieceType, attackingWhite, square, target))
                     {
-                        filePressure += openness == 2 ? 10 : 6;
+                        filePressure += openness == 2 ? state.KingOpenLineDanger
+                                                     : state.KingSemiOpenLineDanger;
                         break;
                     }
                 }
@@ -604,7 +614,7 @@ inline KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
         {
             if (PieceAttacksSquareFast(occupiedSquares, pieceType, attackingWhite, square, kingSquare))
             {
-                diagonalPressure += 9;
+                diagonalPressure += state.KingDiagonalLineDanger;
             }
         }
     }
@@ -648,17 +658,18 @@ inline KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing)
         }
     }
 
-    const int escapeDanger = controlledEscapes * 6 + occupiedEscapes * 2 +
-                             edgeDirections * 2 + std::max(0, 3 - safeEscapes) * 8;
+    const int escapeDanger = controlledEscapes * state.KingControlledEscapeDanger
+                           + (occupiedEscapes + edgeDirections) * state.KingBlockedEscapeDanger
+                           + std::max(0, 3 - safeEscapes) * state.KingTrappedEscapeDanger;
     const int balanceDanger = std::max(0, attackerParticipation - defenderParticipation) +
                               std::max(0, attackerCount - defenderCount) * 4;
-    const int shelterDanger = ShelterDanger(board, whiteKing, kingSquare);
+    const int shelterDanger = ShelterDanger(board, whiteKing, kingSquare, state);
     const int lineDanger = filePressure + diagonalPressure;
-    const int undefendedKingZoneDanger = UndefendedKingZoneDanger(board, whiteKing, kingSquare);
+    const int undefendedKingZoneDanger = UndefendedKingZoneDanger(board, whiteKing, kingSquare, state);
     const int defensiveRestriction = __builtin_popcountll(restrictedBetweenSquares) * 6;
     int rawDanger = attackerParticipation * 2 + escapeDanger +
                     lineDanger + shelterDanger + balanceDanger + undefendedKingZoneDanger +
-                    defensiveRestriction + (hasHeavyMatingBattery ? 140 : 0);
+                    defensiveRestriction + (hasHeavyMatingBattery ? state.KingHeavyBatteryDanger : 0);
 
     const int queenCount = board.pieces[attackingWhite ? 5 : 13].size();
     const int rookCount = board.pieces[attackingWhite ? 4 : 12].size();
@@ -2198,7 +2209,7 @@ inline int PieceMoveCount(Board& thisBoard, int phase, const TunerEvaluationStat
                             } else if (attackers > defenders) {
                                 movement -= 24;
                             } else if (whiteCentralKing && (c == 3 || c == 4) && !pawnDefended) {
-                                movement -= 12;
+                                movement -= state.KingPinnedShelterPawnWeight;
                             }
                         }
                         break;
@@ -2274,7 +2285,7 @@ inline int PieceMoveCount(Board& thisBoard, int phase, const TunerEvaluationStat
                             } else if (attackers > defenders) {
                                 movement += 24;
                             } else if (blackCentralKing && (c == 3 || c == 4) && !pawnDefended) {
-                                movement += 12;
+                                movement += state.KingPinnedShelterPawnWeight;
                             }
                         }
                         break;
@@ -2300,13 +2311,13 @@ inline int PieceMoveCount(Board& thisBoard, int phase, const TunerEvaluationStat
         for (int qSq : thisBoard.pieces[13]) {
             int qr = qSq / 8;
             if (qr <= 1 && wKr <= 1 && wKf >= 2 && wKf <= 5) {
-                movement -= 85;
+                movement -= state.KingInfiltratedQueenWeight;
             }
         }
         for (int qSq : thisBoard.pieces[5]) {
             int qr = qSq / 8;
             if (qr >= 6 && bKr >= 6 && bKf >= 2 && bKf <= 5) {
-                movement += 85;
+                movement += state.KingInfiltratedQueenWeight;
             }
         }
     }
@@ -2609,20 +2620,31 @@ public:
         int movement = Detail::PieceMoveCount(thisBoard, phase, state);
 
         // King Safety
-        Detail::KingDangerResult whiteKingDanger = Detail::EvaluateKingDanger(thisBoard, true);
-        Detail::KingDangerResult blackKingDanger = Detail::EvaluateKingDanger(thisBoard, false);
+        Detail::KingDangerResult whiteKingDanger = Detail::EvaluateKingDanger(thisBoard, true, state);
+        Detail::KingDangerResult blackKingDanger = Detail::EvaluateKingDanger(thisBoard, false, state);
         int kingDangerNet = blackKingDanger.danger - whiteKingDanger.danger;
 
         int whiteKingSq = pieces[6].front();
         int blackKingSq = pieces[14].front();
+        const CentralKingAttackPressure::Weights centralKingWeights = {
+            state.CentralKingInnerMinorPressure, state.CentralKingOuterMinorPressure,
+            state.CentralKingReadinessLagWeight, state.CentralKingPressureScale};
         const CentralKingAttackPressure::Result whiteCentralPressure =
-            CentralKingAttackPressure::Evaluate(thisBoard, true);
+            CentralKingAttackPressure::Evaluate(thisBoard, true, centralKingWeights);
         const CentralKingAttackPressure::Result blackCentralPressure =
-            CentralKingAttackPressure::Evaluate(thisBoard, false);
+            CentralKingAttackPressure::Evaluate(thisBoard, false, centralKingWeights);
         int kingSafety = kingDangerNet +
                          whiteCentralPressure.contribution - blackCentralPressure.contribution;
-        kingSafety += EvaluationLogic::CentralKingReadinessPenalty(thisBoard, false, phase) -
-                      EvaluationLogic::CentralKingReadinessPenalty(thisBoard, true, phase);
+        kingSafety += EvaluationLogic::CentralKingReadinessPenalty(
+                          thisBoard, false, phase, nullptr,
+                          state.KingUnreadyCoordinationWeight,
+                          state.KingLatentActivationWeight,
+                          state.KingFutureShelterWingWeight) -
+                      EvaluationLogic::CentralKingReadinessPenalty(
+                          thisBoard, true, phase, nullptr,
+                          state.KingUnreadyCoordinationWeight,
+                          state.KingLatentActivationWeight,
+                          state.KingFutureShelterWingWeight);
 
         // Pawn Structure
         int pawnStructure = Detail::GetPawnStructureValue(thisBoard, phase, state);

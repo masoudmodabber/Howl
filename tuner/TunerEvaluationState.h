@@ -130,6 +130,36 @@ struct TunerEvaluationState
     int LoneKingConfinementWeight = 0;
     int LoneKingRestrictedNeighbourWeight = 0;
     int LowMaterialScalePermille = 0;
+    int KingAttackerPawnWeight = 0;
+    int KingAttackerMinorWeight = 0;
+    int KingAttackerRookWeight = 0;
+    int KingAttackerQueenWeight = 0;
+    int KingDefenderPawnWeight = 0;
+    int KingDefenderMinorWeight = 0;
+    int KingDefenderRookWeight = 0;
+    int KingDefenderQueenWeight = 0;
+    int KingShelterSecondRankDanger = 0;
+    int KingShelterAdvancedPawnDanger = 0;
+    int KingShelterMissingPawnDanger = 0;
+    int KingShelterOpenFileDanger = 0;
+    int KingUndefendedZoneDanger = 0;
+    int KingAdditionalZoneAttackerDanger = 0;
+    int KingSemiOpenLineDanger = 0;
+    int KingOpenLineDanger = 0;
+    int KingDiagonalLineDanger = 0;
+    int KingControlledEscapeDanger = 0;
+    int KingBlockedEscapeDanger = 0;
+    int KingTrappedEscapeDanger = 0;
+    int KingHeavyBatteryDanger = 0;
+    int CentralKingInnerMinorPressure = 0;
+    int CentralKingOuterMinorPressure = 0;
+    int CentralKingReadinessLagWeight = 0;
+    int CentralKingPressureScale = 0;
+    int KingUnreadyCoordinationWeight = 0;
+    int KingLatentActivationWeight = 0;
+    int KingFutureShelterWingWeight = 0;
+    int KingPinnedShelterPawnWeight = 0;
+    int KingInfiltratedQueenWeight = 0;
 
     // Family: KnightOutpost (4 parameters)
     int KnightOutpostMiddleGame = 0;
@@ -361,6 +391,28 @@ struct TunerEvaluationState
             case 5: return &LowMaterialScalePermille;
             default: return nullptr;
             }
+
+        case ParameterFamily::KingSafety:
+        {
+            int* values[30] = {
+                &KingAttackerPawnWeight, &KingAttackerMinorWeight,
+                &KingAttackerRookWeight, &KingAttackerQueenWeight,
+                &KingDefenderPawnWeight, &KingDefenderMinorWeight,
+                &KingDefenderRookWeight, &KingDefenderQueenWeight,
+                &KingShelterSecondRankDanger, &KingShelterAdvancedPawnDanger,
+                &KingShelterMissingPawnDanger, &KingShelterOpenFileDanger,
+                &KingUndefendedZoneDanger, &KingAdditionalZoneAttackerDanger,
+                &KingSemiOpenLineDanger, &KingOpenLineDanger,
+                &KingDiagonalLineDanger, &KingControlledEscapeDanger,
+                &KingBlockedEscapeDanger, &KingTrappedEscapeDanger,
+                &KingHeavyBatteryDanger, &CentralKingInnerMinorPressure,
+                &CentralKingOuterMinorPressure, &CentralKingReadinessLagWeight,
+                &CentralKingPressureScale, &KingUnreadyCoordinationWeight,
+                &KingLatentActivationWeight, &KingFutureShelterWingWeight,
+                &KingPinnedShelterPawnWeight, &KingInfiltratedQueenWeight
+            };
+            return semanticIndex >= 0 && semanticIndex < 30 ? values[semanticIndex] : nullptr;
+        }
 
         default:
             return nullptr;

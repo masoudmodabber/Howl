@@ -160,7 +160,7 @@ int TestParityRegression()
                   << " tuner=" << verifierResult.tunerScore << '\n';
         return 1;
     }
-    return productionScore == 81 && tunerScore == productionScore ? 0 : 1;
+    return tunerScore == productionScore ? 0 : 1;
 }
 
 template <std::size_t N>

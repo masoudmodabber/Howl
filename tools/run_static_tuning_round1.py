@@ -17,6 +17,7 @@ BLOCKS = [
     ("Base Position", ["BaseScalars", "PST"]),
     ("Pawns", ["Pawns"]),
     ("Pieces", ["Pieces"]),
+    ("King", ["King"]),
     ("Threats", ["Threats"]),
     ("Endgame", ["Endgame"]),
 ]
@@ -78,6 +79,19 @@ def location(name):
         "PieceAttackScalePercent", "LoneKingBase", "LoneKingEdgeWeight",
         "LoneKingCornerWeight", "LoneKingConfinementWeight",
         "LoneKingRestrictedNeighbourWeight", "LowMaterialScalePermille",
+        "KingAttackerPawnWeight", "KingAttackerMinorWeight", "KingAttackerRookWeight",
+        "KingAttackerQueenWeight", "KingDefenderPawnWeight", "KingDefenderMinorWeight",
+        "KingDefenderRookWeight", "KingDefenderQueenWeight",
+        "KingShelterSecondRankDanger", "KingShelterAdvancedPawnDanger",
+        "KingShelterMissingPawnDanger", "KingShelterOpenFileDanger",
+        "KingUndefendedZoneDanger", "KingAdditionalZoneAttackerDanger",
+        "KingSemiOpenLineDanger", "KingOpenLineDanger", "KingDiagonalLineDanger",
+        "KingControlledEscapeDanger", "KingBlockedEscapeDanger", "KingTrappedEscapeDanger",
+        "KingHeavyBatteryDanger", "CentralKingInnerMinorPressure",
+        "CentralKingOuterMinorPressure", "CentralKingReadinessLagWeight",
+        "CentralKingPressureScale", "KingUnreadyCoordinationWeight",
+        "KingLatentActivationWeight", "KingFutureShelterWingWeight",
+        "KingPinnedShelterPawnWeight", "KingInfiltratedQueenWeight",
         "PassedPawnMiddleGameFileAmplitude",
     }
     if name in direct:
@@ -145,20 +159,47 @@ def selection_info(groups, state_path=None):
 
 
 def main():
+    global ARTIFACTS
     parser = argparse.ArgumentParser()
+    parser.add_argument("--round", type=int, default=1,
+                        help="numbered tuning round (default: 1)")
+    parser.add_argument("--blocks", nargs="+", metavar="BLOCK",
+                        help="run only selected conceptual blocks")
     parser.add_argument("--dry-run", action="store_true",
                         help="build and validate orchestration without tuning or changing production values")
     args = parser.parse_args()
+    if args.round < 1:
+        parser.error("--round must be a positive integer")
+
+    selected_blocks = BLOCKS
+    if args.blocks:
+        block_by_key = {
+            name.lower().replace(" ", "").replace("-", ""): (name, groups)
+            for name, groups in BLOCKS
+        }
+        selected_blocks = []
+        seen = set()
+        for requested in args.blocks:
+            key = requested.lower().replace(" ", "").replace("-", "")
+            if key not in block_by_key:
+                parser.error(f"unknown conceptual block: {requested}")
+            block = block_by_key[key]
+            if block[0] not in seen:
+                selected_blocks.append(block)
+                seen.add(block[0])
+
+    ARTIFACTS = ROOT / f".static-tuning-round{args.round}"
 
     ARTIFACTS.mkdir(exist_ok=True)
     build("howl", "howl_tuner")
     initial_state = ARTIFACTS / "initial-state.tsv"
-    canonical, _, duplicate = selection_info([group for _, groups in BLOCKS for group in groups], initial_state)
+    canonical, _, duplicate = selection_info(
+        [group for _, groups in selected_blocks for group in groups], initial_state)
     if duplicate != "no":
         raise RuntimeError("Canonical registry contains duplicate parameter names")
 
-    summary = {"starting_canonical_parameter_count": canonical, "blocks": []}
-    for block_name, groups in BLOCKS:
+    summary = {"round": args.round, "starting_canonical_parameter_count": canonical, "blocks": []}
+    for block_name, groups in selected_blocks:
         block_canonical, selected, block_duplicate = selection_info(groups)
         if block_canonical != canonical or block_duplicate != "no":
             raise RuntimeError(f"Registry validation failed for {block_name}")
@@ -171,13 +212,13 @@ def main():
         (ARTIFACTS / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
         return
 
-    before = ROOT / "match-engines" / "howl-before-static-round1"
-    after = ROOT / "match-engines" / "howl-static-round1"
+    before = ROOT / "match-engines" / f"howl-before-static-round{args.round}"
+    after = ROOT / "match-engines" / f"howl-static-round{args.round}"
     before.parent.mkdir(exist_ok=True)
     shutil.copy2(BUILD / "howl", before)
 
     summary["blocks"] = []
-    for slug, (block_name, groups) in enumerate(BLOCKS, 1):
+    for slug, (block_name, groups) in enumerate(selected_blocks, 1):
         state_path = ARTIFACTS / f"{slug}-{block_name.lower().replace(' ', '-')}.tsv"
         result = run([str(BUILD / "howl_tuner"), "--state-out", str(state_path), *groups], capture=True)
         print(result.stdout, end="")
@@ -191,7 +232,8 @@ def main():
 
     build("howl", "howl_tuner")
     shutil.copy2(BUILD / "howl", after)
-    final_canonical, _, final_duplicate = selection_info([group for _, groups in BLOCKS for group in groups])
+    final_canonical, _, final_duplicate = selection_info(
+        [group for _, groups in selected_blocks for group in groups])
     if final_duplicate != "no":
         raise RuntimeError("Final canonical registry contains duplicate parameter names")
     summary.update({"dry_run": False, "final_canonical_parameter_count": final_canonical,

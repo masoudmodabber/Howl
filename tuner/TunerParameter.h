@@ -36,6 +36,7 @@ enum class ParameterFamily
     Pieces,
     Threats,
     Endgame,
+    King,
     PST
 };
 
@@ -230,6 +231,41 @@ public:
         registry.Add("LoneKingRestrictedNeighbourWeight", ParameterFamily::EndgameWeights, 4, Option::LoneKingRestrictedNeighbourWeight);
         registry.Add("LowMaterialScalePermille", ParameterFamily::EndgameWeights, 5, Option::LowMaterialScalePermille);
 
+        const auto addKing = [&registry](const char* name, int index, int value)
+        {
+            registry.Add(name, ParameterFamily::KingSafety, index, value, 0, 10000);
+        };
+        addKing("KingAttackerPawnWeight", 0, Option::KingAttackerPawnWeight);
+        addKing("KingAttackerMinorWeight", 1, Option::KingAttackerMinorWeight);
+        addKing("KingAttackerRookWeight", 2, Option::KingAttackerRookWeight);
+        addKing("KingAttackerQueenWeight", 3, Option::KingAttackerQueenWeight);
+        addKing("KingDefenderPawnWeight", 4, Option::KingDefenderPawnWeight);
+        addKing("KingDefenderMinorWeight", 5, Option::KingDefenderMinorWeight);
+        addKing("KingDefenderRookWeight", 6, Option::KingDefenderRookWeight);
+        addKing("KingDefenderQueenWeight", 7, Option::KingDefenderQueenWeight);
+        addKing("KingShelterSecondRankDanger", 8, Option::KingShelterSecondRankDanger);
+        addKing("KingShelterAdvancedPawnDanger", 9, Option::KingShelterAdvancedPawnDanger);
+        addKing("KingShelterMissingPawnDanger", 10, Option::KingShelterMissingPawnDanger);
+        addKing("KingShelterOpenFileDanger", 11, Option::KingShelterOpenFileDanger);
+        addKing("KingUndefendedZoneDanger", 12, Option::KingUndefendedZoneDanger);
+        addKing("KingAdditionalZoneAttackerDanger", 13, Option::KingAdditionalZoneAttackerDanger);
+        addKing("KingSemiOpenLineDanger", 14, Option::KingSemiOpenLineDanger);
+        addKing("KingOpenLineDanger", 15, Option::KingOpenLineDanger);
+        addKing("KingDiagonalLineDanger", 16, Option::KingDiagonalLineDanger);
+        addKing("KingControlledEscapeDanger", 17, Option::KingControlledEscapeDanger);
+        addKing("KingBlockedEscapeDanger", 18, Option::KingBlockedEscapeDanger);
+        addKing("KingTrappedEscapeDanger", 19, Option::KingTrappedEscapeDanger);
+        addKing("KingHeavyBatteryDanger", 20, Option::KingHeavyBatteryDanger);
+        addKing("CentralKingInnerMinorPressure", 21, Option::CentralKingInnerMinorPressure);
+        addKing("CentralKingOuterMinorPressure", 22, Option::CentralKingOuterMinorPressure);
+        addKing("CentralKingReadinessLagWeight", 23, Option::CentralKingReadinessLagWeight);
+        addKing("CentralKingPressureScale", 24, Option::CentralKingPressureScale);
+        addKing("KingUnreadyCoordinationWeight", 25, Option::KingUnreadyCoordinationWeight);
+        addKing("KingLatentActivationWeight", 26, Option::KingLatentActivationWeight);
+        addKing("KingFutureShelterWingWeight", 27, Option::KingFutureShelterWingWeight);
+        addKing("KingPinnedShelterPawnWeight", 28, Option::KingPinnedShelterPawnWeight);
+        addKing("KingInfiltratedQueenWeight", 29, Option::KingInfiltratedQueenWeight);
+
         return registry;
     }
 
@@ -241,6 +277,13 @@ public:
     void Add(std::string name, ParameterFamily family, int semanticIndex, int currentValue)
     {
         parameters.push_back({std::move(name), family, semanticIndex, currentValue, currentValue, currentValue});
+    }
+
+    void Add(std::string name, ParameterFamily family, int semanticIndex, int currentValue,
+             int minValue, int maxValue)
+    {
+        parameters.push_back({std::move(name), family, semanticIndex,
+                              currentValue, minValue, maxValue});
     }
 
     const std::vector<TunerParameter>& GetParameters() const

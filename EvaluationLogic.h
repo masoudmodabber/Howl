@@ -179,7 +179,10 @@ public:
     static int Evaluate(Board& thisBoard);
     static EvaluationBreakdown EvaluateDetailed(Board& thisBoard);
     static int CentralKingReadinessPenalty(Board& board, bool whiteKing, int phase,
-                                           const EvaluationContext* ctx = nullptr);
+                                           const EvaluationContext* ctx = nullptr,
+                                           int coordinationWeight = -1,
+                                           int latentWeight = -1,
+                                           int shelterWingWeight = -1);
     static int GetPawnStructureValue(Board& thisBoard, int phase, const EvaluationContext* ctx = nullptr);
     static int* PieceMoveCount(Board& thisBoard, int phase);
     static MovementResult PieceMoveCountFast(Board& thisBoard, int phase);
