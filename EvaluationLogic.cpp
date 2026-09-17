@@ -2006,7 +2006,9 @@ int EvaluationLogic::CalculatePhase(const Board &thisBoard)
 
 namespace
 {
-int LoneKingMateGuidance(Board &board)
+int LoneKingMateGuidanceWithWeights(Board &board, int base, int edgeWeight,
+                                    int cornerWeight, int confinementWeight,
+                                    int restrictedNeighbourWeight)
 {
     const auto materialCount = [&board](int offset)
     {
@@ -2119,8 +2121,9 @@ int LoneKingMateGuidance(Board &board)
         }
     }
 
-    const int guidance = 200 + 12 * edgeSteps + 6 * cornerSteps + 8 * confinementSupport +
-                         10 * (8 - safeNeighbours);
+    const int guidance = base + edgeWeight * edgeSteps + cornerWeight * cornerSteps
+                       + confinementWeight * confinementSupport
+                       + restrictedNeighbourWeight * (8 - safeNeighbours);
     return whiteWinning ? guidance : -guidance;
 }
 
@@ -2129,39 +2132,39 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     long long piecesBinary = thisBoard.whitePieces | thisBoard.blackPieces;
     MyList (&pieces)[15] = thisBoard.pieces;
 
-    int whitePieceEvaluation = pieces[1].size() * Option::PawnValue + pieces[2].size() * Option::KnightValue + pieces[3].size() * (Option::BishopValue + (8 - (pieces[1].size() + pieces[9].size())) * 2) + pieces[4].size() * Option::RookValue + pieces[5].size() * Option::QueenValue;
+    int whitePieceEvaluation = pieces[1].size() * Option::PawnValue + pieces[2].size() * Option::KnightValue + pieces[3].size() * (Option::BishopValue + (8 - (pieces[1].size() + pieces[9].size())) * Option::BishopOpenFilePawnScale) + pieces[4].size() * Option::RookValue + pieces[5].size() * Option::QueenValue;
 
-    int blackPieceEvaluation = pieces[9].size() * Option::PawnValue + pieces[10].size() * Option::KnightValue + pieces[11].size() * (Option::BishopValue + (8 - (pieces[1].size() + pieces[9].size())) * 2) + pieces[12].size() * Option::RookValue + pieces[13].size() * Option::QueenValue;
+    int blackPieceEvaluation = pieces[9].size() * Option::PawnValue + pieces[10].size() * Option::KnightValue + pieces[11].size() * (Option::BishopValue + (8 - (pieces[1].size() + pieces[9].size())) * Option::BishopOpenFilePawnScale) + pieces[12].size() * Option::RookValue + pieces[13].size() * Option::QueenValue;
     double pieceBalance = 1;
     if (whitePieceEvaluation > blackPieceEvaluation)
     {
-        pieceBalance = static_cast<double>(whitePieceEvaluation + 1500) / (blackPieceEvaluation + 1500);
+        pieceBalance = static_cast<double>(whitePieceEvaluation + Option::MaterialBalanceOffset) / (blackPieceEvaluation + Option::MaterialBalanceOffset);
     }
     else if (whitePieceEvaluation < blackPieceEvaluation)
     {
-        pieceBalance = static_cast<double>(blackPieceEvaluation + 1500) / (whitePieceEvaluation + 1500);
+        pieceBalance = static_cast<double>(blackPieceEvaluation + Option::MaterialBalanceOffset) / (whitePieceEvaluation + Option::MaterialBalanceOffset);
     }
 
     if (whitePieceEvaluation > blackPieceEvaluation)
     {
         if (pieces[1].size() == 0)
         {
-            pieceBalance *= .7;
+            pieceBalance *= Option::PawnDeficitZeroPawnMultiplierPermille / 1000.0;
         }
         if (pieces[1].size() == 1)
         {
-            pieceBalance *= .9;
+            pieceBalance *= Option::PawnDeficitOnePawnMultiplierPermille / 1000.0;
         }
     }
     else if (whitePieceEvaluation < blackPieceEvaluation)
     {
         if (pieces[9].size() == 0)
         {
-            pieceBalance *= .7;
+            pieceBalance *= Option::PawnDeficitZeroPawnMultiplierPermille / 1000.0;
         }
         if (pieces[9].size() == 1)
         {
-            pieceBalance *= .9;
+            pieceBalance *= Option::PawnDeficitOnePawnMultiplierPermille / 1000.0;
         }
     }
 
@@ -2170,7 +2173,7 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     int whiteBishopPair = 0;
     int blackBishopPair = 0;
     const int totalPawns = pieces[1].size() + pieces[9].size();
-    const int bpBonus = std::max(0, 48 - totalPawns * 3);
+    const int bpBonus = std::max(0, Option::BishopPairValue - 2 - totalPawns * 3);
     if (pieces[3].size() == 2 && ((pieces[3][0] / 8 + pieces[3][0] % 8) % 2) != ((pieces[3][1] / 8 + pieces[3][1] % 8) % 2))    
     {
         whiteBishopPair = bpBonus;
@@ -2291,16 +2294,20 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     // Rook Connection
     int rookValue = RookConnectionValue(pieces, piecesBinary);
     // Temp
-    const int taperedTempo = TaperGroup1Value(24, 11, phase);
+    const int taperedTempo = TaperGroup1Value(Option::TempoMiddleGame, Option::TempoEndGame, phase);
     int temp = (!thisBoard.sideToMove) ? taperedTempo : -taperedTempo;
 
     double oppositeColorBishop = 1.0;
     if (pieces[3].size() == 1 && pieces[11].size() == 1 && ((pieces[3].front() / 8 + pieces[3].front() % 8) % 2) != ((pieces[11].front() / 8 + pieces[11].front() % 8) % 2))
     {
-        oppositeColorBishop = (0.9 * phase + 0.75 * (24 - phase)) / 24;
+        oppositeColorBishop = ((Option::OppositeColorBishopMiddleGameScalePermille / 1000.0) * phase
+                             + (Option::OppositeColorBishopEndGameScalePermille / 1000.0) * (24 - phase)) / 24;
     }
 
-    const int loneKingMateGuidance = LoneKingMateGuidance(thisBoard);
+    const int loneKingMateGuidance = EvaluationLogic::LoneKingMateGuidance(
+        thisBoard, Option::LoneKingBase, Option::LoneKingEdgeWeight,
+        Option::LoneKingCornerWeight, Option::LoneKingConfinementWeight,
+        Option::LoneKingRestrictedNeighbourWeight);
     // Each existing score now has one explicit conceptual owner.  The
     // components are unchanged; only the aggregation is made explicit.
     const int basePosition = pieceEvaluation + bishopPairVaue + piecePlacement;
@@ -2317,7 +2324,7 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
             (pieces[2].size() + pieces[3].size() == 1) &&
             pieces[9].size() >= 1)
         {
-            endgameScaleFactor *= 0.25;
+            endgameScaleFactor *= Option::LowMaterialScalePermille / 1000.0;
         }
     }
     else if (unscaled < 0)
@@ -2326,7 +2333,7 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
             (pieces[10].size() + pieces[11].size() == 1) &&
             pieces[1].size() >= 1)
         {
-            endgameScaleFactor *= 0.25;
+            endgameScaleFactor *= Option::LowMaterialScalePermille / 1000.0;
         }
     }
 
@@ -2480,6 +2487,14 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
 }
 }
 
+int EvaluationLogic::LoneKingMateGuidance(Board& board, int base, int edgeWeight,
+                                           int cornerWeight, int confinementWeight,
+                                           int restrictedNeighbourWeight)
+{
+    return LoneKingMateGuidanceWithWeights(board, base, edgeWeight, cornerWeight,
+                                           confinementWeight, restrictedNeighbourWeight);
+}
+
 int EvaluationLogic::Evaluate(Board &thisBoard)
 {
     const std::uint64_t evaluationKey =
@@ -2544,7 +2559,7 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int phase, const Ev
         if (IsIsolatedPawn(whitePawns, pawnPlace))
             isolatedPawnValueWhite += isolatedPenalty;
 
-        const int endGameValue = (pawnPlace / 8) * 2;
+        const int endGameValue = (pawnPlace / 8) * Option::EndgamePawnAdvancementRankMultiplier;
         goForwardPawnWhite += TaperGroup3Value(0, endGameValue, phase);
 
         if ((AttackPlaces::BlackPawnAttackPlaces[pawnPlace] & whitePawns) != 0)
@@ -2574,7 +2589,7 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int phase, const Ev
         if (IsIsolatedPawn(blackPawns, pawnPlace))
             isolatedPawnValueBlack += isolatedPenaltyBlack;
 
-        const int endGameValue = (7 - (pawnPlace / 8)) * 2;
+        const int endGameValue = (7 - (pawnPlace / 8)) * Option::EndgamePawnAdvancementRankMultiplier;
         goForwardPawnBlack += TaperGroup3Value(0, endGameValue, phase);
 
         if ((AttackPlaces::WhitePawnAttackPlaces[pawnPlace] & blackPawns) != 0)
@@ -3032,7 +3047,7 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase, 
             }
         }
     }
-    int scaledAttackNet = ((whiteAttackValue - blackAttackValue) * 135) / 100;
+    int scaledAttackNet = ((whiteAttackValue - blackAttackValue) * Option::PieceAttackScalePercent) / 100;
     int rookFileNet = whiteRookFileBonus - blackRookFileBonus;
     
     // Pinned vulnerable pawn (chess-rational vulnerability model)

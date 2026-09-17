@@ -196,6 +196,69 @@ public:
                tunableFamilies.end();
     }
 
+    static bool IsParameterTunable(const TunerParameter& parameter,
+                                   const std::vector<ParameterFamily>& selections)
+    {
+        if (IsFamilyTunable(parameter.family, selections)) return true;
+
+        const auto selected = [&selections](ParameterFamily group)
+        {
+            return IsFamilyTunable(group, selections);
+        };
+
+        if (selected(ParameterFamily::PST) &&
+            parameter.family == ParameterFamily::PieceSquare)
+            return true;
+
+        if (selected(ParameterFamily::Pawns))
+        {
+            if (parameter.family == ParameterFamily::PawnStructure ||
+                parameter.family == ParameterFamily::PassedPawnV2 ||
+                parameter.family == ParameterFamily::IsolatedPawn ||
+                parameter.family == ParameterFamily::RookBehindPassedPawn)
+                return true;
+            if (parameter.family == ParameterFamily::Inline && parameter.semanticIndex == 9)
+                return true;
+        }
+
+        if (selected(ParameterFamily::Pieces) &&
+            (parameter.family == ParameterFamily::KnightMobility ||
+             parameter.family == ParameterFamily::BishopMobility ||
+             parameter.family == ParameterFamily::RookMobility ||
+             parameter.family == ParameterFamily::QueenMobility ||
+             parameter.family == ParameterFamily::RookFile ||
+             parameter.family == ParameterFamily::KnightOutpost))
+            return true;
+
+        if (selected(ParameterFamily::Threats) &&
+            (parameter.family == ParameterFamily::Attack ||
+             (parameter.family == ParameterFamily::Inline && parameter.semanticIndex == 10)))
+            return true;
+
+        if (selected(ParameterFamily::Endgame) &&
+            (parameter.family == ParameterFamily::EndgameWeights ||
+             (parameter.family == ParameterFamily::Inline &&
+              (parameter.semanticIndex == 4 || parameter.semanticIndex == 5))))
+            return true;
+
+        if (selected(ParameterFamily::BaseScalars))
+        {
+            if (parameter.family == ParameterFamily::PieceValue) return true;
+            if (parameter.family == ParameterFamily::Inline)
+            {
+                switch (parameter.semanticIndex)
+                {
+                case 0: case 1: case 2: case 3: case 6: case 7: case 8:
+                    return true;
+                default:
+                    break;
+                }
+            }
+        }
+
+        return false;
+    }
+
     static const std::vector<ParameterFamily>& Refine1Families()
     {
         static const std::vector<ParameterFamily> families = {
@@ -306,8 +369,29 @@ public:
         case ParameterFamily::KnightOutpost: return 2;
         case ParameterFamily::IsolatedPawn: return 2;
         case ParameterFamily::RookBehindPassedPawn: return 2;
+        case ParameterFamily::EndgameWeights: return 2;
         default: return 0;
         }
+    }
+
+    static int GetParameterDelta(const TunerParameter& parameter,
+                                 const std::vector<ParameterFamily>& selections)
+    {
+        if (parameter.family == ParameterFamily::Inline)
+        {
+            if (IsFamilyTunable(ParameterFamily::BaseScalars, selections) &&
+                (parameter.semanticIndex <= 3 ||
+                 (parameter.semanticIndex >= 6 && parameter.semanticIndex <= 8)))
+                return 2;
+            if (IsFamilyTunable(ParameterFamily::Pawns, selections) && parameter.semanticIndex == 9)
+                return 2;
+            if (IsFamilyTunable(ParameterFamily::Threats, selections) && parameter.semanticIndex == 10)
+                return 2;
+            if (IsFamilyTunable(ParameterFamily::Endgame, selections) &&
+                (parameter.semanticIndex == 4 || parameter.semanticIndex == 5))
+                return 2;
+        }
+        return GetFamilyDelta(parameter.family);
     }
 
     static int GetFamilyDeltaPass2(ParameterFamily family)
@@ -371,6 +455,13 @@ public:
         case ParameterFamily::KnightOutpost: return "KnightOutpost";
         case ParameterFamily::IsolatedPawn: return "IsolatedPawn";
         case ParameterFamily::RookBehindPassedPawn: return "RookBehindPassedPawn";
+        case ParameterFamily::EndgameWeights: return "EndgameWeights";
+        case ParameterFamily::BaseScalars: return "BaseScalars";
+        case ParameterFamily::Pawns: return "Pawns";
+        case ParameterFamily::Pieces: return "Pieces";
+        case ParameterFamily::Threats: return "Threats";
+        case ParameterFamily::Endgame: return "Endgame";
+        case ParameterFamily::PST: return "PST";
         default: return "Unknown";
         }
     }
@@ -386,7 +477,11 @@ public:
             ParameterFamily::QueenMobility,
             ParameterFamily::Attack, ParameterFamily::Inline,
             ParameterFamily::RookFile, ParameterFamily::KnightOutpost,
-            ParameterFamily::IsolatedPawn, ParameterFamily::RookBehindPassedPawn
+            ParameterFamily::IsolatedPawn, ParameterFamily::RookBehindPassedPawn,
+            ParameterFamily::EndgameWeights,
+            ParameterFamily::BaseScalars, ParameterFamily::Pawns,
+            ParameterFamily::Pieces, ParameterFamily::Threats,
+            ParameterFamily::Endgame, ParameterFamily::PST
         };
         for (ParameterFamily candidate : families)
         {
@@ -429,8 +524,8 @@ public:
         for (std::size_t p = 0; p < registry.Size(); ++p)
         {
             const auto& param = registry[p];
-            if (IsFamilyTunable(param.family, tunableFamilies) &&
-                GetFamilyDelta(param.family) > 0)
+            if (IsParameterTunable(param, tunableFamilies) &&
+                GetParameterDelta(param, tunableFamilies) > 0)
                 result.parametersExamined++;
         }
 
@@ -442,9 +537,9 @@ public:
             for (std::size_t p = 0; p < registry.Size(); ++p)
             {
                 const auto& param = registry[p];
-                if (!IsFamilyTunable(param.family, tunableFamilies)) continue;
+                if (!IsParameterTunable(param, tunableFamilies)) continue;
 
-                const int delta = GetFamilyDelta(param.family);
+                const int delta = GetParameterDelta(param, tunableFamilies);
                 if (delta <= 0) continue;
 
                 int* targetPtr = state.GetParameterPointer(param.family, param.semanticIndex);

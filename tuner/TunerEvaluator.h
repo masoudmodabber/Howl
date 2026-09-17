@@ -2650,7 +2650,12 @@ public:
                                    (state.OppositeColorBishopEndGameScalePermille / 1000.0) * (24 - phase)) / 24;
         }
 
-        int unscaled = pieceEvaluation + bishopPairValue + movement + pawnStructure + kingSafety + rookValue + temp;
+        const int loneKingMateGuidance = EvaluationLogic::LoneKingMateGuidance(
+            thisBoard, state.LoneKingBase, state.LoneKingEdgeWeight,
+            state.LoneKingCornerWeight, state.LoneKingConfinementWeight,
+            state.LoneKingRestrictedNeighbourWeight);
+        int unscaled = pieceEvaluation + bishopPairValue + movement + pawnStructure
+                     + kingSafety + rookValue + loneKingMateGuidance + temp;
 
         double endgameScaleFactor = oppositeColorBishop;
         if (unscaled > 0)
@@ -2659,7 +2664,7 @@ public:
                 (pieces[2].size() + pieces[3].size() == 1) &&
                 pieces[9].size() >= 1)
             {
-                endgameScaleFactor *= 0.25;
+                endgameScaleFactor *= state.LowMaterialScalePermille / 1000.0;
             }
         }
         else if (unscaled < 0)
@@ -2668,7 +2673,7 @@ public:
                 (pieces[10].size() + pieces[11].size() == 1) &&
                 pieces[1].size() >= 1)
             {
-                endgameScaleFactor *= 0.25;
+                endgameScaleFactor *= state.LowMaterialScalePermille / 1000.0;
             }
         }
 

@@ -6,6 +6,7 @@
 #include <vector>
 #include "MobilityV2.h"
 #include "PassedPawnV2.h"
+#include "PieceSquareModel.h"
 #include "tuner/TunerParameter.h"
 
 namespace Tuner
@@ -44,7 +45,20 @@ struct TunerEvaluationState
     int WhitePassedPawnValueMiddleGam[64] = {0};
     int WhitePassedPawnValueEndGame[64] = {0};
 
-    // Family: PieceSquare (768: 6 pieces * 2 phases * 64 squares)
+    // Family: compact PieceSquare model (96 parameters plus generated tables)
+    int PawnPieceSquareMiddleGameParameters[7] = {0};
+    int KnightPieceSquareMiddleGameParameters[11] = {0};
+    int BishopPieceSquareMiddleGameParameters[11] = {0};
+    int RookPieceSquareMiddleGameParameters[6] = {0};
+    int QueenPieceSquareMiddleGameParameters[6] = {0};
+    int KingPieceSquareMiddleGameParameters[7] = {0};
+    int PawnPieceSquareEndGameParameters[7] = {0};
+    int KnightPieceSquareEndGameParameters[11] = {0};
+    int BishopPieceSquareEndGameParameters[11] = {0};
+    int RookPieceSquareEndGameParameters[6] = {0};
+    int QueenPieceSquareEndGameParameters[6] = {0};
+    int KingPieceSquareEndGameParameters[7] = {0};
+
     int PawnInValueWhiteMiddleGame[64] = {0};
     int KnightInValueWhiteMiddleGame[64] = {0};
     int BishopInValueWhiteMiddleGame[64] = {0};
@@ -110,6 +124,12 @@ struct TunerEvaluationState
     int PawnDeficitOnePawnMultiplierPermille = 0;
     int EndgamePawnAdvancementRankMultiplier = 0;
     int PieceAttackScalePercent = 0;
+    int LoneKingBase = 0;
+    int LoneKingEdgeWeight = 0;
+    int LoneKingCornerWeight = 0;
+    int LoneKingConfinementWeight = 0;
+    int LoneKingRestrictedNeighbourWeight = 0;
+    int LowMaterialScalePermille = 0;
 
     // Family: KnightOutpost (4 parameters)
     int KnightOutpostMiddleGame = 0;
@@ -209,17 +229,22 @@ struct TunerEvaluationState
 
         case ParameterFamily::PieceSquare:
         {
-            if (semanticIndex < 0 || semanticIndex >= 768)
-                return nullptr;
-            int table = semanticIndex / 64;
-            int sq = semanticIndex % 64;
-            int* tables[12] = {
-                PawnInValueWhiteMiddleGame, KnightInValueWhiteMiddleGame, BishopInValueWhiteMiddleGame,
-                RookInValueWhiteMiddleGame, QueenInValueWhiteMiddleGame, KingInValueWhiteMiddleGame,
-                PawnInValueWhiteEndGame, KnightInValueWhiteEndGame, BishopInValueWhiteEndGame,
-                RookInValueWhiteEndGame, QueenInValueWhiteEndGame, KingInValueWhiteEndGame
+            int* groups[12] = {
+                PawnPieceSquareMiddleGameParameters, KnightPieceSquareMiddleGameParameters,
+                BishopPieceSquareMiddleGameParameters, RookPieceSquareMiddleGameParameters,
+                QueenPieceSquareMiddleGameParameters, KingPieceSquareMiddleGameParameters,
+                PawnPieceSquareEndGameParameters, KnightPieceSquareEndGameParameters,
+                BishopPieceSquareEndGameParameters, RookPieceSquareEndGameParameters,
+                QueenPieceSquareEndGameParameters, KingPieceSquareEndGameParameters
             };
-            return &tables[table][sq];
+            const int counts[12] = {7, 11, 11, 6, 6, 7, 7, 11, 11, 6, 6, 7};
+            if (semanticIndex < 0) return nullptr;
+            for (int group = 0; group < 12; ++group)
+            {
+                if (semanticIndex < counts[group]) return &groups[group][semanticIndex];
+                semanticIndex -= counts[group];
+            }
+            return nullptr;
         }
 
         case ParameterFamily::KnightMobility:
@@ -325,6 +350,18 @@ struct TunerEvaluationState
             default: return nullptr;
             }
 
+        case ParameterFamily::EndgameWeights:
+            switch (semanticIndex)
+            {
+            case 0: return &LoneKingBase;
+            case 1: return &LoneKingEdgeWeight;
+            case 2: return &LoneKingCornerWeight;
+            case 3: return &LoneKingConfinementWeight;
+            case 4: return &LoneKingRestrictedNeighbourWeight;
+            case 5: return &LowMaterialScalePermille;
+            default: return nullptr;
+            }
+
         default:
             return nullptr;
         }
@@ -374,6 +411,18 @@ struct TunerEvaluationState
         MobilityV2::GenerateRook(RookMobilityEndGameParameters, RookMoveCountValueEndGame);
         MobilityV2::GenerateQueenMiddleGame(QueenMobilityMiddleGameParameters, QueenMoveCountValueMiddleGame);
         MobilityV2::GenerateQueenEndGame(QueenMobilityEndGameParameters, QueenMoveCountValueEndGame);
+        PieceSquareModel::GeneratePawn(PawnPieceSquareMiddleGameParameters, PawnInValueWhiteMiddleGame);
+        PieceSquareModel::GenerateMinor(KnightPieceSquareMiddleGameParameters, KnightInValueWhiteMiddleGame);
+        PieceSquareModel::GenerateMinor(BishopPieceSquareMiddleGameParameters, BishopInValueWhiteMiddleGame);
+        PieceSquareModel::GenerateMajor(RookPieceSquareMiddleGameParameters, RookInValueWhiteMiddleGame);
+        PieceSquareModel::GenerateMajor(QueenPieceSquareMiddleGameParameters, QueenInValueWhiteMiddleGame);
+        PieceSquareModel::GenerateKing(KingPieceSquareMiddleGameParameters, KingInValueWhiteMiddleGame);
+        PieceSquareModel::GeneratePawn(PawnPieceSquareEndGameParameters, PawnInValueWhiteEndGame);
+        PieceSquareModel::GenerateMinor(KnightPieceSquareEndGameParameters, KnightInValueWhiteEndGame);
+        PieceSquareModel::GenerateMinor(BishopPieceSquareEndGameParameters, BishopInValueWhiteEndGame);
+        PieceSquareModel::GenerateMajor(RookPieceSquareEndGameParameters, RookInValueWhiteEndGame);
+        PieceSquareModel::GenerateMajor(QueenPieceSquareEndGameParameters, QueenInValueWhiteEndGame);
+        PieceSquareModel::GenerateKing(KingPieceSquareEndGameParameters, KingInValueWhiteEndGame);
         std::fill(PawnMoveCountValueMiddleGame, PawnMoveCountValueMiddleGame + 3, 0);
         std::fill(PawnMoveCountValueEndGame, PawnMoveCountValueEndGame + 3, 0);
         std::fill(KingMoveCountValueMiddleGame, KingMoveCountValueMiddleGame + 9, 0);

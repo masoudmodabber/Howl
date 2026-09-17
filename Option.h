@@ -58,12 +58,43 @@ public:
     static int RookBehindPassedPawnMiddleGame;
     static int RookBehindPassedPawnEndGame;
 
+    // Inline production evaluation parameters.
+    static int BishopPairValue;
+    static int BishopOpenFilePawnScale;
+    static int TempoMiddleGame;
+    static int TempoEndGame;
+    static int OppositeColorBishopMiddleGameScalePermille;
+    static int OppositeColorBishopEndGameScalePermille;
+    static int MaterialBalanceOffset;
+    static int PawnDeficitZeroPawnMultiplierPermille;
+    static int PawnDeficitOnePawnMultiplierPermille;
+    static int EndgamePawnAdvancementRankMultiplier;
+    static int PieceAttackScalePercent;
+    static int LoneKingBase;
+    static int LoneKingEdgeWeight;
+    static int LoneKingCornerWeight;
+    static int LoneKingConfinementWeight;
+    static int LoneKingRestrictedNeighbourWeight;
+    static int LowMaterialScalePermille;
+
     // Changeable
     static int pieceMovement[2][7][120];
     static int WhitePassedPawnValueMiddleGam[64];
     static int PassedPawnMiddleGameParameters[6];
     static int PassedPawnEndGameParameters[6];
     static int PassedPawnMiddleGameFileAmplitude;
+    static int PawnPieceSquareMiddleGameParameters[7];
+    static int KnightPieceSquareMiddleGameParameters[11];
+    static int BishopPieceSquareMiddleGameParameters[11];
+    static int RookPieceSquareMiddleGameParameters[6];
+    static int QueenPieceSquareMiddleGameParameters[6];
+    static int KingPieceSquareMiddleGameParameters[7];
+    static int PawnPieceSquareEndGameParameters[7];
+    static int KnightPieceSquareEndGameParameters[11];
+    static int BishopPieceSquareEndGameParameters[11];
+    static int RookPieceSquareEndGameParameters[6];
+    static int QueenPieceSquareEndGameParameters[6];
+    static int KingPieceSquareEndGameParameters[7];
     static int PawnInValueWhiteMiddleGame[64];
     static int KnightInValueWhiteMiddleGame[64];
     static int BishopInValueWhiteMiddleGame[64];
