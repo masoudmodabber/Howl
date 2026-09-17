@@ -112,16 +112,13 @@ struct TunerEvaluationState
     int KingAttackValueMiddleGame[16] = {0};
     int KingAttackValueEndGame[16] = {0};
 
-    // Family: Inline (11 parameters)
+    // Family: Inline (8 parameters)
     int BishopPairValue = 0;
     int BishopOpenFilePawnScale = 0;
     int TempoMiddleGame = 0;
     int TempoEndGame = 0;
     int OppositeColorBishopMiddleGameScalePermille = 0;
     int OppositeColorBishopEndGameScalePermille = 0;
-    int MaterialBalanceOffset = 0;
-    int PawnDeficitZeroPawnMultiplierPermille = 0;
-    int PawnDeficitOnePawnMultiplierPermille = 0;
     int EndgamePawnAdvancementRankMultiplier = 0;
     int PieceAttackScalePercent = 0;
     int LoneKingBase = 0;
@@ -129,7 +126,6 @@ struct TunerEvaluationState
     int LoneKingCornerWeight = 0;
     int LoneKingConfinementWeight = 0;
     int LoneKingRestrictedNeighbourWeight = 0;
-    int LowMaterialScalePermille = 0;
     int KingAttackerPawnWeight = 0;
     int KingAttackerMinorWeight = 0;
     int KingAttackerRookWeight = 0;
@@ -151,13 +147,6 @@ struct TunerEvaluationState
     int KingBlockedEscapeDanger = 0;
     int KingTrappedEscapeDanger = 0;
     int KingHeavyBatteryDanger = 0;
-    int CentralKingInnerMinorPressure = 0;
-    int CentralKingOuterMinorPressure = 0;
-    int CentralKingReadinessLagWeight = 0;
-    int CentralKingPressureScale = 0;
-    int KingUnreadyCoordinationWeight = 0;
-    int KingLatentActivationWeight = 0;
-    int KingFutureShelterWingWeight = 0;
     int KingPinnedShelterPawnWeight = 0;
     int KingInfiltratedQueenWeight = 0;
 
@@ -336,11 +325,8 @@ struct TunerEvaluationState
             case 3: return &TempoEndGame;
             case 4: return &OppositeColorBishopMiddleGameScalePermille;
             case 5: return &OppositeColorBishopEndGameScalePermille;
-            case 6: return &MaterialBalanceOffset;
-            case 7: return &PawnDeficitZeroPawnMultiplierPermille;
-            case 8: return &PawnDeficitOnePawnMultiplierPermille;
-            case 9: return &EndgamePawnAdvancementRankMultiplier;
-            case 10: return &PieceAttackScalePercent;
+            case 6: return &EndgamePawnAdvancementRankMultiplier;
+            case 7: return &PieceAttackScalePercent;
             default: return nullptr;
             }
 
@@ -388,13 +374,12 @@ struct TunerEvaluationState
             case 2: return &LoneKingCornerWeight;
             case 3: return &LoneKingConfinementWeight;
             case 4: return &LoneKingRestrictedNeighbourWeight;
-            case 5: return &LowMaterialScalePermille;
             default: return nullptr;
             }
 
         case ParameterFamily::KingSafety:
         {
-            int* values[30] = {
+            int* values[23] = {
                 &KingAttackerPawnWeight, &KingAttackerMinorWeight,
                 &KingAttackerRookWeight, &KingAttackerQueenWeight,
                 &KingDefenderPawnWeight, &KingDefenderMinorWeight,
@@ -405,13 +390,10 @@ struct TunerEvaluationState
                 &KingSemiOpenLineDanger, &KingOpenLineDanger,
                 &KingDiagonalLineDanger, &KingControlledEscapeDanger,
                 &KingBlockedEscapeDanger, &KingTrappedEscapeDanger,
-                &KingHeavyBatteryDanger, &CentralKingInnerMinorPressure,
-                &CentralKingOuterMinorPressure, &CentralKingReadinessLagWeight,
-                &CentralKingPressureScale, &KingUnreadyCoordinationWeight,
-                &KingLatentActivationWeight, &KingFutureShelterWingWeight,
-                &KingPinnedShelterPawnWeight, &KingInfiltratedQueenWeight
+                &KingHeavyBatteryDanger, &KingPinnedShelterPawnWeight,
+                &KingInfiltratedQueenWeight
             };
-            return semanticIndex >= 0 && semanticIndex < 30 ? values[semanticIndex] : nullptr;
+            return semanticIndex >= 0 && semanticIndex < 23 ? values[semanticIndex] : nullptr;
         }
 
         default:

@@ -65,9 +65,6 @@ public:
     static int TempoEndGame;
     static int OppositeColorBishopMiddleGameScalePermille;
     static int OppositeColorBishopEndGameScalePermille;
-    static int MaterialBalanceOffset;
-    static int PawnDeficitZeroPawnMultiplierPermille;
-    static int PawnDeficitOnePawnMultiplierPermille;
     static int EndgamePawnAdvancementRankMultiplier;
     static int PieceAttackScalePercent;
     static int LoneKingBase;
@@ -75,7 +72,6 @@ public:
     static int LoneKingCornerWeight;
     static int LoneKingConfinementWeight;
     static int LoneKingRestrictedNeighbourWeight;
-    static int LowMaterialScalePermille;
     static int KingAttackerPawnWeight;
     static int KingAttackerMinorWeight;
     static int KingAttackerRookWeight;
@@ -97,13 +93,6 @@ public:
     static int KingBlockedEscapeDanger;
     static int KingTrappedEscapeDanger;
     static int KingHeavyBatteryDanger;
-    static int CentralKingInnerMinorPressure;
-    static int CentralKingOuterMinorPressure;
-    static int CentralKingReadinessLagWeight;
-    static int CentralKingPressureScale;
-    static int KingUnreadyCoordinationWeight;
-    static int KingLatentActivationWeight;
-    static int KingFutureShelterWingWeight;
     static int KingPinnedShelterPawnWeight;
     static int KingInfiltratedQueenWeight;
 

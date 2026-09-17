@@ -122,7 +122,7 @@ if(BUILD_TESTING)
         COMMAND howl_correctness_tests search igg_depth_mapping
     )
 
-    foreach(CACHE_CASE evaluation evaluation_rook_ordering evaluation_rook_connection evaluation_fixed_table exchange exchange_variants exchange_promotion_key exchange_wrong_lookup exchange_field_collision exchange_attacker_bounds exchange_power_two_bounds exchange_legacy_equivalence exchange_fixed_table)
+    foreach(CACHE_CASE evaluation evaluation_rook_ordering evaluation_fixed_table exchange exchange_variants exchange_promotion_key exchange_wrong_lookup exchange_field_collision exchange_attacker_bounds exchange_power_two_bounds exchange_legacy_equivalence exchange_fixed_table)
         add_test(
             NAME cache_${CACHE_CASE}
             COMMAND howl_correctness_tests cache ${CACHE_CASE}
@@ -152,7 +152,7 @@ if(BUILD_TESTING)
         )
     endforeach()
 
-    foreach(EVAL_CASE lone_king_mate_guidance black_en_passant black_knight_attack bishop_pair_color king_danger_sign passed_pawn_minor_accessibility passed_pawn_table_symmetry king_safety_table_symmetry pawn_move_center_symmetry game_phase_calculation phase_taper_interpolation breakdown_reconciliation passed_pawn_phase_interpolation piece_balance_continuous central_king_attack_pressure)
+    foreach(EVAL_CASE lone_king_mate_guidance black_en_passant black_knight_attack bishop_pair_color king_danger_sign passed_pawn_minor_accessibility passed_pawn_table_symmetry king_safety_table_symmetry pawn_move_center_symmetry game_phase_calculation phase_taper_interpolation breakdown_reconciliation passed_pawn_phase_interpolation)
         add_test(
             NAME eval_${EVAL_CASE}
             COMMAND howl_correctness_tests eval ${EVAL_CASE}
