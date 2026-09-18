@@ -47,55 +47,103 @@ PVSSearch::KillerMove PVSSearch::killers[PVSSearch::MaxKillerPly][2] = {};
 
 namespace
 {
-    constexpr int HistoryReductionUnit = 4096;
-    constexpr int MaxHistoryReductionAdjustment = 2;
-    constexpr double LMRLogReductionScale = 0.60;
-    constexpr int CutNodeReduction = 1;
-    constexpr int ImprovingReduction = 1;
-    constexpr int NonImprovingReduction = 1;
-    constexpr int PVNodeReduction = 1;
-    constexpr int TTPVReduction = 2;
-    constexpr int TacticalRefutationReduction = 1;
-    constexpr int CheckReduction = 1;
-    constexpr int PromotionReduction = 2;
-    constexpr int CaptureReduction = 1;
-    constexpr int StaticPruningMaxDepth = 3;
+    constexpr int StaticPruningMaxDepth = 5;
     constexpr int RazoringMaxDepth = 2;
-    constexpr int RazoringBaseMargin = 200;
-    constexpr int RazoringDepthMargin = 120;
-    constexpr int ChildFutilityMarginPerDepth = 90;
-    constexpr int NullMoveMinDepth = 3;
-    constexpr int NullMoveEvalUnit = 250;
-    constexpr int NullMoveMaxEvalBonus = 2;
+    constexpr int RazorMargin = 531;
     constexpr int ProbCutMinDepth = 5;
-    constexpr int ProbCutMargin = 120;
-    constexpr int ProbCutMaxCandidates = 2;
-    constexpr int ProbCutPickerLimit = 6;
-    constexpr int HistoryStrengthUnit = 4096;
-    constexpr int MaxHistoryStrength = 3;
-    constexpr int MinimumQuietMoveBudget = 3;
-    constexpr int QuietMovesPerExpectedDepth = 2;
-    constexpr int FutilityHistoryUnit = 64;
-    constexpr int FutilityHistoryMinimumMargin = 40;
-    constexpr int FutilityBaseMargin = 100;
-    constexpr int FutilityDepthMargin = 120;
-    constexpr int SeePruningMargin = 150;
+    constexpr int ProbCutMaxCandidatesBase = 2;
+    constexpr int ProbCutPickerLimit = 8; // Legacy inactive SearchNode storage bound.
+    constexpr int MaxReductionIndex = 255;
 
-
-
-
-    constexpr int HistoryLimit = 16384;
-    constexpr size_t ContinuationTableSize = 1u << 16;
+    constexpr int MainHistoryLimit = 16384;
+    constexpr int CaptureHistoryLimit = 16384;
+    constexpr int ContinuationHistoryLimit = 29952;
+    constexpr int SearchStackBack = 8;
+    constexpr int SearchStackSize = 256;
+    constexpr int NoStaticEval = -200000;
     int mainHistory[2][64][64] = {};
+    int captureHistory[15][64][7] = {};
+    uint16_t counterMoves[15][64] = {};
+    constexpr int TtHitAverageWindow = 4096;
+    int ttHitAverage = TtHitAverageWindow * 1024 / 2;
+    int nullSuppressedSide = -1;
+    int nullSuppressedUntilPly = -1;
 
-    struct ContinuationHistoryEntry
+    const std::array<int, MaxReductionIndex + 1> Reductions = [] {
+        std::array<int, MaxReductionIndex + 1> values{};
+        for (int i = 1; i <= MaxReductionIndex; ++i)
+            values[i] = static_cast<int>(24.8 * std::log(static_cast<double>(i)));
+        return values;
+    }();
+
+    int Reduction(bool improving, int depth, int moveNumber)
     {
-        uint32_t key = 0;
-        int score = 0;
-        bool occupied = false;
+        const int d = std::clamp(depth, 1, MaxReductionIndex);
+        const int m = std::clamp(moveNumber, 1, MaxReductionIndex);
+        const int raw = Reductions[d] * Reductions[m];
+        return (raw + 511) / 1024 + (!improving && raw > 1007);
+    }
+
+    int FutilityMargin(int depth, bool improving) { return 217 * (depth - int(improving)); }
+    int FutilityMoveCount(bool improving, int depth)
+    {
+        return (5 + depth * depth) * (1 + int(improving)) / 2 - 1;
+    }
+    int StatBonus(int depth)
+    {
+        return depth > 15 ? -8 : 19 * depth * depth + 155 * depth - 132;
+    }
+
+    constexpr std::size_t ContinuationTableSize = 15u * 64u * 15u * 64u;
+    std::array<int, ContinuationTableSize> continuationHistory{};
+
+    struct SearchStackFrame
+    {
+        int ply = 0;
+        Move currentMove{};
+        bool hasCurrentMove = false;
+        int currentMovedPiece = 0;
+        uint16_t excludedMove = 0;
+        int staticEval = NoStaticEval;
+        int statScore = 0;
+        int moveCount = 0;
+        PVSSearch::KillerMove* killer1 = nullptr;
+        PVSSearch::KillerMove* killer2 = nullptr;
+        int* continuationContext = nullptr;
+        bool pvNode = false;
     };
 
-    ContinuationHistoryEntry continuationHistory[ContinuationTableSize] = {};
+    std::array<SearchStackFrame, SearchStackSize + SearchStackBack> searchStack{};
+
+    SearchStackFrame& StackFrame(int ply)
+    {
+        static SearchStackFrame neutral{};
+        const int index = ply + SearchStackBack;
+        return index >= 0 && index < static_cast<int>(searchStack.size())
+            ? searchStack[index] : neutral;
+    }
+
+    const Move* StackMove(int ply)
+    {
+        const SearchStackFrame& frame = StackFrame(ply);
+        return frame.hasCurrentMove ? &frame.currentMove : nullptr;
+    }
+
+    void ResetSearchStack()
+    {
+        for (int ply = -SearchStackBack; ply < SearchStackSize; ++ply)
+        {
+            SearchStackFrame& frame = StackFrame(ply);
+            frame = SearchStackFrame{};
+            frame.ply = ply;
+            frame.currentMove.beginPlace = -1;
+            frame.currentMove.endPlace = -1;
+            frame.currentMove.promotionPiece = -2;
+        }
+        nullSuppressedSide = -1;
+        nullSuppressedUntilPly = -1;
+        ttHitAverage = TtHitAverageWindow * 1024 / 2;
+    }
 
     bool IsQuietMove(const Move &move)
     {
@@ -107,71 +155,237 @@ namespace
         return mainHistory[side][move.beginPlace][move.endPlace];
     }
 
-    bool ContinuationKey(const Move &previousMove, const Move &move, uint32_t &key)
+    std::size_t ContinuationIndex(int previousPiece, int previousTo,
+                                  int currentPiece, int currentTo)
     {
-        if (previousMove.beginPlace < 0 || previousMove.beginPlace >= 64 ||
-            previousMove.endPlace < 0 || previousMove.endPlace >= 64)
-            return false;
-        key = static_cast<uint32_t>(previousMove.beginPlace) |
-              (static_cast<uint32_t>(previousMove.endPlace) << 6) |
-              (static_cast<uint32_t>(move.beginPlace) << 12) |
-              (static_cast<uint32_t>(move.endPlace) << 18);
-        return true;
+        return (((static_cast<std::size_t>(previousPiece) * 64 + previousTo) * 15 +
+                 currentPiece) * 64 + currentTo);
     }
 
-    ContinuationHistoryEntry &ContinuationEntry(uint32_t key)
+    int ContinuationHistoryScoreAt(int ply, int offset, int currentPiece,
+                                   const Move& move)
     {
-        return continuationHistory[(key * 0x9e3779b1u) & (ContinuationTableSize - 1)];
-    }
-
-    int ContinuationHistoryScore(const Move &previousMove, const Move &move)
-    {
-        uint32_t key;
-        if (!ContinuationKey(previousMove, move, key))
+        // Frame P contains the move that arrived from P-1. Therefore offset N
+        // is frame P-(N-1), giving exactly P-1, P-2, P-4 and P-6 contexts.
+        const SearchStackFrame& previous = StackFrame(ply - (offset - 1));
+        if (!previous.hasCurrentMove || previous.currentMovedPiece <= 0 ||
+            move.beginPlace < 0 || move.beginPlace >= 64)
             return 0;
-        const ContinuationHistoryEntry &entry = ContinuationEntry(key);
-        return entry.occupied && entry.key == key ? entry.score : 0;
+        const int piece = std::clamp(currentPiece, 1, 14);
+        return continuationHistory[ContinuationIndex(previous.currentMovedPiece,
+            previous.currentMove.endPlace, piece, move.endPlace)];
+    }
+
+    struct QuietHistoryValues
+    {
+        int main = 0;
+        int c1 = 0;
+        int c2 = 0;
+        int c4 = 0;
+        int c6 = 0;
+
+        int orderingScore() const { return main + 2*c1 + 2*c2 + 2*c4 + c6; }
+        int combinedHistory() const { return main + c1 + c2 + c4; }
+        int statScore() const
+        {
+            int score = combinedHistory() - 4926;
+            if (score < 0 && c1 >= 0 && c2 >= 0 && main >= 0)
+                score = 0;
+            return score;
+        }
+    };
+
+    QuietHistoryValues ReadQuietHistory(int side, int ply, int currentPiece,
+                                        const Move& move)
+    {
+        return {HistoryScore(side, move),
+            ContinuationHistoryScoreAt(ply, 1, currentPiece, move),
+            ContinuationHistoryScoreAt(ply, 2, currentPiece, move),
+            ContinuationHistoryScoreAt(ply, 4, currentPiece, move),
+            ContinuationHistoryScoreAt(ply, 6, currentPiece, move)};
     }
 
     void UpdateHistory(int side, const Move &move, int depth, bool improvedAlpha)
     {
-        const int magnitude = std::min(1024, depth * depth * 16);
+        const int magnitude = StatBonus(depth);
         const int bonus = improvedAlpha ? magnitude : -magnitude;
         int &score = mainHistory[side][move.beginPlace][move.endPlace];
-        score += bonus - score * std::abs(bonus) / HistoryLimit;
-        score = std::clamp(score, -HistoryLimit, HistoryLimit);
+        score += bonus - score * std::abs(bonus) / MainHistoryLimit;
     }
 
-    void UpdateContinuationHistory(const Move &previousMove, const Move &move,
+    void UpdateHistoryByBonus(int side, const Move& move, int bonus)
+    {
+        int& score = mainHistory[side][move.beginPlace][move.endPlace];
+        score += bonus - score * std::abs(bonus) / MainHistoryLimit;
+    }
+
+    void UpdateContinuationHistory(int previousPiece, int previousTo,
+                                   int currentPiece, const Move &move,
                                    int depth, bool improvedAlpha)
     {
-        uint32_t key;
-        if (!ContinuationKey(previousMove, move, key))
+        if (previousPiece <= 0 || previousTo < 0 || currentPiece <= 0)
             return;
-        ContinuationHistoryEntry &entry = ContinuationEntry(key);
-        if (!entry.occupied || entry.key != key)
-        {
-            entry.key = key;
-            entry.score = 0;
-            entry.occupied = true;
-        }
-        const int magnitude = std::min(1024, depth * depth * 16);
+        int& entry = continuationHistory[ContinuationIndex(previousPiece,
+            previousTo, currentPiece, move.endPlace)];
+        const int magnitude = StatBonus(depth);
         const int bonus = improvedAlpha ? magnitude : -magnitude;
-        entry.score += bonus - entry.score * std::abs(bonus) / HistoryLimit;
-        entry.score = std::clamp(entry.score, -HistoryLimit, HistoryLimit);
+        entry += bonus - entry * std::abs(bonus) / ContinuationHistoryLimit;
+    }
+
+    void UpdateContinuationHistories(int ply, int currentPiece, const Move& move,
+                                     int depth, bool success)
+    {
+        for (int offset : {1, 2, 4, 6})
+        {
+            const SearchStackFrame& previous = StackFrame(ply - (offset - 1));
+            if (previous.hasCurrentMove)
+                UpdateContinuationHistory(previous.currentMovedPiece,
+                    previous.currentMove.endPlace,
+                    std::clamp(currentPiece, 1, 14),
+                    move, depth, success);
+        }
+    }
+
+    void UpdateContinuationHistoriesByBonus(int ply, int currentPiece,
+                                             const Move& move, int bonus)
+    {
+        for (int offset : {1, 2, 4, 6})
+        {
+            const SearchStackFrame& previous = StackFrame(ply - (offset - 1));
+            if (!previous.hasCurrentMove || previous.currentMovedPiece <= 0)
+                continue;
+            int& entry = continuationHistory[ContinuationIndex(
+                previous.currentMovedPiece, previous.currentMove.endPlace,
+                std::clamp(currentPiece, 1, 14), move.endPlace)];
+            entry += bonus - entry * std::abs(bonus) / ContinuationHistoryLimit;
+        }
+    }
+
+    int QuietOrderingScore(int side, int ply, int currentPiece, const Move& move)
+    {
+        return ReadQuietHistory(side, ply, currentPiece, move).orderingScore();
+    }
+
+    int QuietCombinedHistory(int side, int ply, int currentPiece, const Move& move)
+    {
+        return HistoryScore(side, move)
+            + ContinuationHistoryScoreAt(ply, 1, currentPiece, move)
+            + ContinuationHistoryScoreAt(ply, 2, currentPiece, move)
+            + ContinuationHistoryScoreAt(ply, 4, currentPiece, move);
+    }
+
+    int QuietStatScore(int side, int ply, int currentPiece, const Move& move)
+    {
+        const int main = HistoryScore(side, move);
+        const int c1 = ContinuationHistoryScoreAt(ply, 1, currentPiece, move);
+        const int c2 = ContinuationHistoryScoreAt(ply, 2, currentPiece, move);
+        int score = main + c1 + c2 +
+            ContinuationHistoryScoreAt(ply, 4, currentPiece, move) - 4926;
+        if (score < 0 && c1 >= 0 && c2 >= 0 && main >= 0)
+            score = 0;
+        return score;
+    }
+
+    void UpdateCaptureHistory(const Board& board, const Move& move, int depth,
+                              bool success)
+    {
+        const int movingPiece = std::clamp(board.mainBoard[move.beginPlace], 0, 14);
+        const int capturedPiece = std::clamp(move.endPiece % 8, 0, 6);
+        int& score = captureHistory[movingPiece][move.endPlace][capturedPiece];
+        const int magnitude = StatBonus(depth);
+        const int bonus = success ? magnitude : -magnitude;
+        score += bonus - score * std::abs(bonus) / CaptureHistoryLimit;
+    }
+
+    uint16_t CounterMoveFor(const Board& board, int ply)
+    {
+        const Move* previous = StackMove(ply);
+        if (!previous || previous->endPlace < 0 || previous->endPlace >= 64)
+            return 0;
+        const SearchStackFrame& frame = StackFrame(ply);
+        return counterMoves[std::clamp(frame.currentMovedPiece, 0, 14)]
+                           [previous->endPlace];
+    }
+
+    void StoreCounterMove(const Board& board, int ply, const Move& move)
+    {
+        const Move* previous = StackMove(ply);
+        if (!previous || previous->endPlace < 0 || previous->endPlace >= 64)
+            return;
+        counterMoves[std::clamp(StackFrame(ply).currentMovedPiece, 0, 14)]
+                    [previous->endPlace] = TTMoveHelper::PackMove(move);
+    }
+
+    void RewardCutoffMove(const Board& board, int side, int ply, int depth,
+                          int bestValue, int beta,
+                          const Move& move,
+                          const std::vector<Move*>& searchedQuiets,
+                          const std::vector<Move*>& searchedCaptures)
+    {
+        const int bonus1 = StatBonus(depth + 1);
+        const int bonus2 = bestValue > beta + Option::PawnValue
+            ? bonus1 : StatBonus(depth);
+        if (IsQuietMove(move))
+        {
+            PVSSearch::RecordKiller(ply, move);
+            UpdateHistoryByBonus(side, move, bonus2);
+            UpdateContinuationHistoriesByBonus(
+                ply, board.mainBoard[move.beginPlace], move, bonus2);
+            StoreCounterMove(board, ply, move);
+            const Move* previous = StackMove(ply);
+            if (previous &&
+                (StackFrame(ply - 1).moveCount == 1 ||
+                 (ply>0&&ply-1<PVSSearch::MaxKillerPly&&
+                  PVSSearch::killers[ply-1][0]==*previous)) &&
+                previous->endPlace >= 0 && previous->endPlace < 64 &&
+                previous->endPiece == 0 && previous->promotionPiece <= 0)
+                UpdateContinuationHistoriesByBonus(
+                    ply - 1, StackFrame(ply).currentMovedPiece,
+                    *previous, -bonus1);
+            for (Move* prior : searchedQuiets)
+                if (prior != &move)
+                {
+                    UpdateHistoryByBonus(side, *prior, -bonus2);
+                    UpdateContinuationHistoriesByBonus(
+                        ply, board.mainBoard[prior->beginPlace], *prior, -bonus2);
+                }
+            if (board.mainBoard[move.beginPlace] % 8 != 1)
+            {
+                Move reverse = move;
+                std::swap(reverse.beginPlace, reverse.endPlace);
+                UpdateHistoryByBonus(side, reverse, -bonus2);
+            }
+        }
+        else
+        {
+            const int movingPiece = std::clamp(board.mainBoard[move.beginPlace], 0, 14);
+            const int capturedPiece = std::clamp(move.endPiece % 8, 0, 6);
+            int& winning = captureHistory[movingPiece][move.endPlace][capturedPiece];
+            winning += bonus1 - winning * std::abs(bonus1) / CaptureHistoryLimit;
+            for (Move* prior : searchedCaptures)
+                if (prior != &move)
+                {
+                    const int priorPiece = std::clamp(board.mainBoard[prior->beginPlace], 0, 14);
+                    const int priorCaptured = std::clamp(prior->endPiece % 8, 0, 6);
+                    int& failed = captureHistory[priorPiece][prior->endPlace][priorCaptured];
+                    failed += -bonus1 - failed * std::abs(bonus1) / CaptureHistoryLimit;
+                }
+        }
+    }
+
+    void RewardCutoffMove(const Board& board, int side, int ply, int depth,
+                          const Move& move,
+                          const std::vector<Move*>& searchedQuiets,
+                          const std::vector<Move*>& searchedCaptures)
+    {
+        RewardCutoffMove(board, side, ply, depth, 0, 0, move,
+                         searchedQuiets, searchedCaptures);
     }
 
     int CombinedHistoryScore(int side, const Move &previousMove, const Move &move)
     {
-        return HistoryScore(side, move) + ContinuationHistoryScore(previousMove, move);
-    }
-
-    int HistoryReductionAdjustment(int side, const Move &previousMove, const Move &move)
-    {
-        return std::clamp(CombinedHistoryScore(side, previousMove, move) /
-                              HistoryReductionUnit,
-                          -MaxHistoryReductionAdjustment,
-                          MaxHistoryReductionAdjustment);
+        (void)previousMove;
+        return HistoryScore(side, move);
     }
 
     bool MatchesPackedMove(const Move& move, uint16_t packedMove)
@@ -185,6 +399,46 @@ namespace
                 : move.promotionPiece == TTMoveHelper::UnpackPromotion(packedMove));
     }
 
+    uint64_t SearchKey(uint64_t positionKey, uint16_t excludedMove)
+    {
+        if (excludedMove == 0)
+            return positionKey;
+        uint64_t component = static_cast<uint64_t>(excludedMove) + 0x9e3779b97f4a7c15ULL;
+        component ^= component >> 30;
+        component *= 0xbf58476d1ce4e5b9ULL;
+        component ^= component >> 27;
+        component *= 0x94d049bb133111ebULL;
+        component ^= component >> 31;
+        return positionKey ^ component;
+    }
+
+    Move UnpackMove(uint16_t packed)
+    {
+        Move move{};
+        move.beginPlace = TTMoveHelper::UnpackFrom(packed);
+        move.endPlace = TTMoveHelper::UnpackTo(packed);
+        move.promotionPiece = TTMoveHelper::UnpackPromotion(packed);
+        move.endPiece = 0;
+        return move;
+    }
+
+    void PrepareChildStack(int childPly, const Move& move, int movedPiece, int statScore)
+    {
+        SearchStackFrame& child = StackFrame(childPly);
+        child = SearchStackFrame{};
+        child.ply = childPly;
+        child.currentMove = move;
+        child.hasCurrentMove = move.beginPlace >= 0 && move.endPlace >= 0 &&
+            move.promotionPiece != -1;
+        child.currentMovedPiece = std::clamp(movedPiece, 0, 14);
+        child.statScore = statScore;
+        const SearchStackFrame& previous = StackFrame(childPly - 1);
+        if (previous.hasCurrentMove && previous.currentMovedPiece > 0 && movedPiece > 0)
+            child.continuationContext = &continuationHistory[ContinuationIndex(
+                previous.currentMovedPiece, previous.currentMove.endPlace,
+                movedPiece, move.endPlace)];
+    }
+
     bool IsKillerMove(int ply, const Move& move)
     {
         if (ply < 0 || ply >= PVSSearch::MaxKillerPly)
@@ -194,40 +448,31 @@ namespace
     }
 
     int ContextualLMRReduction(int depth, int moveNumber, int childDepth,
-                               int side, const Move& previousMove,
+                               int side, int ply,
                                const Move& move, bool isPVNode,
                                bool cutNode, bool improving,
                                bool ttPvEvidence, bool escapesThreat,
-                               bool singularMove)
+                               bool singularMove, bool singularLMR)
     {
         if (childDepth < 1 || singularMove)
             return 0;
-
-        int reduction = static_cast<int>(std::lround(
-            LMRLogReductionScale * std::log(static_cast<double>(depth)) *
-            std::log(static_cast<double>(moveNumber))));
-
-        if (IsQuietMove(move))
-            reduction -= HistoryReductionAdjustment(side, previousMove, move);
-        if (cutNode)
-            reduction += CutNodeReduction;
-        if (improving)
-            reduction -= ImprovingReduction;
-        else
-            reduction += NonImprovingReduction;
-        if (isPVNode)
-            reduction -= PVNodeReduction;
-        if (ttPvEvidence)
-            reduction -= TTPVReduction;
-        if (escapesThreat || move.isRefuteWithoutNullMove)
-            reduction -= TacticalRefutationReduction;
-        if (move.givesCheck)
-            reduction -= CheckReduction;
-        if (move.promotionPiece > 0)
-            reduction -= PromotionReduction;
-        if (move.endPiece > 0 && move.promotionPiece <= 0)
-            reduction += move.value < 0 ? CaptureReduction : -CaptureReduction;
-
+        int reduction = Reduction(improving, depth, moveNumber);
+        if (moveNumber <= 2 && ttHitAverage / TtHitAverageWindow >= 375)
+            reduction = 0;
+        if (isPVNode || ttPvEvidence) reduction -= 2;
+        if (cutNode && IsQuietMove(move)) reduction += 2;
+        const int currentPiece = 1;
+        const int statScore = IsQuietMove(move)
+            ? QuietStatScore(side, ply, currentPiece, move) : 0;
+        const int previousStatScore = StackFrame(ply).statScore;
+        if (statScore >= -102 && previousStatScore < -114)
+            --reduction;
+        else if (previousStatScore >= -116 && statScore < -154)
+            ++reduction;
+        reduction -= statScore / 16384;
+        if (singularLMR) reduction -= 2;
+        if (ttHitAverage / TtHitAverageWindow > 500) --reduction;
+        if (!IsQuietMove(move) && depth < 8 && moveNumber > 2) ++reduction;
         reduction = std::max(0, reduction);
         const int reducedChildDepth = std::clamp(childDepth - reduction, 1, childDepth);
         return childDepth - reducedChildDepth;
@@ -261,7 +506,8 @@ namespace
                    int turnValue, const Move& previousMoveValue,
                    uint16_t ttMoveValue)
             : board(boardValue), depth(depthValue), depthGone(depthGoneValue),
-              turn(turnValue), previousMove(previousMoveValue), packedTTMove(ttMoveValue) {}
+              turn(turnValue), previousMove(previousMoveValue), packedTTMove(ttMoveValue),
+              packedCounterMove(CounterMoveFor(boardValue, depthGoneValue)) {}
 
         ~MovePicker()
         {
@@ -272,7 +518,7 @@ namespace
         MovePicker(const MovePicker&) = delete;
         MovePicker& operator=(const MovePicker&) = delete;
 
-        Move* Next()
+        Move* Next(bool moveCountPruning = false)
         {
             while (true)
             {
@@ -296,17 +542,32 @@ namespace
                         return move;
                     break;
                 case Stage::KillerTwo:
-                    stage = Stage::StrongQuiets;
+                    stage = Stage::Countermove;
                     if (Move* move = BuildKiller(1))
                         return move;
                     break;
+                case Stage::Countermove:
+                    stage = Stage::StrongQuiets;
+                    if (Move* move = BuildRefutation(packedCounterMove))
+                        return move;
+                    break;
                 case Stage::StrongQuiets:
+                    if (moveCountPruning)
+                    {
+                        stage = Stage::BadTactical;
+                        break;
+                    }
                     ScoreAndClassifyQuiets();
                     if (Move* move = Select(strongQuiets, strongQuietCount, strongQuietCursor))
                         return move;
                     stage = Stage::RemainingQuiets;
                     break;
                 case Stage::RemainingQuiets:
+                    if (moveCountPruning)
+                    {
+                        stage = Stage::BadTactical;
+                        break;
+                    }
                     ScoreAndClassifyQuiets();
                     if (Move* move = Select(remainingQuiets, remainingQuietCount,
                                             remainingQuietCursor))
@@ -347,6 +608,7 @@ namespace
             GoodTactical,
             KillerOne,
             KillerTwo,
+            Countermove,
             StrongQuiets,
             RemainingQuiets,
             BadTactical,
@@ -420,7 +682,11 @@ namespace
             if (entry.scored)
                 return;
             EnsureAttackers();
-            entry.move->givesCheck = MoveLogic::MoveGivesCheck(board, *entry.move);
+            if (!entry.move->givesCheckComputed)
+            {
+                entry.move->givesCheck = MoveLogic::MoveGivesCheck(board, *entry.move);
+                entry.move->givesCheckComputed = true;
+            }
             MoveLogic::ScoreMove(board, *entry.move, whiteAttacker, blackAttacker);
             entry.scored = true;
         }
@@ -467,11 +733,18 @@ namespace
                 const int index = Add(candidate);
                 if (index >= 0)
                 {
-                    Score(index);
-                    entries[index].key = BasePvsOrderingScore(entries[index].move);
+                    const int movingPiece = board.mainBoard[entries[index].move->beginPlace];
+                    const int capturedPiece = entries[index].move->endPiece;
+                    static constexpr int MgValue[7] = {0, 100, 320, 330, 500, 900, 0};
+                    const int victimType = capturedPiece % 8;
+                    entries[index].key = 6 * MgValue[std::min(victimType, 6)] +
+                        captureHistory[std::clamp(movingPiece, 0, 14)]
+                                      [entries[index].move->endPlace]
+                                      [std::clamp(capturedPiece % 8, 0, 6)];
                     if (MatchesTT(*entries[index].move))
                         ttEntry = index;
-                    if (entries[index].move->value >= 0)
+                    if (MoveLogic::SEE_GE(board, *entries[index].move,
+                                         -55 * entries[index].key / 1024))
                         goodTactical[goodCount++] = index;
                     else
                         badTactical[badCount++] = index;
@@ -495,6 +768,20 @@ namespace
                     entries[index].move->endPlace == killer.endPlace &&
                     (entries[index].move->promotionPiece > 0
                          ? entries[index].move->promotionPiece : 0) == killer.promotionPiece)
+                    return MarkReturned(index);
+            }
+            return nullptr;
+        }
+
+        Move* BuildRefutation(uint16_t packedMove)
+        {
+            if (packedMove == 0 || packedMove == packedTTMove)
+                return nullptr;
+            GenerateQuietPseudoMoves();
+            for (int i = 0; i < quietEntryCount; ++i)
+            {
+                const int index = quietEntries[i];
+                if (!entries[index].returned && MatchesPackedMove(*entries[index].move, packedMove))
                     return MarkReturned(index);
             }
             return nullptr;
@@ -555,10 +842,10 @@ namespace
                 if (entries[index].returned || IsKiller(*entries[index].move))
                     continue;
                 Score(index);
-                entries[index].key = 100000 +
-                    CombinedHistoryScore(turn, previousMove, *entries[index].move) +
-                    BasePvsOrderingScore(entries[index].move);
-                if (entries[index].key >= 100000)
+                const int currentPiece = board.mainBoard[entries[index].move->beginPlace];
+                entries[index].key = QuietOrderingScore(
+                    turn, depthGone, currentPiece, *entries[index].move);
+                if (entries[index].key >= -3000 * depth)
                     strongQuiets[strongQuietCount++] = index;
                 else
                     remainingQuiets[remainingQuietCount++] = index;
@@ -571,6 +858,7 @@ namespace
         int turn;
         const Move& previousMove;
         uint16_t packedTTMove;
+        uint16_t packedCounterMove;
         std::array<Entry, 256> entries{};
         std::array<int, 256> goodTactical{};
         std::array<int, 256> badTactical{};
@@ -603,14 +891,98 @@ namespace
         const int minorPieceCount =
             static_cast<int>(board.pieces[turn * 8 + 2].size() +
                              board.pieces[turn * 8 + 3].size());
-        const bool sparseMinorOnlyMaterial =
-            board.pieces[turn * 8 + 5].size() == 0 &&
-            board.pieces[turn * 8 + 4].size() == 0 &&
-            minorPieceCount <= 1;
         const bool hasNonPawn = minorPieceCount > 0 ||
             board.pieces[turn * 8 + 4].size() > 0 ||
             board.pieces[turn * 8 + 5].size() > 0;
-        return hasNonPawn && !sparseMinorOnlyMaterial;
+        return hasNonPawn;
+    }
+
+    bool IsAdvancedPassedPawnPush(const Board& board, const Move& move, int side)
+    {
+        if (board.mainBoard[move.beginPlace] % 8 != 1 || move.endPiece != 0)
+            return false;
+        const int rank = move.endPlace / 8;
+        if ((side == 0 && rank < 5) || (side == 1 && rank > 2))
+            return false;
+        const int file = move.endPlace % 8;
+        const int enemyPawn = side == 0 ? 9 : 1;
+        const int step = side == 0 ? 8 : -8;
+        for (int base = move.endPlace + step; base >= 0 && base < 64; base += step)
+        {
+            const int row = base / 8;
+            for (int df = -1; df <= 1; ++df)
+            {
+                const int targetFile = file + df;
+                if (targetFile >= 0 && targetFile < 8 &&
+                    board.mainBoard[row * 8 + targetFile] == enemyPawn)
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    bool LastCaptureExtension(const Board& board, const Move& move)
+    {
+        if (move.endPiece % 8 <= 1)
+            return false;
+        int nonPawnMaterial = 0;
+        for (int sideOffset : {0, 8})
+        {
+            nonPawnMaterial += static_cast<int>(board.pieces[sideOffset + 2].size()) * Option::KnightValue;
+            nonPawnMaterial += static_cast<int>(board.pieces[sideOffset + 3].size()) * Option::BishopValue;
+            nonPawnMaterial += static_cast<int>(board.pieces[sideOffset + 4].size()) * Option::RookValue;
+            nonPawnMaterial += static_cast<int>(board.pieces[sideOffset + 5].size()) * Option::QueenValue;
+        }
+        static const int values[7] = {0, Option::PawnValue, Option::KnightValue,
+            Option::BishopValue, Option::RookValue, Option::QueenValue, 0};
+        nonPawnMaterial -= values[std::clamp(move.endPiece % 8, 0, 6)];
+        return nonPawnMaterial <= 2 * Option::RookValue;
+    }
+
+    bool MovedPieceGivesCheck(const Board& board, const Move& move)
+    {
+        const bool movingWhite = !board.sideToMove;
+        const int enemyKingIndex = movingWhite ? 14 : 6;
+        if (board.pieces[enemyKingIndex].count == 0)
+            return false;
+        const int kingSquare = board.pieces[enemyKingIndex].front();
+        const long long kingBit = Option::PowerTwo[kingSquare];
+        long long occupancy = (board.whitePieces | board.blackPieces) &
+            ~Option::PowerTwo[move.beginPlace];
+        occupancy |= Option::PowerTwo[move.endPlace];
+        if ((move.PublicFlag & Option::PowerTwo[6]) != 0)
+            occupancy &= ~Option::PowerTwo[move.endPlace + (movingWhite ? -8 : 8)];
+        const int piece = move.promotionPiece > 0
+            ? move.promotionPiece % 8 : board.mainBoard[move.beginPlace] % 8;
+        switch (piece)
+        {
+        case 1:
+            return (((movingWhite ? AttackPlaces::WhitePawnAttackPlaces[move.endPlace]
+                                  : AttackPlaces::BlackPawnAttackPlaces[move.endPlace])) & kingBit) != 0;
+        case 2:
+            return (AttackPlaces::KnightAttackPlaces[move.endPlace] & kingBit) != 0;
+        case 3:
+            return (AttackPlaces::BishopAttack[move.endPlace][kingSquare] & occupancy) == kingBit;
+        case 4:
+            return (AttackPlaces::RookAttack[move.endPlace][kingSquare] & occupancy) == kingBit;
+        case 5:
+            return (AttackPlaces::QueenAttack[move.endPlace][kingSquare] & occupancy) == kingBit;
+        case 6:
+            return (AttackPlaces::KingAttackPlaces[move.endPlace] & kingBit) != 0;
+        default:
+            return false;
+        }
+    }
+
+    int TempoForPosition(const Board& board)
+    {
+        static constexpr int weights[25] = {
+            10000, 10000, 10000, 10000, 10000, 10000, 10000, 8902, 7804,
+            6706, 5609, 4511, 3413, 2844, 2275, 1706, 1138, 569, 0, 0, 0,
+            0, 0, 0, 0};
+        const int phase = std::clamp(EvaluationLogic::CalculatePhase(board), 0, 24);
+        return (Option::TempoMiddleGame * (10000 - weights[phase]) +
+                Option::TempoEndGame * weights[phase]) / 10000;
     }
 
 }
@@ -618,9 +990,29 @@ namespace
 void PVSSearch::ResetHistory()
 {
     std::fill(&mainHistory[0][0][0], &mainHistory[0][0][0] + 2 * 64 * 64, 0);
-    for (ContinuationHistoryEntry &entry : continuationHistory)
-        entry = ContinuationHistoryEntry{};
+    std::fill(&captureHistory[0][0][0], &captureHistory[0][0][0] + 15 * 64 * 7, 0);
+    std::fill(&counterMoves[0][0], &counterMoves[0][0] + 15 * 64, 0);
+    continuationHistory.fill(0);
+    ResetSearchStack();
 }
+
+int PVSSearch::QCaptureOrderingScore(const Board& board, const Move& move)
+{
+    static constexpr int value[7] = {0, 100, 350, 350, 550, 975, 2500};
+    const int movingPiece = std::clamp(board.mainBoard[move.beginPlace], 0, 14);
+    const int capturedPiece = std::clamp(move.endPiece % 8, 0, 6);
+    return 6 * value[capturedPiece] +
+        captureHistory[movingPiece][move.endPlace][capturedPiece];
+}
+
+int PVSSearch::QQuietEvasionOrderingScore(int side, int ply,
+                                           const Board& board, const Move& move)
+{
+    const int movingPiece = std::clamp(board.mainBoard[move.beginPlace], 1, 14);
+    return HistoryScore(side, move) +
+        ContinuationHistoryScoreAt(ply, 1, movingPiece, move);
+}
+
 
 void PVSSearch::ResetKillers()
 {
@@ -1175,7 +1567,9 @@ int PVSSearch::DiagnosticMainHistory(int side, const Move &move)
 
 int PVSSearch::DiagnosticContinuationHistory(const Move &prevMove, const Move &move)
 {
-    return ContinuationHistoryScore(prevMove, move);
+    (void)prevMove;
+    (void)move;
+    return 0;
 }
 
 int PVSSearch::DiagnosticUnifiedOrderingScore(int turn, const Move &prevMove, int depthGone, const Move *m)
@@ -1201,17 +1595,352 @@ int PVSSearch::DiagnosticUnifiedOrderingScore(int turn, const Move &prevMove, in
 }
 #endif
 
-MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool selectiveSearch)
+namespace
 {
-    MovePrintValue* result = SearchNode(isPVNode, alpha, beta, depth, prevMove,
-        move1, move2, move3, board4, MAtESearch, isNullMoveAllowed, depthGone,
-        previousMoveWasCheck, nullWindowSearch, selectiveSearch);
-    if (selectiveSearch)
-        result->MarkSpeculative(SearchProvenance::ReducedSearch);
-    return result;
+struct TargetResult { int value=0; std::string pv; };
+
+void deleteMoveList(MoveList list)
+{
+    PVSSearch::deleteMoveList(list);
 }
 
-MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool selectiveSearch)
+void UpdateCounterMove(const Board& board, const Move& move)
+{
+    StoreCounterMove(board, 0, move);
+}
+
+int CaptureOrder(const Board& b, const Move& m)
+{
+    static constexpr int v[7]={0,100,350,350,550,975,2500};
+    const int mover=b.mainBoard[m.beginPlace];
+    const int victim=m.endPiece>8?m.endPiece-8:m.endPiece;
+    const int captured=std::clamp(victim,0,6);
+    return 6*v[captured]+captureHistory[mover][m.endPlace][captured];
+}
+
+class ProbCutPicker
+{
+public:
+    ProbCutPicker(Board& boardValue, int depth, int ply, uint16_t ttMoveValue,
+                  int seeThresholdValue)
+        : board(boardValue), ttMove(ttMoveValue), seeThreshold(seeThresholdValue)
+    {
+        moves = MoveLogic::MoveGenerator(board, depth, ply, true, false);
+        for (int i = 0; i < moves.count; ++i)
+        {
+            Move* move = moves.moves[i];
+            if (move->endPiece == 0 && move->promotionPiece <= 0)
+                continue;
+            if (!MoveLogic::SEE_GE(board, *move, seeThreshold))
+                continue;
+            entries[count++] = {move, CaptureOrder(board, *move), false};
+            if (MatchesPackedMove(*move, ttMove))
+                ttIndex = count - 1;
+        }
+    }
+
+    ~ProbCutPicker() { deleteMoveList(moves); }
+
+    Move* Next()
+    {
+        if (!ttReturned && ttIndex >= 0)
+        {
+            ttReturned = true;
+            entries[ttIndex].returned = true;
+            return entries[ttIndex].move;
+        }
+        int best = -1;
+        for (int i = 0; i < count; ++i)
+            if (!entries[i].returned &&
+                (best < 0 || entries[i].score > entries[best].score))
+                best = i;
+        if (best < 0)
+            return nullptr;
+        entries[best].returned = true;
+        return entries[best].move;
+    }
+
+private:
+    struct Entry { Move* move; int score; bool returned; };
+    Board& board;
+    MoveList moves{};
+    uint16_t ttMove;
+    int seeThreshold;
+    std::array<Entry, 256> entries{};
+    int count = 0;
+    int ttIndex = -1;
+    bool ttReturned = false;
+};
+
+int CapturedEndgameValue(const Move& move)
+{
+    static const int values[7] = {0, Option::PawnValue, Option::KnightValue,
+        Option::BishopValue, Option::RookValue, Option::QueenValue, 0};
+    return values[std::clamp(move.endPiece % 8, 0, 6)];
+}
+
+bool PackedMoveIsTactical(const Board& board, uint16_t packed)
+{
+    if (packed == 0)
+        return false;
+    const int from = TTMoveHelper::UnpackFrom(packed);
+    const int to = TTMoveHelper::UnpackTo(packed);
+    return TTMoveHelper::UnpackPromotion(packed) != 0 || board.mainBoard[to] != 0 ||
+        (board.mainBoard[from] % 8 == 1 && to == board.unpassentPlace);
+}
+
+int QuietOrder(int side,int ply,const Move&m)
+{
+    return QuietOrderingScore(side, ply, 1, m);
+}
+
+TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
+                          Move& m1,Move& m2,Move& m3,Board& b,bool nullAllowed,
+                          int ply,bool cutNode)
+{
+    if (Search::stopRequested.load(std::memory_order_relaxed)) return {0,{}};
+    if (ply > 0 && RepetitionHistory::IsRepetition(b.ZobristHashCode)) return {0,{}};
+    if (depth <= 0) {
+        std::unique_ptr<MovePrintValue> q(QSearcher::QSearch(pv,alpha,beta,prev,ply,0,false,depth,m1,m2,m3,b,false,ply,beta-alpha==1));
+        return {q->value,q->printString};
+    }
+    ++Search::searchNodeCount;
+    if ((Search::searchNodeCount & 2047) == 0) Search::CheckLimits();
+    if (Search::stopRequested.load(std::memory_order_relaxed)) return {0,{}};
+    alpha=std::max(alpha,MateScore::MatedAtPly(ply));
+    beta=std::min(beta,MateScore::MateAtPly(ply+1));
+    if(alpha>=beta) return {alpha,{}};
+
+    const int side=b.sideToMove?1:0;
+    const bool inCheck=BoardLogic::UnderAttack(b,b.pieces[side*8+6].front(),!b.sideToMove);
+    if (ply >= SearchStackSize - 1)
+        return {inCheck ? 0 : EvaluationLogic::Evaluate(b), {}};
+    SearchStackFrame& ss=StackFrame(ply);
+    ss.ply=ply; ss.currentMove=prev;
+    ss.hasCurrentMove=prev.beginPlace>=0&&prev.endPlace>=0&&prev.promotionPiece!=-1;
+    if (ss.currentMovedPiece == 0 && ss.hasCurrentMove)
+        ss.currentMovedPiece = std::clamp(b.mainBoard[prev.endPlace],0,14);
+    ss.moveCount=0; ss.pvNode=pv;
+    if(ply<PVSSearch::MaxKillerPly){ss.killer1=&PVSSearch::killers[ply][0];ss.killer2=&PVSSearch::killers[ply][1];}
+
+    const uint64_t key=SearchKey(b.ZobristHashCode,ss.excludedMove);
+    TTEntry tt{};
+    bool hit=TranspositionTable::Probe(key,tt);
+    ttHitAverage = static_cast<int>(
+        int64_t(TtHitAverageWindow - 1) * ttHitAverage / TtHitAverageWindow) +
+        1024 * int(hit);
+    int ttValue=hit?MateScore::FromTranspositionTable(tt.score,ply):0;
+    uint8_t ttBound=hit?TTBaseFlag(tt.flag):TT_NONE;
+    bool ttPv=pv||(hit&&(tt.metadata&TT_META_PV));
+    if(!pv&&hit&&tt.depth>=depth&&
+       (ttBound==TT_EXACT||(ttBound==TT_LOWER_BOUND&&ttValue>=beta)||
+        (ttBound==TT_UPPER_BOUND&&ttValue<=alpha))) {
+        if(tt.bestMove!=0) {
+            Move tm=UnpackMove(tt.bestMove);
+            const bool quiet=b.mainBoard[tm.endPlace]==0&&tm.promotionPiece<=0;
+            const int movingPiece=std::clamp(b.mainBoard[tm.beginPlace],0,14);
+            if(quiet&&ttBound==TT_LOWER_BOUND&&ttValue>=beta){
+                PVSSearch::RecordKiller(ply,tm);StoreCounterMove(b,ply,tm);
+                UpdateHistory(side,tm,depth,true);
+                UpdateContinuationHistories(ply,movingPiece,tm,depth,true);
+                if(movingPiece%8!=1){Move reverse=tm;std::swap(reverse.beginPlace,reverse.endPlace);
+                    UpdateHistoryByBonus(side,reverse,-StatBonus(depth));}
+                if(ss.hasCurrentMove&&IsQuietMove(prev)&&
+                   StackFrame(ply-1).moveCount<=2)
+                    UpdateContinuationHistoriesByBonus(
+                        ply-1,ss.currentMovedPiece,prev,-StatBonus(depth+1));
+            }
+            else if(quiet&&ttBound==TT_UPPER_BOUND&&ttValue<=alpha){
+                UpdateHistory(side,tm,depth,false);
+                UpdateContinuationHistories(ply,movingPiece,tm,depth,false);
+            }
+        }
+        TranspositionTable::RecordCutoff(); return {ttValue,{}};
+    }
+    int tablebaseMaxValue=200000;
+    const bool tablebaseEligible = ss.excludedMove==0 && ply>0 &&
+        Option::SyzygyProbeLimit>0 && Tablebase::IsAvailable() &&
+        Tablebase::PieceCount(b)<=Option::SyzygyProbeLimit &&
+        Tablebase::PieceCount(b)<=Tablebase::MaxPieces() &&
+        Tablebase::IsPositionStateSupported(b);
+    if(tablebaseEligible) {
+        const std::optional<Tablebase::Wdl> wdl=Tablebase::ProbeWdl(b,Option::SyzygyProbeLimit);
+        if(wdl.has_value()){
+            Search::tablebaseHits.fetch_add(1,std::memory_order_relaxed);
+            const int tbValue=Tablebase::Score(*wdl);
+            const uint8_t tbBound=*wdl==Tablebase::Wdl::Draw?TT_EXACT:
+                (*wdl==Tablebase::Wdl::Win?TT_LOWER_BOUND:TT_UPPER_BOUND);
+            TranspositionTable::Store(key,MateScore::ToTranspositionTable(tbValue,ply),
+                std::min(SearchStackSize-1,depth+6),tbBound,0,TT_NO_STATIC_EVAL,pv);
+            if(tbBound==TT_EXACT||(tbBound==TT_LOWER_BOUND&&tbValue>=beta)||
+               (tbBound==TT_UPPER_BOUND&&tbValue<=alpha))
+                return {tbValue,{}};
+            if(pv&&tbBound==TT_LOWER_BOUND) alpha=std::max(alpha,tbValue);
+            if(pv&&tbBound==TT_UPPER_BOUND) tablebaseMaxValue=tbValue;
+        }
+    }
+
+    int rawStaticEval=NoStaticEval,eval=NoStaticEval;
+    if(!inCheck) {
+        if(prev.promotionPiece==-1&&ss.staticEval!=NoStaticEval)
+            rawStaticEval=ss.staticEval;
+        else if(hit&&tt.staticEval!=TT_NO_STATIC_EVAL) rawStaticEval=tt.staticEval;
+        else {
+            rawStaticEval=EvaluationLogic::Evaluate(b)-ss.statScore/512;
+            if(ss.excludedMove==0)
+                TranspositionTable::Store(key,0,-128,TT_EVAL_ONLY,0,rawStaticEval,pv);
+        }
+        ss.staticEval=rawStaticEval; eval=rawStaticEval;
+        if(hit&&ttBound==TT_LOWER_BOUND&&ttValue>eval) eval=ttValue;
+        else if(hit&&ttBound==TT_UPPER_BOUND&&ttValue<eval) eval=ttValue;
+    } else ss.staticEval=NoStaticEval;
+    bool improving=false;
+    if(!inCheck){const auto&s2=StackFrame(ply-2);const auto&s4=StackFrame(ply-4);improving=s2.staticEval!=NoStaticEval?rawStaticEval>=s2.staticEval:(s4.staticEval==NoStaticEval||rawStaticEval>=s4.staticEval);}
+
+    if(!pv&&!inCheck&&ss.excludedMove==0&&alpha>-MateScore::Threshold&&beta<MateScore::Threshold){
+        if(depth<2&&eval<=alpha-531){std::unique_ptr<MovePrintValue>q(QSearcher::QSearch(false,alpha,beta,prev,ply,0,false,0,m1,m2,m3,b,false,ply,true));if(q->value<=alpha)return {q->value,q->printString};}
+        if(depth<6&&eval-217*(depth-int(improving))>=beta&&eval<MateScore::Threshold)return {eval,{}};
+    }
+    const bool suppressed=nullSuppressedSide==side&&ply<=nullSuppressedUntilPly;
+    if(!pv&&!inCheck&&nullAllowed&&!suppressed&&ss.excludedMove==0&&prev.promotionPiece!=-1&&
+       ss.statScore<23397&&NullMoveMaterialEligible(b,side)&&eval>=beta&&eval>=rawStaticEval&&
+       rawStaticEval>=beta-32*depth+292-int(improving)*30){
+        int R=(854+68*depth)/258+std::min((eval-beta)/192,3); R=std::clamp(R,1,depth);
+        Move n{}; n.promotionPiece=-1; MissingInfoAboutPrevStateFromMove u(b);
+        GameLogic::DoMove(b,n,prev,ply,ply); PrepareChildStack(ply+1,n,0,0);
+        StackFrame(ply+1).staticEval=-rawStaticEval+2*TempoForPosition(b);
+        TargetResult nr=TargetSearch(false,-beta,-beta+1,depth-R,n,m2,m3,prev,b,false,ply+1,!cutNode);
+        int score=-nr.value; GameLogic::UndoMove(b,n,u);
+        if(score>=beta){if(MateScore::IsMate(score))score=beta;if(depth<13)return {score,{}};
+            int os=nullSuppressedSide,ou=nullSuppressedUntilPly;nullSuppressedSide=side;nullSuppressedUntilPly=ply+3*(depth-R)/4;
+            TargetResult vr=TargetSearch(false,beta-1,beta,depth-R,prev,m1,m2,m3,b,false,ply,false);
+            nullSuppressedSide=os;nullSuppressedUntilPly=ou;if(vr.value>=beta)return {score,{}};}
+    }
+    if(ss.excludedMove==0&&depth>=5&&!pv&&!inCheck&&std::abs(beta)<MateScore::Threshold){
+        const int raised=beta+189-45*int(improving);
+        ProbCutPicker probCutPicker(b,depth,ply,hit?tt.bestMove:0,
+                                    raised-rawStaticEval);
+        int tried=0;
+        while(Move*c=probCutPicker.Next()){if(tried>=ProbCutMaxCandidatesBase+2*int(cutNode))break;
+            const int moved=b.mainBoard[c->beginPlace];
+            MissingInfoAboutPrevStateFromMove u(b,*c);GameLogic::DoMove(b,*c,prev,depth,ply,&u);
+            if(BoardLogic::UnderAttack(b,b.pieces[side*8+6].front(),b.sideToMove)){GameLogic::UndoMove(b,*c,u);continue;}++tried;
+            std::unique_ptr<MovePrintValue>q(QSearcher::QSearch(false,-raised,-raised+1,*c,ply+1,0,false,0,m2,m3,prev,b,false,ply+1,true));int qs=-q->value;
+            if(qs>=raised){PrepareChildStack(ply+1,*c,moved,0);TargetResult pc=TargetSearch(false,-raised,-raised+1,depth-4,*c,m2,m3,prev,b,true,ply+1,!cutNode);qs=-pc.value;}
+            GameLogic::UndoMove(b,*c,u);if(qs>=raised)return {qs,{}};}
+    }
+    if(ss.excludedMove==0&&depth>=7&&(!hit||tt.bestMove==0)){
+        TargetSearch(pv,alpha,beta,depth-7,prev,m1,m2,m3,b,nullAllowed,ply,cutNode);
+        const bool iidHit=TranspositionTable::Probe(key,tt);
+        if(iidHit){hit=true;ttValue=MateScore::FromTranspositionTable(tt.score,ply);
+            ttBound=TTBaseFlag(tt.flag);ttPv=pv||(tt.metadata&TT_META_PV);}
+    }
+
+    const bool ttCapture=hit&&PackedMoveIsTactical(b,tt.bestMove);
+    MovePicker picker(b,depth,ply,side,prev,hit?tt.bestMove:0);
+    int oldAlpha=alpha,best=-200000,legal=0; uint16_t bestPacked=0;
+    Move* bestMove=nullptr; std::string bestPv;
+    std::vector<Move*>quietTried,captureTried; bool pruneQuiets=false;
+    while(Move* move=picker.Next(pruneQuiets)){
+        if(TTMoveHelper::PackMove(*move)==ss.excludedMove)continue;
+        ++ss.moveCount; const bool quiet=IsQuietMove(*move); const bool tactical=!quiet;
+        pruneQuiets=ply>0&&NullMoveMaterialEligible(b,side)&&
+            best>MateScore::MatedAtPly(SearchStackSize-1)&&
+            ss.moveCount>=FutilityMoveCount(improving,depth);
+        const int movingPiece=std::clamp(b.mainBoard[move->beginPlace],0,14);
+        if(!move->givesCheckComputed){move->givesCheck=MoveLogic::MoveGivesCheck(b,*move);move->givesCheckComputed=true;}
+        const bool givesCheck=move->givesCheck;
+        int extension=0; bool singularLMR=false;
+        if(hit&&tt.bestMove==TTMoveHelper::PackMove(*move)&&ss.excludedMove==0&&depth>=6&&
+           ttValue>-MateScore::Threshold&&ttValue<MateScore::Threshold&&
+           (ttBound==TT_LOWER_BOUND||ttBound==TT_EXACT)&&tt.depth>=depth-3){
+            const int sb=ttValue-2*depth; ss.excludedMove=tt.bestMove;
+            TargetResult sr=TargetSearch(false,sb-1,sb,depth/2,prev,m1,m2,m3,b,nullAllowed,ply,cutNode);
+            ss.excludedMove=0;
+            if(sr.value<sb){extension=1;singularLMR=true;}else if(sb>=beta)return {sb,{}};
+        }
+        const bool discoveredCheck=givesCheck&&!MovedPieceGivesCheck(b,*move);
+        const bool actualCastle=movingPiece%8==6&&std::abs(move->endPlace-move->beginPlace)==2;
+        if(!extension&&givesCheck&&(discoveredCheck||MoveLogic::SEE_GE(b,*move,0)))extension=1;
+        else if(!extension&&IsKillerMove(ply,*move)&&IsAdvancedPassedPawnPush(b,*move,side))extension=1;
+        else if(!extension&&LastCaptureExtension(b,*move))extension=1;
+        else if(!extension&&actualCastle)extension=1;
+        const int childDepth=depth-1+extension;
+        const bool lmr=depth>=3&&ss.moveCount>1&&
+            (quiet||pruneQuiets||rawStaticEval+CapturedEndgameValue(*move)<=alpha||cutNode||
+             ttHitAverage/TtHitAverageWindow<375);
+        const QuietHistoryValues quietHistory=quiet
+            ? ReadQuietHistory(side,ply,movingPiece,*move) : QuietHistoryValues{};
+        const int currentStat=quiet?quietHistory.statScore():0;
+        StackFrame(ply+1).statScore=currentStat;
+        const int previousStat=ss.statScore;
+        int lmrDepth=childDepth;
+        if(lmr){
+            int r=Reduction(improving,depth,ss.moveCount);
+            if(ttPv)r-=2;
+            if(ttHitAverage/TtHitAverageWindow>500)--r;
+            if(StackFrame(ply-1).moveCount>14)--r;if(singularLMR)r-=2;
+            if(quiet){
+                if(ttCapture)++r;
+                if(cutNode)r+=2;
+                else if(movingPiece%8!=6 || std::abs(move->endPlace-move->beginPlace)!=2){
+                    Move reverse=*move;std::swap(reverse.beginPlace,reverse.endPlace);
+                    reverse.PublicFlag=0;reverse.promotionPiece=0;
+                    if(!MoveLogic::SEE_GE(b,reverse,0))r-=2;
+                }
+                if(currentStat>=-102&&previousStat<-114)--r;
+                else if(previousStat>=-116&&currentStat<-154)++r;
+                r-=currentStat/16384;
+            } else if(depth<8&&ss.moveCount>2) ++r;
+            r=std::clamp(r,0,std::max(0,childDepth-1));lmrDepth=childDepth-r;
+        }
+        if(ply>0&&NullMoveMaterialEligible(b,side)&&best>MateScore::MatedAtPly(SearchStackSize-1)){
+            if(quiet&&!givesCheck){
+                const int combined=quietHistory.combinedHistory();
+                const SearchStackFrame& previousFrame=StackFrame(ply-1);
+                if(lmrDepth<4+(previousFrame.statScore>0||previousFrame.moveCount==1)&&
+                   quietHistory.c1<0&&quietHistory.c2<0)continue;
+                if(lmrDepth<6&&!inCheck&&rawStaticEval+235+172*lmrDepth<=alpha&&combined<25000)continue;
+                const int see=-(32-std::min(lmrDepth,18))*lmrDepth*lmrDepth;
+                if(!MoveLogic::SEE_GE(b,*move,see))continue;
+            } else if(!MoveLogic::SEE_GE(b,*move,-194*depth))continue;
+        }
+        MissingInfoAboutPrevStateFromMove u(b,*move);GameLogic::DoMove(b,*move,prev,depth,ply,&u);
+        if(BoardLogic::UnderAttack(b,b.pieces[side*8+6].front(),b.sideToMove)){GameLogic::UndoMove(b,*move,u);--ss.moveCount;continue;}
+        ++legal; PrepareChildStack(ply+1,*move,movingPiece,currentStat);
+        TargetResult child; int value;
+        if(pv&&legal==1){child=TargetSearch(true,-beta,-alpha,childDepth,*move,m2,m3,prev,b,true,ply+1,false);value=-child.value;}
+        else {child=TargetSearch(false,-alpha-1,-alpha,lmrDepth,*move,m2,m3,prev,b,true,ply+1,lmr?true:!cutNode);value=-child.value;
+            if(lmr&&value>alpha&&lmrDepth!=childDepth){child=TargetSearch(false,-alpha-1,-alpha,childDepth,*move,m2,m3,prev,b,true,ply+1,!cutNode);value=-child.value;
+                if(quiet){int bonus=value>alpha?StatBonus(childDepth):-StatBonus(childDepth);
+                    if(ply<PVSSearch::MaxKillerPly&&PVSSearch::killers[ply][0]==*move)bonus+=bonus/4;
+                    UpdateContinuationHistoriesByBonus(ply,movingPiece,*move,bonus);}}
+            if(pv&&value>alpha&&value<beta){child=TargetSearch(true,-beta,-alpha,childDepth,*move,m2,m3,prev,b,true,ply+1,false);value=-child.value;}}
+        GameLogic::UndoMove(b,*move,u); if(quiet)quietTried.push_back(move);else captureTried.push_back(move);
+        if(value>best){best=value;bestMove=move;bestPacked=TTMoveHelper::PackMove(*move);bestPv=ChessStringManipulation::PVToString(*move,0,false,b)+(child.pv.empty()?"":" "+child.pv);
+            if(value>alpha){alpha=value;if(value>=beta)break;}}
+    }
+    if(legal==0)best=ss.excludedMove?alpha:(inCheck?MateScore::MatedAtPly(ply):0);
+    else if(bestMove)RewardCutoffMove(b,side,ply,depth,best,beta,*bestMove,quietTried,captureTried);
+    else if((depth>=3||pv)&&ss.hasCurrentMove&&IsQuietMove(prev))
+        UpdateContinuationHistoriesByBonus(
+            ply-1,ss.currentMovedPiece,prev,StatBonus(depth));
+    best=std::min(best,tablebaseMaxValue);
+    const uint8_t flag=best>=beta?TT_LOWER_BOUND:(best<=oldAlpha?TT_UPPER_BOUND:TT_EXACT);
+    if(ss.excludedMove==0&&!Search::stopRequested.load(std::memory_order_relaxed))
+        TranspositionTable::Store(key,MateScore::ToTranspositionTable(best,ply),depth,flag,bestPacked,rawStaticEval,pv||ttPv);
+    return {best,bestPv};
+}
+}
+
+MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool selectiveSearch, bool cutNode)
+{
+    (void)MAtESearch;(void)previousMoveWasCheck;(void)nullWindowSearch;(void)selectiveSearch;
+    TargetResult r=TargetSearch(isPVNode,alpha,beta,depth,prevMove,move1,move2,move3,board4,isNullMoveAllowed,depthGone,cutNode);
+    auto*out=new MovePrintValue();out->value=r.value;out->printString=r.pv;out->bound=r.value>=beta?SearchBound::Lower:(r.value<=alpha?SearchBound::Upper:SearchBound::Exact);out->proof=ExactProof;out->selective=false;return out;
+}
+
+MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool selectiveSearch, bool cutNode)
 {
     if (Search::stopRequested.load(std::memory_order_relaxed))
     {
@@ -1222,11 +1951,27 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
         return abortRet;
     }
 
+
+    SearchStackFrame& ss = StackFrame(depthGone);
+    ss.ply = depthGone;
+    ss.currentMove = prevMove;
+    ss.hasCurrentMove = prevMove.beginPlace >= 0 && prevMove.beginPlace < 64 &&
+        prevMove.endPlace >= 0 && prevMove.endPlace < 64 && prevMove.promotionPiece != -1;
+    const int inheritedStaticEval = ss.staticEval;
+    ss.staticEval = (prevMove.promotionPiece == -1) ? inheritedStaticEval : NoStaticEval;
+    ss.moveCount = 0;
+    ss.pvNode = isPVNode;
+
     Move *SelectedMove = nullptr;
     Board *boardCopy = nullptr;
 
     MovePrintValue *retValue = new MovePrintValue();
     retValue->printString = "";
+    if (depthGone >= 0 && depthGone < MaxKillerPly)
+    {
+        ss.killer1 = &killers[depthGone][0];
+        ss.killer2 = &killers[depthGone][1];
+    }
 
     MovePrintValue *MPValue = new MovePrintValue();
     MPValue->printString = "";
@@ -1376,10 +2121,17 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
     }
     const bool nodeInCheck = BoardLogic::UnderAttack(
         board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove);
+    const uint64_t ttKey = SearchKey(board4.ZobristHashCode, ss.excludedMove);
     TTEntry ttEntry{};
-    bool ttHit = TranspositionTable::Probe(board4.ZobristHashCode, ttEntry);
+    bool ttHit = TranspositionTable::Probe(ttKey, ttEntry);
+    ttHitAverage = static_cast<int>(
+        int64_t(TtHitAverageWindow - 1) * ttHitAverage / TtHitAverageWindow) +
+        1024 * int(ttHit);
     if (ttHit)
+    {
         ttEntry.score = MateScore::FromTranspositionTable(ttEntry.score, depthGone);
+    }
+    const bool ttPv = isPVNode || (ttHit && (ttEntry.metadata & TT_META_PV) != 0);
 #if HOWL_CORRECTNESS_TESTING
     TTTelemetryStats &ttStats = TranspositionTable::TelemetryStats();
     ttStats.eligibleProbes++;
@@ -1409,9 +2161,29 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
         ttStats.misses++;
     }
 #endif
-    if (TranspositionTable::CutoffsEnabled() && !MAtESearch && !isPVNode && ttHit && ttEntry.depth >= depth && TTFlagIsRigorous(ttEntry.flag))
+    if (TranspositionTable::CutoffsEnabled() && !MAtESearch && !isPVNode &&
+        ttHit && ttEntry.depth >= depth && TTFlagIsRigorous(ttEntry.flag))
     {
-        if (TTBaseFlag(ttEntry.flag) == TT_EXACT)
+        const uint8_t ttBase = TTBaseFlag(ttEntry.flag);
+        const bool cutoff = (ttEntry.score >= beta &&
+                             (ttBase == TT_LOWER_BOUND || ttBase == TT_EXACT)) ||
+                            (ttEntry.score < beta &&
+                             (ttBase == TT_UPPER_BOUND || ttBase == TT_EXACT));
+        if (cutoff && ttEntry.bestMove != 0)
+        {
+            Move ttMove = UnpackMove(ttEntry.bestMove);
+            const bool enPassant = board4.mainBoard[ttMove.beginPlace] % 8 == 1 &&
+                ttMove.endPlace == board4.unpassentPlace;
+            if (board4.mainBoard[ttMove.endPlace] == 0 &&
+                ttMove.promotionPiece == 0 && !enPassant)
+            {
+                const bool success = ttEntry.score >= beta;
+                UpdateHistory(turn, ttMove, depth, success);
+                UpdateContinuationHistories(depthGone,
+                    board4.mainBoard[ttMove.beginPlace], ttMove, depth, success);
+            }
+        }
+        if (ttBase == TT_EXACT && cutoff)
         {
             TranspositionTable::RecordCutoff();
 #if HOWL_CORRECTNESS_TESTING
@@ -1428,7 +2200,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             MPValue = nullptr;
             return retValue;
         }
-        else if (TTBaseFlag(ttEntry.flag) == TT_LOWER_BOUND && ttEntry.score >= beta)
+        else if (ttBase == TT_LOWER_BOUND && ttEntry.score >= beta)
         {
             TranspositionTable::RecordCutoff();
 #if HOWL_CORRECTNESS_TESTING
@@ -1445,7 +2217,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             MPValue = nullptr;
             return retValue;
         }
-        else if (TTBaseFlag(ttEntry.flag) == TT_UPPER_BOUND && ttEntry.score <= alpha)
+        else if (ttBase == TT_UPPER_BOUND && ttEntry.score <= alpha)
         {
             TranspositionTable::RecordCutoff();
 #if HOWL_CORRECTNESS_TESTING
@@ -1463,17 +2235,40 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             return retValue;
         }
     }
+    if (!nodeInCheck)
+    {
+        if (ttHit && ttEntry.staticEval != TT_NO_STATIC_EVAL)
+            ss.staticEval = ttEntry.staticEval;
+        else if (prevMove.promotionPiece == -1 && StackFrame(depthGone - 1).staticEval != NoStaticEval)
+            ss.staticEval = -StackFrame(depthGone - 1).staticEval;
+        else
+        {
+            ss.staticEval = EvaluationLogic::Evaluate(board4);
+            if (prevMove.promotionPiece != -1)
+                ss.staticEval -= ss.statScore / 512;
+        }
+        if (ttHit && TTFlagIsRigorous(ttEntry.flag))
+        {
+            const uint8_t ttBase = TTBaseFlag(ttEntry.flag);
+            if (ttBase == TT_LOWER_BOUND && ttEntry.score > ss.staticEval)
+                ss.staticEval = ttEntry.score;
+            else if (ttBase == TT_UPPER_BOUND && ttEntry.score < ss.staticEval)
+                ss.staticEval = ttEntry.score;
+        }
+    }
+
+    const bool improving = depthGone < 2 || StackFrame(depthGone - 2).staticEval == NoStaticEval ||
+        ss.staticEval > StackFrame(depthGone - 2).staticEval;
     const bool staticPruningContext = !isPVNode && !nodeInCheck &&
         !MAtESearch && depth <= StaticPruningMaxDepth &&
         alpha > -MateScore::Threshold && beta < MateScore::Threshold;
     if (staticPruningContext)
     {
-        const int staticValue = EvaluationLogic::Evaluate(board4);
+        const int staticValue = ss.staticEval;
 
-        if (depth <= RazoringMaxDepth)
+        if (depth < RazoringMaxDepth)
         {
-            const int razorMargin = RazoringBaseMargin + RazoringDepthMargin * depth;
-            if (staticValue + razorMargin <= alpha)
+            if (staticValue <= alpha - RazorMargin)
             {
                 MovePrintValue* razorResult = StartQSearch(
                     false, alpha, beta, prevMove, depthGone, move1, move2,
@@ -1488,8 +2283,8 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             }
         }
 
-        const int reverseFutilityMargin = ChildFutilityMarginPerDepth * depth;
-        if (staticValue - reverseFutilityMargin >= beta)
+        if (depth < 6 && staticValue - FutilityMargin(depth, improving) >= beta &&
+            staticValue < MateScore::Threshold)
         {
             retValue->value = staticValue;
             retValue->bound = SearchBound::Lower;
@@ -1499,9 +2294,12 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             return retValue;
         }
     }
+    const bool nullSuppressed = nullSuppressedSide == turn &&
+        depthGone <= nullSuppressedUntilPly;
     if (isNullMoveAllowed && prevMove.promotionPiece != -1 && !isPVNode &&
-        !nodeInCheck && !MAtESearch && depth >= NullMoveMinDepth &&
-        alpha > -159800 && beta < 159800)
+        !nodeInCheck && !MAtESearch && depth >= 1 &&
+        alpha > -159800 && beta < 159800 && !nullSuppressed &&
+        ss.statScore < 23397 && ss.excludedMove == 0)
     {
         const int nonPawnMaterialCount =
             static_cast<int>(board4.pieces[turn * 8 + 2].size() +
@@ -1519,19 +2317,22 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
         }
         if (NullMoveMaterialEligible(board4, turn))
         {
-            int staticEval = EvaluationLogic::Evaluate(board4);
-            if (staticEval >= beta)
+            int staticEval = ss.staticEval;
+            if (staticEval >= beta &&
+                staticEval >= beta - 32 * depth + 292 - int(improving) * 30)
             {
-                const int evalReduction = std::clamp(
-                    (staticEval - beta) / NullMoveEvalUnit, 0, NullMoveMaxEvalBonus);
-                int R = 2 + depth / 2 + evalReduction;
+                int R = (854 + 68 * depth) / 258 +
+                    std::min((staticEval - beta) / 192, 3);
                 R = std::min(R, depth - 1);
                 Move nullMove{};
                 nullMove.promotionPiece = -1;
                 MissingInfoAboutPrevStateFromMove undoInfo(board4);
                 GameLogic::DoMove(board4, nullMove, prevMove, depthGone, depthGone);
 
-                std::unique_ptr<MovePrintValue> nullRes(PVS(false, -beta, -beta + 1, depth - 1 - R, nullMove, move2, move3, prevMove, board4, MAtESearch, false, depthGone + 1, previousMoveWasCheck, true, selectiveSearch));
+                PrepareChildStack(depthGone + 1, nullMove, 0, 0);
+                StackFrame(depthGone + 1).staticEval =
+                    -ss.staticEval + 2 * TempoForPosition(board4);
+                std::unique_ptr<MovePrintValue> nullRes(PVS(false, -beta, -beta + 1, depth - 1 - R, nullMove, move2, move3, prevMove, board4, MAtESearch, false, depthGone + 1, previousMoveWasCheck, true, selectiveSearch, !cutNode));
                 int nullScore = -nullRes->value;
 
                 GameLogic::UndoMove(board4, nullMove, undoInfo);
@@ -1539,41 +2340,26 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 const bool nullFailedHigh = nullScore >= beta;
                 bool verificationPerformed = false;
                 bool cutoffAccepted = nullFailedHigh;
-                const int staticMargin = staticEval - beta;
-                const int nullMargin = nullScore - beta;
-                const bool sparseMaterialRisk =
-                    (totalPieceCount <= 10 && totalNonPawnMaterialCount <= 3) ||
-                    (totalPieceCount <= 8 && nonPawnMaterialCount == 1);
-                int uncertainty = 0;
-                uncertainty += staticMargin < 150 ? 1 : 0;
-                uncertainty += nullMargin < 100 ? 1 : 0;
-                uncertainty += (R * 3 >= depth * 2) ? 1 : 0;
-                if (nullFailedHigh && !sparseMaterialRisk && uncertainty == 3)
-                {
-                    // Certified full-depth TT bounds were resolved before the
-                    // null probe. Without that evidence, verify at the requested
-                    // depth in this node. A reduced
-                    // verification can miss the depth-sensitive false-positive
-                    // tail. Reuse the ensuing ordinary result, on either side
-                    // of beta, rather than accepting the speculative null score
-                    // or starting a duplicate verification/continuation pass.
-                    cutoffAccepted = false;
-                    retValue->AddProvenance(SearchProvenance::NullVerification);
-                }
-
-                const bool verificationRequired = nullFailedHigh && sparseMaterialRisk &&
-                    (totalPieceCount <= 6 || uncertainty >= 2);
+                const bool verificationRequired = nullFailedHigh && depth >= 13 &&
+                    std::abs(beta) < MateScore::Threshold;
                 if (verificationRequired)
                 {
                     verificationPerformed = true;
-                    const int verificationReduction = uncertainty >= 3 ? 2 : 3;
-                    const int verificationDepth = std::max(0, depth - verificationReduction);
+                    const int verificationDepth = std::max(0, depth - R);
+                    const int oldSuppressedSide = nullSuppressedSide;
+                    const int oldSuppressedUntil = nullSuppressedUntilPly;
+                    const SearchStackFrame savedVerificationFrame = ss;
+                    nullSuppressedSide = turn;
+                    nullSuppressedUntilPly = depthGone + 3 * (depth - R) / 4;
                     std::unique_ptr<MovePrintValue> verification(PVS(
                         false, beta - 1, beta, verificationDepth, prevMove,
                         move1, move2, move3, board4, MAtESearch, false,
                         depthGone, previousMoveWasCheck, true,
-                        selectiveSearch));
+                        selectiveSearch, false));
                     cutoffAccepted = verification->value >= beta;
+                    ss = savedVerificationFrame;
+                    nullSuppressedSide = oldSuppressedSide;
+                    nullSuppressedUntilPly = oldSuppressedUntil;
                 }
 
 #if HOWL_CORRECTNESS_TESTING
@@ -1584,7 +2370,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
 
                 if (cutoffAccepted)
                 {
-                    retValue->value = nullScore;
+                    retValue->value = IsMateScore(nullScore) ? beta : nullScore;
                     retValue->bound = SearchBound::Lower;
                     retValue->MarkSpeculative(SearchProvenance::NullMove);
                     retValue->printString = "null";
@@ -1601,6 +2387,24 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             retValue->bound = SearchBound::Upper;
             retValue->MarkSpeculative(SearchProvenance::Aborted);
             return retValue;
+        }
+    }
+
+    if (!MAtESearch && ss.excludedMove == 0 && depth >= 7 &&
+        (!ttHit || ttEntry.bestMove == 0))
+    {
+        const SearchStackFrame savedFrame = ss;
+        std::unique_ptr<MovePrintValue> iidResult(PVS(
+            isPVNode, alpha, beta, depth - 7, prevMove, move1, move2, move3,
+            board4, MAtESearch, isNullMoveAllowed, depthGone,
+            previousMoveWasCheck, nullWindowSearch, selectiveSearch, cutNode));
+        ss = savedFrame;
+        TTEntry iidEntry{};
+        if (TranspositionTable::Probe(ttKey, iidEntry) && iidEntry.bestMove != 0)
+        {
+            ttEntry = iidEntry;
+            ttEntry.score = MateScore::FromTranspositionTable(ttEntry.score, depthGone);
+            ttHit = true;
         }
     }
 #if HOWL_CORRECTNESS_TESTING
@@ -1632,17 +2436,19 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
     int availMoves = 0;
     int quietMovesSearched = 0;
     int selectedMoveRank = 0;
+    std::vector<Move*> searchedQuiets;
+    std::vector<Move*> searchedCaptures;
     {
         bool firstMove = true;
         if (!isPVNode && !nodeInCheck && !MAtESearch && depth >= ProbCutMinDepth &&
             beta < 159500 && alpha > -159500)
         {
-            const int probBeta = beta + ProbCutMargin;
+            const int probBeta = std::min(200000, beta + 189 - 45 * int(improving));
             int forcingMovesTried = 0;
             MovePicker probPicker(board4, depth, depthGone, turn, prevMove,
                                   ttHit ? ttEntry.bestMove : 0);
             for (int i = 0; i < ProbCutPickerLimit &&
-                         forcingMovesTried < ProbCutMaxCandidates; ++i)
+                         forcingMovesTried < ProbCutMaxCandidatesBase + 2 * int(cutNode); ++i)
             {
                 Move* nextProbMove = probPicker.Next();
                 if (nextProbMove == nullptr)
@@ -1675,10 +2481,12 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 int probValue = -qResult->value;
                 if (probValue >= probBeta && !IsMateScore(probValue))
                 {
+                    PrepareChildStack(depthGone + 1, probMove,
+                        board4.mainBoard[probMove.beginPlace], 0);
                     std::unique_ptr<MovePrintValue> reducedResult(PVS(
                         false, -probBeta, -probBeta + 1, depth - 4, probMove,
                         move2, move3, prevMove, board4, false, true,
-                        depthGone + 1, givesCheck, true, true));
+                        depthGone + 1, givesCheck, true, true, !cutNode));
                     probValue = -reducedResult->value;
                     if (probValue >= probBeta && !IsMateScore(probValue))
                     {
@@ -1709,6 +2517,8 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             Move *move = movePicker.Next();
             if (move == nullptr)
                 break;
+            if (ss.excludedMove != 0 && MatchesPackedMove(*move, ss.excludedMove))
+                continue;
             if (Search::stopRequested.load(std::memory_order_relaxed))
             {
                 delete MPValue;
@@ -1718,12 +2528,73 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 retValue->MarkSpeculative(SearchProvenance::Aborted);
                 return retValue;
             }
+            ss.moveCount = i + 1;
             const int alphaBeforeMove = alpha;
             int LMRDepth = 0;
             uint8_t moveProof = NoProof;
             const bool isTTMove = ttHit &&
                 MatchesPackedMove(*move, ttEntry.bestMove);
-            const int moveExtension = 0;
+            int moveExtension = 0;
+            bool singularLMR = false;
+            if (depth >= 6 && isTTMove && depthGone > 0 && ss.excludedMove == 0 &&
+                TTFlagIsRigorous(ttEntry.flag) &&
+                (TTBaseFlag(ttEntry.flag) == TT_LOWER_BOUND ||
+                 TTBaseFlag(ttEntry.flag) == TT_EXACT) &&
+                ttEntry.depth >= depth - 3 && !IsMateScore(ttEntry.score))
+            {
+                bool ttMoveLegal = false;
+                MissingInfoAboutPrevStateFromMove singularLegalityUndo(board4, *move);
+                GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone,
+                                  &singularLegalityUndo);
+                ttMoveLegal = !BoardLogic::UnderAttack(
+                    board4, board4.pieces[turn * 8 + 6].front(), board4.sideToMove);
+                GameLogic::UndoMove(board4, *move, singularLegalityUndo);
+                if (ttMoveLegal)
+                {
+                    const int singularBeta = ttEntry.score - 2 * depth;
+                    const SearchStackFrame savedFrame = ss;
+                    ss.excludedMove = ttEntry.bestMove;
+                    std::unique_ptr<MovePrintValue> singularResult(PVS(
+                        false, singularBeta - 1, singularBeta, depth / 2,
+                        prevMove, move1, move2, move3, board4, MAtESearch,
+                        isNullMoveAllowed, depthGone, previousMoveWasCheck,
+                        true, selectiveSearch, cutNode));
+                    ss = savedFrame;
+                    if (singularResult->value < singularBeta)
+                    {
+                        moveExtension = 1;
+                        singularLMR = true;
+                    }
+                    else if (singularBeta >= beta)
+                    {
+                        retValue->value = singularBeta;
+                        retValue->bound = SearchBound::Lower;
+                        retValue->proof = LowerProof;
+                        delete MPValue;
+                        return retValue;
+                    }
+                }
+            }
+            const bool discoveredCheck = move->givesCheck &&
+                !MovedPieceGivesCheck(board4, *move);
+            if (move->givesCheck && (discoveredCheck || move->value >= 0))
+            {
+                moveExtension = 1;
+            }
+            if (IsKillerMove(depthGone, *move) &&
+                IsAdvancedPassedPawnPush(board4, *move, turn))
+            {
+                moveExtension = 1;
+            }
+            if (LastCaptureExtension(board4, *move))
+            {
+                moveExtension = 1;
+            }
+            if (board4.mainBoard[move->beginPlace] % 8 == 6 &&
+                std::abs(move->endPlace - move->beginPlace) == 2)
+            {
+                moveExtension = 1;
+            }
             if (firstMove)
             {
                 bool firstMoveWasRepetition = false;
@@ -1758,17 +2629,23 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 }
                 else
                 {
+                    if (IsQuietMove(*move)) searchedQuiets.push_back(move);
+                    else searchedCaptures.push_back(move);
                     bool tempPVNode = false;
                     if (isPVNode || move->isRefuteWithoutNullMove)
                     {
                         tempPVNode = true;
                     }
                     delete MPValue;
+                    PrepareChildStack(depthGone + 1, *move,
+                        board4.mainBoard[move->beginPlace], IsQuietMove(*move)
+                            ? QuietStatScore(turn, depthGone,
+                                board4.mainBoard[move->beginPlace], *move) : 0);
                     MPValue = PVS(tempPVNode, -beta, -alpha,
                                   depth - 1 + moveExtension, *move, move2, move3,
                                   prevMove, board4, MAtESearch, true,
                                   depthGone + 1, previousMoveWasCheck, nullWindowSearch,
-                                  selectiveSearch);
+                                  selectiveSearch, false);
                     bestMoveValue = -MPValue->value;
                     moveProof = InvertProof(MPValue->proof);
                     bestLowerProof = (moveProof & LowerProof) != 0;
@@ -1808,12 +2685,6 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 firstMove = false;
                 if (bestMoveValue > alpha)
                 {
-                    if (!firstMoveWasRepetition && !selectiveSearch &&
-                        IsQuietMove(*move) && !IsMateScore(bestMoveValue))
-                    {
-                        UpdateHistory(turn, *move, depth, true);
-                        UpdateContinuationHistory(prevMove, *move, depth, true);
-                    }
                     if (bestMoveValue >= beta)
                     {
 #if HOWL_CORRECTNESS_TESTING
@@ -1821,7 +2692,8 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
 #endif
                         if (!selectiveSearch)
                         {
-                            RecordKiller(depthGone, *move);
+                            RewardCutoffMove(board4, turn, depthGone, depth, *move,
+                                             searchedQuiets, searchedCaptures);
                             if (isPVNode)
                             {
                                 move->isRefuteWithoutNullMove = true;
@@ -1835,9 +2707,9 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                                 cutoffResult.SetProof(bestLowerProof, false);
                                 cutoffResult.selective = bestMoveSelective;
                                 const uint8_t cutoffFlag = TTFlagForResult(cutoffResult);
-                                TranspositionTable::Store(board4.ZobristHashCode,
+                                TranspositionTable::Store(ttKey,
                                     MateScore::ToTranspositionTable(move->value, depthGone),
-                                    depth, cutoffFlag, packed);
+                                    depth, cutoffFlag, packed, ss.staticEval, ttPv);
                             }
                         }
                         retValue->value = move->value;
@@ -1861,17 +2733,14 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 bool trustedValue = false;
                 const int nominalChildDepth = depth - 1 + moveExtension;
                 const int combinedHistory = IsQuietMove(*move)
-                    ? CombinedHistoryScore(turn, prevMove, *move)
+                    ? QuietCombinedHistory(turn, depthGone,
+                        board4.mainBoard[move->beginPlace], *move)
                     : 0;
-                const bool cutNode = !isPVNode &&
-                    (nullWindowSearch || beta - alpha <= Option::nullWindowSize);
-                const bool improving = bestMoveValue > origAlpha;
-                const bool ttPvEvidence = isTTMove &&
-                    TTFlagIsRigorous(ttEntry.flag) && ttEntry.depth >= depth - 2;
+                const bool ttPvEvidence = ttPv;
                 LMRDepth = ContextualLMRReduction(
-                    depth, i + 1, nominalChildDepth, turn, prevMove, *move,
+                    depth, i + 1, nominalChildDepth, turn, depthGone, *move,
                     isPVNode, cutNode, improving, ttPvEvidence, nodeInCheck,
-                    moveExtension > 0);
+                    moveExtension > 0, singularLMR);
                 if (MAtESearch)
                     LMRDepth = 0;
 
@@ -1880,48 +2749,39 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 const bool pruningContext = !isPVNode && !nodeInCheck &&
                     !MAtESearch && !isTTMove &&
                     alpha > -159800 && beta < 159800;
-                const int negativeHistoryStrength =
-                    std::clamp(-combinedHistory / HistoryStrengthUnit, 0, MaxHistoryStrength);
-                const int positiveHistoryStrength =
-                    std::clamp(combinedHistory / HistoryStrengthUnit, 0, MaxHistoryStrength);
-                const int historyMoveCountAdjustment =
-                    positiveHistoryStrength * 3 - negativeHistoryStrength * 3;
                 const bool forcingMove = move->givesCheck ||
                     move->promotionPiece > 0 || move->isRefuteWithoutNullMove;
                 const bool highConfidenceMove = forcingMove ||
                     IsKillerMove(depthGone, *move) || combinedHistory >= 4096 ||
                     (move->endPiece > 0 && move->value >= 0);
-                const int allowedQuietMoves = std::max(
-                    MinimumQuietMoveBudget,
-                    MinimumQuietMoveBudget + expectedReducedDepth * QuietMovesPerExpectedDepth +
-                    historyMoveCountAdjustment);
                 const bool moveCountPruningCandidate = pruningContext &&
                     !highConfidenceMove && IsQuietMove(*move) &&
-                    expectedReducedDepth <= 2 &&
-                    i >= allowedQuietMoves;
+                    i + 1 >= FutilityMoveCount(improving, depth);
 
                 bool valueFutilityCandidate = false;
-                const int valueFutilityDepthLimit =
-                    2 + (negativeHistoryStrength >= 2 ? 1 : 0);
                 if (pruningContext && !highConfidenceMove &&
                     IsQuietMove(*move) &&
-                    expectedReducedDepth <= valueFutilityDepthLimit)
+                    expectedReducedDepth < 6)
                 {
                     if (staticEval == -200000)
-                        staticEval = EvaluationLogic::Evaluate(board4);
-                    const int historyMarginAdjustment =
-                        std::clamp(combinedHistory / FutilityHistoryUnit, -240, 180);
-                    const int futilityMargin = std::max(
-                        FutilityHistoryMinimumMargin,
-                        FutilityBaseMargin + FutilityDepthMargin * expectedReducedDepth +
-                        historyMarginAdjustment);
-                    valueFutilityCandidate = staticEval + futilityMargin <= alpha;
+                        staticEval = ss.staticEval;
+                    valueFutilityCandidate = staticEval + 235 +
+                        172 * expectedReducedDepth <= alpha && combinedHistory < 25000;
                 }
+                const bool counterHistoryPruningCandidate = pruningContext &&
+                    IsQuietMove(*move) &&
+                    expectedReducedDepth < 4 +
+                        (ss.statScore > 0 || ss.moveCount == 1) &&
+                    ContinuationHistoryScoreAt(depthGone, 1,
+                        board4.mainBoard[move->beginPlace], *move) < 0 &&
+                    ContinuationHistoryScoreAt(depthGone, 2,
+                        board4.mainBoard[move->beginPlace], *move) < 0;
                 const bool seePruningCandidate = pruningContext &&
                     !highConfidenceMove &&
-                    move->endPiece > 0 && move->promotionPiece <= 0 &&
-                    expectedReducedDepth <= 2 &&
-                    move->value <= -SeePruningMargin * expectedReducedDepth;
+                    ((IsQuietMove(*move) && move->value <
+                        -(32 - std::min(expectedReducedDepth, 18)) *
+                         expectedReducedDepth * expectedReducedDepth) ||
+                     (!IsQuietMove(*move) && move->value < -194 * depth));
 
                 boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
                 MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
@@ -1958,7 +2818,8 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                         !board4.sideToMove);
                     if (!givesCheck && (moveCountPruningCandidate ||
                                        valueFutilityCandidate ||
-                                       seePruningCandidate))
+                                       seePruningCandidate ||
+                                       counterHistoryPruningCandidate))
                     {
                         allUpperProof = false;
                         retValue->AddProvenance(SearchProvenance::ForwardPruning);
@@ -1974,6 +2835,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                         continue;
                     }
 
+
                     bool tempPVNode = false;
                     if (move->isRefuteWithoutNullMove || (isPVNode && availMoves < 2))
                     {
@@ -1982,16 +2844,24 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     if (move->endPiece == 0 && move->promotionPiece <= 0)
                     {
                         quietMovesSearched++;
+                        searchedQuiets.push_back(move);
                     }
+                    else
+                        searchedCaptures.push_back(move);
 
                     const bool reducedSearch = LMRDepth > 0;
                     delete MPValue;
+                    PrepareChildStack(depthGone + 1, *move,
+                        board4.mainBoard[move->beginPlace], IsQuietMove(*move)
+                            ? QuietStatScore(turn, depthGone,
+                                board4.mainBoard[move->beginPlace], *move) : 0);
                     MPValue = PVS(reducedSearch ? false : tempPVNode,
                                   -alpha - Option::nullWindowSize, -alpha,
                                   nominalChildDepth - LMRDepth, *move, move2,
                                   move3, prevMove, board4, MAtESearch, true,
                                   depthGone + 1, previousMoveWasCheck, true,
-                                  selectiveSearch || reducedSearch);
+                                  selectiveSearch || reducedSearch,
+                                  reducedSearch ? true : (tempPVNode ? false : !cutNode));
                     value = -MPValue->value;
                     moveProof = InvertProof(MPValue->proof);
                     if (value != -160000)
@@ -2015,11 +2885,15 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     {
                         const int smallerReduction = LMRDepth / 2;
                         delete MPValue;
+                        PrepareChildStack(depthGone + 1, *move,
+                            board4.mainBoard[move->beginPlace], IsQuietMove(*move)
+                                ? QuietStatScore(turn, depthGone,
+                                    board4.mainBoard[move->beginPlace], *move) : 0);
                         MPValue = PVS(false, -alpha - Option::nullWindowSize, -alpha,
                                       nominalChildDepth - smallerReduction,
                                       *move, move2, move3,
                                       prevMove, board4, MAtESearch, true, depthGone + 1,
-                                      previousMoveWasCheck, true, true);
+                                      previousMoveWasCheck, true, true, true);
                         value = -MPValue->value;
                         moveProof = InvertProof(MPValue->proof);
                         valueSelective = true;
@@ -2042,11 +2916,16 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                         int origBetaForLMR = beta;
 #endif
                         delete MPValue;
+                        PrepareChildStack(depthGone + 1, *move,
+                            board4.mainBoard[move->beginPlace], IsQuietMove(*move)
+                                ? QuietStatScore(turn, depthGone,
+                                    board4.mainBoard[move->beginPlace], *move) : 0);
                         MPValue = PVS(confirmationPVNode, -beta, -alpha,
                                       nominalChildDepth,
                                       *move, move2, move3, prevMove, board4, MAtESearch,
                                       true, depthGone + 1, previousMoveWasCheck,
-                                      nullWindowSearch, selectiveSearch);
+                                      nullWindowSearch, selectiveSearch,
+                                      confirmationPVNode ? false : !cutNode);
                         value = -MPValue->value;
                         moveProof = InvertProof(MPValue->proof);
                         valueSelective = MPValue->selective || selectiveSearch;
@@ -2067,21 +2946,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     allUpperProof = allUpperProof && ((moveProof & UpperProof) != 0);
                 if (trustedValue && value > alpha)
                 {
-                    if (!tempRepeat && !selectiveSearch && IsQuietMove(*move) &&
-                        !IsMateScore(value))
-                    {
-                        UpdateHistory(turn, *move, depth, true);
-                        UpdateContinuationHistory(prevMove, *move, depth, true);
-                    }
                     alpha = value;
-                }
-                else if (trustedValue && !tempRepeat && !selectiveSearch &&
-                         IsQuietMove(*move) && SelectedMove != nullptr &&
-                         bestMoveValue > value && alphaBeforeMove >= value &&
-                         !IsMateScore(value))
-                {
-                    UpdateHistory(turn, *move, depth, false);
-                    UpdateContinuationHistory(prevMove, *move, depth, false);
                 }
                 GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
                 delete missingInfoAboutPrevStateFromMove;
@@ -2110,7 +2975,8 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
 #endif
                         if (!selectiveSearch)
                         {
-                            RecordKiller(depthGone, *move);
+                            RewardCutoffMove(board4, turn, depthGone, depth, *move,
+                                             searchedQuiets, searchedCaptures);
                             if (isPVNode)
                             {
                                 move->isRefuteWithoutNullMove = true;
@@ -2124,9 +2990,9 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                                 cutoffResult.SetProof((moveProof & LowerProof) != 0, false);
                                 cutoffResult.selective = valueSelective;
                                 const uint8_t cutoffFlag = TTFlagForResult(cutoffResult);
-                                TranspositionTable::Store(board4.ZobristHashCode,
+                                TranspositionTable::Store(ttKey,
                                     MateScore::ToTranspositionTable(move->value, depthGone),
-                                    depth, cutoffFlag, packed);
+                                    depth, cutoffFlag, packed, ss.staticEval, ttPv);
                             }
                         }
                         retValue->value = move->value;
@@ -2150,6 +3016,14 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             }
         }
 
+        if (availMoves == 0 && ss.excludedMove != 0)
+        {
+            retValue->value = alpha;
+            retValue->bound = SearchBound::Upper;
+            retValue->proof = UpperProof;
+            delete MPValue;
+            return retValue;
+        }
         if (availMoves == 0 && !BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove))
         {
             Move stalemateMove;
@@ -2184,15 +3058,24 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 bestMoveValue, origAlpha, origBeta);
             if (!selectiveSearch && SelectedMove != nullptr && bestMoveValue != 0)
             {
+                if (IsQuietMove(*SelectedMove))
+                {
+                    UpdateHistory(turn, *SelectedMove, depth, true);
+                    UpdateContinuationHistories(depthGone,
+                        board4.mainBoard[SelectedMove->beginPlace], *SelectedMove,
+                        depth, true);
+                }
+                else
+                    UpdateCaptureHistory(board4, *SelectedMove, depth, true);
                 MovePrintValue storedResult;
                 storedResult.bound = resultBound;
                 storedResult.SetProof(bestLowerProof, allUpperProof);
                 storedResult.selective = resultSelective;
                 const uint8_t flag = TTFlagForResult(storedResult);
                 uint16_t packed = TTMoveHelper::PackMove(*SelectedMove);
-                TranspositionTable::Store(board4.ZobristHashCode,
+                TranspositionTable::Store(ttKey,
                     MateScore::ToTranspositionTable(bestMoveValue, depthGone),
-                    depth, flag, packed);
+                    depth, flag, packed, ss.staticEval, ttPv);
             }
             retValue->value = bestMoveValue;
             retValue->bound = resultBound;

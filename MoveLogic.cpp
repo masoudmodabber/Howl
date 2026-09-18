@@ -2225,6 +2225,161 @@ void MoveLogic::ScoreMove(Board& thisBoard, Move& move, const AttackerState& whi
     }
 }
 
+namespace
+{
+constexpr int SeeValue[7] = {0, 100, 350, 350, 550, 975, 2500};
+
+bool SeeAttacks(int piece, int from, int target, std::uint64_t occupancy)
+{
+    const bool white = piece < 8;
+    const int type = NormalizeExchangePiece(piece);
+    const std::uint64_t targetBit = Option::PowerTwo[target];
+    switch (type)
+    {
+    case 1: return ((white ? AttackPlaces::WhitePawnAttackPlaces[from]
+                           : AttackPlaces::BlackPawnAttackPlaces[from]) & targetBit) != 0;
+    case 2: return (AttackPlaces::KnightAttackPlaces[from] & targetBit) != 0;
+    case 3: return (AttackPlaces::BishopAttack[from][target] & occupancy) == targetBit;
+    case 4: return (AttackPlaces::RookAttack[from][target] & occupancy) == targetBit;
+    case 5: return (AttackPlaces::QueenAttack[from][target] & occupancy) == targetBit;
+    case 6: return (AttackPlaces::KingAttackPlaces[from] & targetBit) != 0;
+    default: return false;
+    }
+}
+
+struct SeePosition
+{
+    int pieces[64]{};
+    std::uint64_t pieceBoards[15]{};
+    std::uint64_t occupancy = 0;
+    int kingSquare[2] = {-1, -1};
+
+    void remove(int piece, int square)
+    {
+        if (!piece) return;
+        pieceBoards[piece] &= ~Option::PowerTwo[square];
+        pieces[square] = 0;
+        occupancy &= ~Option::PowerTwo[square];
+    }
+
+    void add(int piece, int square)
+    {
+        pieceBoards[piece] |= Option::PowerTwo[square];
+        pieces[square] = piece;
+        occupancy |= Option::PowerTwo[square];
+    }
+};
+
+bool SeeSquareAttacked(const SeePosition& position, int square, bool byWhite)
+{
+    const int offset = byWhite ? 0 : 8;
+    for (int type = 1; type <= 6; ++type)
+    {
+        const int piece = offset + type;
+        std::uint64_t candidates = position.pieceBoards[piece];
+        while (candidates)
+        {
+            const int from = __builtin_ctzll(candidates);
+            candidates &= candidates - 1;
+            if (SeeAttacks(piece, from, square, position.occupancy))
+                return true;
+        }
+    }
+    return false;
+}
+
+int SeeExchange(SeePosition& position, int target, bool white)
+{
+    int best = 0;
+    const int capturedPiece = position.pieces[target];
+    const int victim = NormalizeExchangePiece(capturedPiece);
+    const int offset = white ? 0 : 8;
+    for (int attackerType = 1; attackerType <= 6; ++attackerType)
+    {
+        const int attacker = offset + attackerType;
+        std::uint64_t candidates = position.pieceBoards[attacker];
+        while (candidates)
+        {
+            const int from = __builtin_ctzll(candidates);
+            candidates &= candidates - 1;
+            if (!SeeAttacks(attacker, from, target, position.occupancy))
+                continue;
+            const bool promotes = attackerType == 1 &&
+                ((white && target >= 56) || (!white && target < 8));
+            const int firstPromotion = promotes ? 2 : attackerType;
+            const int lastPromotion = promotes ? 5 : attackerType;
+            for (int resultType = firstPromotion; resultType <= lastPromotion; ++resultType)
+            {
+                const int resultPiece = offset + resultType;
+                const int oldKingSquare = position.kingSquare[white ? 0 : 1];
+                position.remove(attacker, from);
+                position.remove(capturedPiece, target);
+                position.add(resultPiece, target);
+                if (attackerType == 6)
+                    position.kingSquare[white ? 0 : 1] = target;
+                const int kingSquare = position.kingSquare[white ? 0 : 1];
+                if (kingSquare >= 0 &&
+                    !SeeSquareAttacked(position, kingSquare, !white))
+                {
+                    const int promotionGain = promotes
+                        ? SeeValue[resultType] - SeeValue[1] : 0;
+                    best = std::max(best, SeeValue[victim] + promotionGain -
+                                          SeeExchange(position, target, !white));
+                }
+                position.remove(resultPiece, target);
+                position.add(capturedPiece, target);
+                position.add(attacker, from);
+                position.kingSquare[white ? 0 : 1] = oldKingSquare;
+            }
+        }
+    }
+    return best;
+}
+}
+
+bool MoveLogic::SEE_GE(Board& board, Move& move, int threshold)
+{
+    SeePosition position;
+    for (int square = 0; square < 64; ++square)
+    {
+        const int piece = board.mainBoard[square];
+        if (!piece) continue;
+        position.add(piece, square);
+        if (NormalizeExchangePiece(piece) == 6)
+            position.kingSquare[piece < 8 ? 0 : 1] = square;
+    }
+    const bool white = !board.sideToMove;
+    const int movingPiece = position.pieces[move.beginPlace];
+    const bool enPassant = (move.PublicFlag & Option::PowerTwo[6]) != 0;
+    const int capturedPiece = enPassant
+        ? position.pieces[move.endPlace + (white ? -8 : 8)]
+        : position.pieces[move.endPlace];
+    const int captured = NormalizeExchangePiece(capturedPiece);
+    const int promoted = move.promotionPiece > 0
+        ? NormalizeExchangePiece(move.promotionPiece) : NormalizeExchangePiece(movingPiece);
+    const int initialGain = SeeValue[captured] +
+        (move.promotionPiece > 0 ? SeeValue[promoted] - SeeValue[1] : 0);
+    if (initialGain < threshold)
+        return false;
+
+    position.remove(movingPiece, move.beginPlace);
+    if (enPassant)
+    {
+        const int capturedSquare = move.endPlace + (white ? -8 : 8);
+        position.remove(capturedPiece, capturedSquare);
+    }
+    else
+        position.remove(capturedPiece, move.endPlace);
+    const int resultPiece = white ? promoted : promoted + 8;
+    position.add(resultPiece, move.endPlace);
+    if (NormalizeExchangePiece(movingPiece) == 6)
+        position.kingSquare[white ? 0 : 1] = move.endPlace;
+    const int kingSquare = position.kingSquare[white ? 0 : 1];
+    if (kingSquare >= 0 && SeeSquareAttacked(position, kingSquare, !white))
+        return false;
+    return initialGain - SeeExchange(position, move.endPlace, !white) >= threshold;
+}
+
 MoveList MoveLogic::QSearchStage1Generator(Board &thisBoard, int depth, int depthGone, DeferredMove* deferredMoves, int& deferredCount, const Move& prevMove, bool includeQuietChecks, bool deepResolution)
 {
     deferredCount = 0;
@@ -3553,7 +3708,8 @@ Move *MoveLogic::MoveCopy(Move *move)
     newMove->PublicFlag = move->PublicFlag;
     newMove->unpassentPlace = move->unpassentPlace;
     newMove->moveCount = move->moveCount;
-    newMove->givesCheck = move->givesCheck;
+    newMove->givesCheck = false;
+    newMove->givesCheckComputed = false;
     return newMove;
 }
 

@@ -3,9 +3,8 @@
 #include <cstdio>
 
 std::vector<TTEntry> TranspositionTable::entries{};
-std::array<QSearchTTEntry, TranspositionTable::qSearchEntryCount>
-    TranspositionTable::qSearchEntries{};
 std::size_t TranspositionTable::entryMask = 0;
+uint8_t TranspositionTable::generation = 0;
 TTStats TranspositionTable::stats{};
 QSearchTTStats TranspositionTable::qSearchStats{};
 bool TranspositionTable::cutoffsEnabled = true;
@@ -19,7 +18,7 @@ bool TranspositionTable::Resize(std::size_t targetBytes)
     entries.shrink_to_fit();
     entryMask = 0;
 
-    if (targetBytes < sizeof(TTEntry))
+    if (targetBytes < 3 * sizeof(TTEntry))
     {
         return true;
     }
@@ -32,14 +31,14 @@ bool TranspositionTable::Resize(std::size_t targetBytes)
 #endif
 
     std::size_t count = 1;
-    while (count * 2 * sizeof(TTEntry) <= targetBytes)
+    while (count * 2 * 3 * sizeof(TTEntry) <= targetBytes)
     {
         count *= 2;
     }
 
     try
     {
-        entries.resize(count);
+        entries.resize(count * 3);
         entryMask = count - 1;
         return true;
     }
@@ -55,7 +54,6 @@ bool TranspositionTable::Resize(std::size_t targetBytes)
 void TranspositionTable::Clear()
 {
     std::fill(entries.begin(), entries.end(), TTEntry{});
-    std::fill(qSearchEntries.begin(), qSearchEntries.end(), QSearchTTEntry{});
     ResetStats();
 }
 
@@ -67,6 +65,11 @@ std::size_t TranspositionTable::CapacityBytes()
 std::size_t TranspositionTable::EntryCount()
 {
     return entries.size();
+}
+
+void TranspositionTable::NewSearch()
+{
+    ++generation;
 }
 
 bool TranspositionTable::IsActive()
@@ -222,141 +225,89 @@ void TranspositionTable::CheckShadowEntryOnProbe(uint64_t key, int depth, int al
 
 bool TranspositionTable::Probe(uint64_t key, TTEntry& entry)
 {
-    if (entries.empty())
-    {
-        return false;
-    }
+    if (entries.empty()) return false;
     stats.probes++;
-    std::size_t idx = key & entryMask;
-    if (entries[idx].key == key && entries[idx].flag != TT_NONE)
+    const std::size_t base = (key & entryMask) * 3;
+    for (int i = 0; i < 3; ++i)
     {
-        stats.hits++;
-        entry = entries[idx];
-        return true;
+        TTEntry& candidate = entries[base + i];
+        if (candidate.key == key && candidate.flag != TT_NONE)
+        {
+            stats.hits++;
+            candidate.generation = generation;
+            entry = candidate;
+            return true;
+        }
     }
     return false;
 }
 
-void TranspositionTable::Store(uint64_t key, int32_t score, int8_t depth, uint8_t flag, uint16_t bestMove)
+void TranspositionTable::Store(uint64_t key, int32_t score, int8_t depth,
+    uint8_t flag, uint16_t bestMove, int32_t staticEval, bool pv)
 {
-    if (entries.empty() || key == 0)
+    if (entries.empty() || key == 0 || flag == TT_NONE) return;
+    const std::size_t base = (key & entryMask) * 3;
+    TTEntry* replacement = &entries[base];
+    for (int i = 0; i < 3; ++i)
     {
-        return;
+        TTEntry& candidate = entries[base + i];
+        if (candidate.key == 0 || candidate.flag == TT_NONE)
+        {
+            replacement = &candidate;
+            break;
+        }
+        if (candidate.key == key)
+        {
+            replacement = &candidate;
+            break;
+        }
+        const int candidateValue = candidate.depth - 8 * int(uint8_t(generation - candidate.generation));
+        const int replacementValue = replacement->depth -
+            8 * int(uint8_t(generation - replacement->generation));
+        if (candidateValue < replacementValue)
+            replacement = &candidate;
     }
-    std::size_t idx = key & entryMask;
 #if HOWL_CORRECTNESS_TESTING
     g_ttTelemetryStats.stores++;
 #endif
-    if (entries[idx].key == key && TTFlagIsRigorous(entries[idx].flag) &&
-        !TTFlagIsRigorous(flag))
+    if (replacement->key == key && depth + 4 < replacement->depth && flag != TT_EXACT)
     {
-        // Keep a usable score certificate when the new result supplies only
-        // ordering information. The newer move hint can still be useful.
-        if (bestMove != 0)
-            entries[idx].bestMove = bestMove;
+        if (bestMove) replacement->bestMove = bestMove;
+        if (staticEval != TT_NO_STATIC_EVAL)
+            replacement->staticEval = static_cast<int16_t>(std::clamp(staticEval, -32767, 32766));
+        replacement->generation = generation;
         return;
     }
-#if HOWL_CORRECTNESS_TESTING
-    if (entries[idx].key == 0 || entries[idx].flag == TT_NONE)
-    {
-        g_ttTelemetryStats.emptySlotStores++;
-    }
-    else if (entries[idx].key == key)
-    {
-        g_ttTelemetryStats.overwriteSameKey++;
-        if (depth < entries[idx].depth)
-        {
-            auto& s = g_ttTelemetryStats.shallowSameKey;
-            s.totalAttempts++;
-            int diff = entries[idx].depth - depth;
-            if (diff == 1) s.depthDiff1++;
-            else if (diff == 2) s.depthDiff2++;
-            else if (diff <= 4) s.depthDiff3To4++;
-            else s.depthDiff5Plus++;
-
-            uint8_t existBase = TTBaseFlag(entries[idx].flag);
-            uint8_t incBase = TTBaseFlag(flag);
-            if (existBase == TT_EXACT && incBase == TT_EXACT) s.exactToExact++;
-            else if (existBase == TT_EXACT && incBase == TT_LOWER_BOUND) s.exactToLower++;
-            else if (existBase == TT_EXACT && incBase == TT_UPPER_BOUND) s.exactToUpper++;
-            else if (existBase == TT_LOWER_BOUND && incBase == TT_EXACT) s.lowerToExact++;
-            else if (existBase == TT_LOWER_BOUND && incBase == TT_LOWER_BOUND) s.lowerToLower++;
-            else if (existBase == TT_LOWER_BOUND && incBase == TT_UPPER_BOUND) s.lowerToUpper++;
-            else if (existBase == TT_UPPER_BOUND && incBase == TT_EXACT) s.upperToExact++;
-            else if (existBase == TT_UPPER_BOUND && incBase == TT_LOWER_BOUND) s.upperToLower++;
-            else if (existBase == TT_UPPER_BOUND && incBase == TT_UPPER_BOUND) s.upperToUpper++;
-
-            if (bestMove != 0 && entries[idx].bestMove != 0 && bestMove != entries[idx].bestMove) s.bestMoveDiffers++;
-            if (entries[idx].bestMove == 0 && bestMove != 0) s.existingBestMoveEmptyIncomingProvides++;
-
-            if (score > 150000 || score < -150000) s.incomingScoreIsMate++;
-            if (entries[idx].score > 150000 || entries[idx].score < -150000) s.existingScoreIsMate++;
-
-            if (g_shadowEntries.size() > idx && !g_shadowEntries[idx].wasOverwritten)
-            {
-                g_shadowEntries[idx].entry = entries[idx];
-                g_shadowEntries[idx].wasOverwritten = true;
-            }
-        }
-    }
-    else
-    {
-        g_ttTelemetryStats.replacementCollisions++;
-        if (entries[idx].depth > depth)
-        {
-            g_ttTelemetryStats.replacementGreaterDepthOverwritten++;
-        }
-    }
-#endif
-    if (entries[idx].key == 0 || entries[idx].key == key || depth >= entries[idx].depth)
-    {
-        entries[idx].key = key;
-        entries[idx].score = score;
-        entries[idx].depth = depth;
-        entries[idx].flag = flag;
-        if (bestMove != 0)
-        {
-            entries[idx].bestMove = bestMove;
-        }
-    }
-    else if (entries[idx].key == key && bestMove != 0 && entries[idx].bestMove == 0)
-    {
-        entries[idx].bestMove = bestMove;
-    }
+    *replacement = TTEntry{key, score, depth, flag, bestMove,
+        staticEval == TT_NO_STATIC_EVAL ? TT_NO_STATIC_EVAL
+            : static_cast<int16_t>(std::clamp(staticEval, -32767, 32766)),
+        static_cast<uint8_t>(pv ? TT_META_PV : 0), generation};
 }
 
 bool TranspositionTable::ProbeQSearch(uint64_t key, QSearchTTEntry& entry)
 {
     qSearchStats.probes++;
-    const QSearchTTEntry& candidate = qSearchEntries[key & (qSearchEntryCount - 1)];
-    if (candidate.key != key || candidate.flag == TT_NONE)
-        return false;
-    entry = candidate;
+    TTEntry candidate{};
+    if (!Probe(key, candidate)) return false;
+    entry.key = candidate.key;
+    entry.score = candidate.score;
+    entry.staticEval = candidate.staticEval;
+    entry.depth = candidate.depth;
+    entry.flag = candidate.flag;
+    entry.bestMove = candidate.bestMove;
+    entry.state = QTT_NONE;
+    entry.staticEvalValid = candidate.staticEval != TT_NO_STATIC_EVAL;
+    entry.pv = (candidate.metadata & TT_META_PV) != 0;
     return true;
 }
 
 void TranspositionTable::StoreQSearch(uint64_t key, int32_t score, int8_t depth,
     uint8_t state, uint8_t flag, uint16_t bestMove,
-    int32_t staticEval, bool staticEvalValid)
+    int32_t staticEval, bool staticEvalValid, bool pv)
 {
-    if (key == 0 || flag == TT_NONE)
-        return;
-
-    QSearchTTEntry& entry = qSearchEntries[key & (qSearchEntryCount - 1)];
-    if (entry.key != 0 && entry.key != key && entry.depth > depth)
-        return;
-    if (entry.key == key && entry.state == state && entry.depth > depth &&
-        TTFlagIsRigorous(entry.flag) && !TTFlagIsRigorous(flag))
-        return;
-
-    entry.key = key;
-    entry.score = score;
-    entry.depth = depth;
-    entry.state = state;
-    entry.flag = flag;
-    entry.bestMove = bestMove;
-    entry.staticEval = staticEval;
-    entry.staticEvalValid = staticEvalValid;
+    (void)state;
+    Store(key, score, depth, flag, bestMove,
+          staticEvalValid ? staticEval : TT_NO_STATIC_EVAL, pv);
     qSearchStats.stores++;
 }
 
