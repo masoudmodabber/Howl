@@ -78,9 +78,19 @@ void Search::CheckLimits()
 
 namespace
 {
+    class MovePoolSearchGuard
+    {
+    public:
+        MovePoolSearchGuard() { Move::SetPoolEnabled(true); }
+        ~MovePoolSearchGuard() { Move::SetPoolEnabled(false); }
+    };
+
     constexpr int FullSearchAlpha = -200000;
     constexpr int FullSearchBeta = 200000;
-    constexpr int InitialAspirationDelta = 50;
+    int InitialAspirationDelta(int previousScore)
+    {
+        return 21 + std::abs(previousScore) / 256;
+    }
 
     bool IsMateScore(int score)
     {
@@ -97,7 +107,7 @@ namespace
     }
 
     bool AdvanceAspirationWindow(int score, bool exactMate, int& retriesUsed,
-                                 int& alpha, int& beta)
+                                 int& alpha, int& beta, int& delta)
     {
         if (exactMate || (score > alpha && score < beta))
             return false;
@@ -107,31 +117,18 @@ namespace
         if (!failLow && !failHigh)
             return false;
 
-        if (retriesUsed == 0)
+        if (failLow)
         {
-            if (failHigh)
-            {
-                // Keep the successful edge. Moving alpha to the old beta
-                // turns a repeated boundary result into an opposite failure.
-                beta = FullSearchBeta;
-            }
-            else
-            {
-                alpha = FullSearchAlpha;
-            }
-            retriesUsed = 1;
-            return true;
+            beta = (alpha + beta) / 2;
+            alpha = std::max(FullSearchAlpha, score - delta);
         }
-
-        if (retriesUsed == 1)
+        else
         {
-            alpha = FullSearchAlpha;
-            beta = FullSearchBeta;
-            retriesUsed = 2;
-            return true;
+            beta = std::min(FullSearchBeta, score + delta);
         }
-
-        return false;
+        delta += delta / 4 + 5;
+        ++retriesUsed;
+        return true;
     }
 }
 
@@ -139,16 +136,15 @@ namespace
 std::vector<std::pair<int, int>> Search::AspirationWindowsForTesting(
     int previousScore, const std::vector<int>& searchScores)
 {
-    int alpha = std::max(FullSearchAlpha,
-                         previousScore - InitialAspirationDelta);
-    int beta = std::min(FullSearchBeta,
-                        previousScore + InitialAspirationDelta);
+    int delta = InitialAspirationDelta(previousScore);
+    int alpha = std::max(FullSearchAlpha, previousScore - delta);
+    int beta = std::min(FullSearchBeta, previousScore + delta);
     int retriesUsed = 0;
     std::vector<std::pair<int, int>> windows;
     for (int score : searchScores)
     {
         windows.emplace_back(alpha, beta);
-        if (!AdvanceAspirationWindow(score, false, retriesUsed, alpha, beta))
+        if (!AdvanceAspirationWindow(score, false, retriesUsed, alpha, beta, delta))
             break;
     }
     return windows;
@@ -183,6 +179,7 @@ void Search::PrintBestMove()
 
 void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Board &board4)
 {
+    TranspositionTable::NewSearch();
     PVSSearch::ResetHistory();
     bestMove = "";
     ponderMove = "";
@@ -196,6 +193,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         PrintBestMove();
         return;
     }
+    MovePoolSearchGuard movePoolGuard;
     if (RepetitionHistory::Size() == 0)
     {
         RepetitionHistory::ResetWithRoot(board4.ZobristHashCode);
@@ -386,13 +384,12 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
 
         int aspAlpha = FullSearchAlpha;
         int aspBeta = FullSearchBeta;
-        if (Option::MultiPV <= 1 && prevCompletedScore > -MateScore::Threshold &&
+        int aspirationDelta = InitialAspirationDelta(prevCompletedScore);
+        if (recDepth >= 4 && Option::MultiPV <= 1 && prevCompletedScore > -MateScore::Threshold &&
             prevCompletedScore < MateScore::Threshold)
         {
-            aspAlpha = std::max(FullSearchAlpha,
-                                prevCompletedScore - InitialAspirationDelta);
-            aspBeta = std::min(FullSearchBeta,
-                               prevCompletedScore + InitialAspirationDelta);
+            aspAlpha = std::max(FullSearchAlpha, prevCompletedScore - aspirationDelta);
+            aspBeta = std::min(FullSearchBeta, prevCompletedScore + aspirationDelta);
         }
         int aspirationRetriesUsed = 0;
         bool iterationCompleted = false;
@@ -968,7 +965,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             {
                 if (AdvanceAspirationWindow(iterScore, false,
                                             aspirationRetriesUsed,
-                                            aspAlpha, aspBeta))
+                                            aspAlpha, aspBeta, aspirationDelta))
                 {
                     deleteMovesPrintValue(movesPrintValue);
                     continue;

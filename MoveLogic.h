@@ -35,6 +35,7 @@ public:
     static bool HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int depthGone);
     static void ScoreAndSortMoves(Board& thisBoard, MoveList& moveList, int depth, int depthGone, const AttackerState& whiteAttacker, const AttackerState& blackAttacker);
     static void ScoreMove(Board& thisBoard, Move& move, const AttackerState& whiteAttacker, const AttackerState& blackAttacker);
+    static bool SEE_GE(Board& thisBoard, Move& move, int threshold);
     static bool MoveGivesCheck(Board& thisBoard, const Move& move);
     static AttackerState SetWhiteAttacker(Board &thisBoard);
     static AttackerState SetBlackAttacker(Board &thisBoard);

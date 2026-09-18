@@ -16,12 +16,17 @@ enum TTFlag : uint8_t
     TT_EXACT = 1,
     TT_LOWER_BOUND = 2, // Fail-high / Beta cutoff (rigorous)
     TT_UPPER_BOUND = 3, // Fail-low / Alpha bound (rigorous)
+    TT_EVAL_ONLY = 4,
     TT_EXACT_HEURISTIC = 5,
     TT_LOWER_HEURISTIC = 6,
     TT_UPPER_HEURISTIC = 7,
     // Score certified relative to the search frontier, not an exact mate proof.
     TT_SELECTIVE_FRONTIER = 8
 };
+
+constexpr int16_t TT_NO_STATIC_EVAL = 32767;
+constexpr uint8_t TT_META_PV = 1;
+constexpr uint8_t TT_META_QSEARCH = 2;
 
 inline bool TTFlagIsRigorous(uint8_t flag)
 {
@@ -64,10 +69,13 @@ struct TTEntry
     int8_t depth = 0;       // 1 byte
     uint8_t flag = TT_NONE; // 1 byte
     uint16_t bestMove = 0;  // 2 bytes
+    int16_t staticEval = TT_NO_STATIC_EVAL;
+    uint8_t metadata = 0;
+    uint8_t generation = 0;
 };
 #pragma pack(pop)
 
-static_assert(sizeof(TTEntry) == 16, "TTEntry must be exactly 16 bytes");
+static_assert(sizeof(TTEntry) == 20, "TTEntry layout changed unexpectedly");
 
 class TTMoveHelper
 {
@@ -127,6 +135,7 @@ struct QSearchTTEntry
     uint16_t bestMove = 0;
     uint8_t state = QTT_NONE;
     bool staticEvalValid = false;
+    bool pv = false;
 };
 #pragma pack(pop)
 
@@ -221,14 +230,16 @@ public:
     static std::size_t CapacityBytes();
     static std::size_t EntryCount();
     static bool IsActive();
+    static void NewSearch();
 
     static bool Probe(uint64_t key, TTEntry& entry);
-    static void Store(uint64_t key, int32_t score, int8_t depth, uint8_t flag, uint16_t bestMove);
+    static void Store(uint64_t key, int32_t score, int8_t depth, uint8_t flag,
+        uint16_t bestMove, int32_t staticEval = TT_NO_STATIC_EVAL, bool pv = false);
 
     static bool ProbeQSearch(uint64_t key, QSearchTTEntry& entry);
     static void StoreQSearch(uint64_t key, int32_t score, int8_t depth,
         uint8_t state, uint8_t flag, uint16_t bestMove,
-        int32_t staticEval, bool staticEvalValid);
+        int32_t staticEval, bool staticEvalValid, bool pv = false);
     static void RecordQSearchCutoff();
     static QSearchTTStats QSearchStats();
 
@@ -250,9 +261,8 @@ public:
 
 private:
     static std::vector<TTEntry> entries;
-    static constexpr std::size_t qSearchEntryCount = 1U << 15;
-    static std::array<QSearchTTEntry, qSearchEntryCount> qSearchEntries;
     static std::size_t entryMask;
+    static uint8_t generation;
     static TTStats stats;
     static QSearchTTStats qSearchStats;
     static bool cutoffsEnabled;
