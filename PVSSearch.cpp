@@ -17,6 +17,7 @@
 #include "MateScore.h"
 #include "Tablebase.h"
 #include "Option.h"
+#include "SearchParameters.h"
 #include <iostream>
 #include <algorithm>
 #include <array>
@@ -48,16 +49,16 @@ PVSSearch::KillerMove PVSSearch::killers[PVSSearch::MaxKillerPly][2] = {};
 namespace
 {
     constexpr int StaticPruningMaxDepth = 5;
-    constexpr int RazoringMaxDepth = 2;
-    constexpr int RazorMargin = 531;
-    constexpr int ProbCutMinDepth = 5;
+    constexpr int RazoringMaxDepth = SearchParameters::Razoring::MaxDepth;
+    constexpr int RazorMargin = SearchParameters::Razoring::Margin;
+    constexpr int ProbCutMinDepth = SearchParameters::ProbCut::MinDepth;
     constexpr int ProbCutMaxCandidatesBase = 2;
     constexpr int ProbCutPickerLimit = 8; // Legacy inactive SearchNode storage bound.
     constexpr int MaxReductionIndex = 255;
 
-    constexpr int MainHistoryLimit = 16384;
-    constexpr int CaptureHistoryLimit = 16384;
-    constexpr int ContinuationHistoryLimit = 29952;
+    constexpr int MainHistoryLimit = SearchParameters::History::MainLimit;
+    constexpr int CaptureHistoryLimit = SearchParameters::History::CaptureLimit;
+    constexpr int ContinuationHistoryLimit = SearchParameters::History::ContinuationLimit;
     constexpr int SearchStackBack = 8;
     constexpr int SearchStackSize = 256;
     constexpr int NoStaticEval = -200000;
@@ -72,7 +73,8 @@ namespace
     const std::array<int, MaxReductionIndex + 1> Reductions = [] {
         std::array<int, MaxReductionIndex + 1> values{};
         for (int i = 1; i <= MaxReductionIndex; ++i)
-            values[i] = static_cast<int>(24.8 * std::log(static_cast<double>(i)));
+            values[i] = static_cast<int>(SearchParameters::LMR::LogarithmicScale *
+                std::log(static_cast<double>(i)));
         return values;
     }();
 
@@ -81,17 +83,27 @@ namespace
         const int d = std::clamp(depth, 1, MaxReductionIndex);
         const int m = std::clamp(moveNumber, 1, MaxReductionIndex);
         const int raw = Reductions[d] * Reductions[m];
-        return (raw + 511) / 1024 + (!improving && raw > 1007);
+        return (raw + SearchParameters::LMR::RoundingTerm) /
+            SearchParameters::LMR::Divisor +
+            (!improving && raw > SearchParameters::LMR::NonImprovingThreshold);
     }
 
-    int FutilityMargin(int depth, bool improving) { return 217 * (depth - int(improving)); }
+    int FutilityMargin(int depth, bool improving) { return SearchParameters::ReverseFutility::DepthMargin * (depth - int(improving)); }
     int FutilityMoveCount(bool improving, int depth)
     {
-        return (5 + depth * depth) * (1 + int(improving)) / 2 - 1;
+        return (SearchParameters::MoveCountPruning::Base +
+                SearchParameters::MoveCountPruning::DepthQuadratic * depth * depth) *
+            (SearchParameters::MoveCountPruning::ImprovingBase + int(improving)) /
+            SearchParameters::MoveCountPruning::Divisor -
+            SearchParameters::MoveCountPruning::Offset;
     }
     int StatBonus(int depth)
     {
-        return depth > 15 ? -8 : 19 * depth * depth + 155 * depth - 132;
+        return depth > SearchParameters::History::BonusDeepDepth
+            ? SearchParameters::History::BonusDeepValue
+            : SearchParameters::History::BonusQuadratic * depth * depth
+              + SearchParameters::History::BonusLinear * depth
+              + SearchParameters::History::BonusConstant;
     }
 
     constexpr std::size_t ContinuationTableSize = 15u * 64u * 15u * 64u;
@@ -188,7 +200,7 @@ namespace
         int combinedHistory() const { return main + c1 + c2 + c4; }
         int statScore() const
         {
-            int score = combinedHistory() - 4926;
+        int score = combinedHistory() - SearchParameters::History::LmrStatOffset;
             if (score < 0 && c1 >= 0 && c2 >= 0 && main >= 0)
                 score = 0;
             return score;
@@ -280,7 +292,8 @@ namespace
         const int c1 = ContinuationHistoryScoreAt(ply, 1, currentPiece, move);
         const int c2 = ContinuationHistoryScoreAt(ply, 2, currentPiece, move);
         int score = main + c1 + c2 +
-            ContinuationHistoryScoreAt(ply, 4, currentPiece, move) - 4926;
+            ContinuationHistoryScoreAt(ply, 4, currentPiece, move) -
+            SearchParameters::History::LmrStatOffset;
         if (score < 0 && c1 >= 0 && c2 >= 0 && main >= 0)
             score = 0;
         return score;
@@ -457,22 +470,26 @@ namespace
         if (childDepth < 1 || singularMove)
             return 0;
         int reduction = Reduction(improving, depth, moveNumber);
-        if (moveNumber <= 2 && ttHitAverage / TtHitAverageWindow >= 375)
+        if (moveNumber <= 2 && ttHitAverage / TtHitAverageWindow >=
+            SearchParameters::LMR::TtHitLowThreshold)
             reduction = 0;
-        if (isPVNode || ttPvEvidence) reduction -= 2;
-        if (cutNode && IsQuietMove(move)) reduction += 2;
+        if (isPVNode || ttPvEvidence) reduction -= SearchParameters::LMR::TtPvAdjustment;
+        if (cutNode && IsQuietMove(move)) reduction += SearchParameters::LMR::CutNodeAdjustment;
         const int currentPiece = 1;
         const int statScore = IsQuietMove(move)
             ? QuietStatScore(side, ply, currentPiece, move) : 0;
         const int previousStatScore = StackFrame(ply).statScore;
-        if (statScore >= -102 && previousStatScore < -114)
+        if (statScore >= SearchParameters::LMR::GoodStatScore &&
+            previousStatScore < SearchParameters::LMR::BadPreviousStatScore)
             --reduction;
-        else if (previousStatScore >= -116 && statScore < -154)
+        else if (previousStatScore >= SearchParameters::LMR::GoodPreviousStatScore &&
+                 statScore < SearchParameters::LMR::BadStatScore)
             ++reduction;
-        reduction -= statScore / 16384;
-        if (singularLMR) reduction -= 2;
-        if (ttHitAverage / TtHitAverageWindow > 500) --reduction;
-        if (!IsQuietMove(move) && depth < 8 && moveNumber > 2) ++reduction;
+        reduction -= statScore / SearchParameters::LMR::StatScoreDivisor;
+        if (singularLMR) reduction -= SearchParameters::LMR::SingularAdjustment;
+        if (ttHitAverage / TtHitAverageWindow > SearchParameters::LMR::TtHitHighThreshold) --reduction;
+        if (!IsQuietMove(move) && depth < SearchParameters::LMR::ShallowCaptureDepth &&
+            moveNumber > SearchParameters::LMR::LateCaptureMoveCount) ++reduction;
         reduction = std::max(0, reduction);
         const int reducedChildDepth = std::clamp(childDepth - reduction, 1, childDepth);
         return childDepth - reducedChildDepth;
@@ -737,14 +754,17 @@ namespace
                     const int capturedPiece = entries[index].move->endPiece;
                     static constexpr int MgValue[7] = {0, 100, 320, 330, 500, 900, 0};
                     const int victimType = capturedPiece % 8;
-                    entries[index].key = 6 * MgValue[std::min(victimType, 6)] +
+                    entries[index].key = SearchParameters::MoveOrdering::CaptureVictimMultiplier *
+                        MgValue[std::min(victimType, 6)] +
                         captureHistory[std::clamp(movingPiece, 0, 14)]
                                       [entries[index].move->endPlace]
                                       [std::clamp(capturedPiece % 8, 0, 6)];
                     if (MatchesTT(*entries[index].move))
                         ttEntry = index;
                     if (MoveLogic::SEE_GE(board, *entries[index].move,
-                                         -55 * entries[index].key / 1024))
+                                         -SearchParameters::SEE::GoodCaptureCoefficient *
+                                         entries[index].key /
+                                         SearchParameters::MoveOrdering::GoodCaptureSeeDivisor))
                         goodTactical[goodCount++] = index;
                     else
                         badTactical[badCount++] = index;
@@ -845,7 +865,8 @@ namespace
                 const int currentPiece = board.mainBoard[entries[index].move->beginPlace];
                 entries[index].key = QuietOrderingScore(
                     turn, depthGone, currentPiece, *entries[index].move);
-                if (entries[index].key >= -3000 * depth)
+                if (entries[index].key >=
+                    SearchParameters::MoveOrdering::StrongQuietDepthCoefficient * depth)
                     strongQuiets[strongQuietCount++] = index;
                 else
                     remainingQuiets[remainingQuietCount++] = index;
@@ -1001,7 +1022,7 @@ int PVSSearch::QCaptureOrderingScore(const Board& board, const Move& move)
     static constexpr int value[7] = {0, 100, 350, 350, 550, 975, 2500};
     const int movingPiece = std::clamp(board.mainBoard[move.beginPlace], 0, 14);
     const int capturedPiece = std::clamp(move.endPiece % 8, 0, 6);
-    return 6 * value[capturedPiece] +
+    return SearchParameters::MoveOrdering::CaptureVictimMultiplier * value[capturedPiece] +
         captureHistory[movingPiece][move.endPlace][capturedPiece];
 }
 
@@ -1615,7 +1636,8 @@ int CaptureOrder(const Board& b, const Move& m)
     const int mover=b.mainBoard[m.beginPlace];
     const int victim=m.endPiece>8?m.endPiece-8:m.endPiece;
     const int captured=std::clamp(victim,0,6);
-    return 6*v[captured]+captureHistory[mover][m.endPlace][captured];
+    return SearchParameters::MoveOrdering::CaptureVictimMultiplier*v[captured]+
+        captureHistory[mover][m.endPlace][captured];
 }
 
 class ProbCutPicker
@@ -1746,7 +1768,7 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
                 if(movingPiece%8!=1){Move reverse=tm;std::swap(reverse.beginPlace,reverse.endPlace);
                     UpdateHistoryByBonus(side,reverse,-StatBonus(depth));}
                 if(ss.hasCurrentMove&&IsQuietMove(prev)&&
-                   StackFrame(ply-1).moveCount<=2)
+                   StackFrame(ply-1).moveCount<=SearchParameters::History::TtCutoffPreviousMoveCount)
                     UpdateContinuationHistoriesByBonus(
                         ply-1,ss.currentMovedPiece,prev,-StatBonus(depth+1));
             }
@@ -1786,7 +1808,8 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
             rawStaticEval=ss.staticEval;
         else if(hit&&tt.staticEval!=TT_NO_STATIC_EVAL) rawStaticEval=tt.staticEval;
         else {
-            rawStaticEval=EvaluationLogic::Evaluate(b)-ss.statScore/512;
+            rawStaticEval=EvaluationLogic::Evaluate(b)-
+                ss.statScore/SearchParameters::StaticEvaluation::StatScoreDivisor;
             if(ss.excludedMove==0)
                 TranspositionTable::Store(key,0,-128,TT_EVAL_ONLY,0,rawStaticEval,pv);
         }
@@ -1798,26 +1821,36 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
     if(!inCheck){const auto&s2=StackFrame(ply-2);const auto&s4=StackFrame(ply-4);improving=s2.staticEval!=NoStaticEval?rawStaticEval>=s2.staticEval:(s4.staticEval==NoStaticEval||rawStaticEval>=s4.staticEval);}
 
     if(!pv&&!inCheck&&ss.excludedMove==0&&alpha>-MateScore::Threshold&&beta<MateScore::Threshold){
-        if(depth<2&&eval<=alpha-531){std::unique_ptr<MovePrintValue>q(QSearcher::QSearch(false,alpha,beta,prev,ply,0,false,0,m1,m2,m3,b,false,ply,true));if(q->value<=alpha)return {q->value,q->printString};}
-        if(depth<6&&eval-217*(depth-int(improving))>=beta&&eval<MateScore::Threshold)return {eval,{}};
+        if(depth<SearchParameters::Razoring::MaxDepth&&
+           eval<=alpha-SearchParameters::Razoring::Margin){std::unique_ptr<MovePrintValue>q(QSearcher::QSearch(false,alpha,beta,prev,ply,0,false,0,m1,m2,m3,b,false,ply,true));if(q->value<=alpha)return {q->value,q->printString};}
+        if(depth<SearchParameters::ReverseFutility::MaxDepth&&
+           eval-SearchParameters::ReverseFutility::DepthMargin*(depth-int(improving))>=beta&&
+           eval<MateScore::Threshold)return {eval,{}};
     }
     const bool suppressed=nullSuppressedSide==side&&ply<=nullSuppressedUntilPly;
     if(!pv&&!inCheck&&nullAllowed&&!suppressed&&ss.excludedMove==0&&prev.promotionPiece!=-1&&
-       ss.statScore<23397&&NullMoveMaterialEligible(b,side)&&eval>=beta&&eval>=rawStaticEval&&
-       rawStaticEval>=beta-32*depth+292-int(improving)*30){
-        int R=(854+68*depth)/258+std::min((eval-beta)/192,3); R=std::clamp(R,1,depth);
+       ss.statScore<SearchParameters::NullMove::StatScoreLimit&&NullMoveMaterialEligible(b,side)&&eval>=beta&&eval>=rawStaticEval&&
+       rawStaticEval>=beta-SearchParameters::NullMove::StaticEvalDepthSlope*depth+
+           SearchParameters::NullMove::StaticEvalBase-int(improving)*SearchParameters::NullMove::ImprovingMargin){
+        int R=(SearchParameters::NullMove::Base+SearchParameters::NullMove::DepthSlope*depth)/
+            SearchParameters::NullMove::Divisor+
+            std::min((eval-beta)/SearchParameters::NullMove::EvalDivisor,
+                     SearchParameters::NullMove::MaxEvalBonus); R=std::clamp(R,1,depth);
         Move n{}; n.promotionPiece=-1; MissingInfoAboutPrevStateFromMove u(b);
         GameLogic::DoMove(b,n,prev,ply,ply); PrepareChildStack(ply+1,n,0,0);
         StackFrame(ply+1).staticEval=-rawStaticEval+2*TempoForPosition(b);
         TargetResult nr=TargetSearch(false,-beta,-beta+1,depth-R,n,m2,m3,prev,b,false,ply+1,!cutNode);
         int score=-nr.value; GameLogic::UndoMove(b,n,u);
-        if(score>=beta){if(MateScore::IsMate(score))score=beta;if(depth<13)return {score,{}};
-            int os=nullSuppressedSide,ou=nullSuppressedUntilPly;nullSuppressedSide=side;nullSuppressedUntilPly=ply+3*(depth-R)/4;
+        if(score>=beta){if(MateScore::IsMate(score))score=beta;if(depth<SearchParameters::NullMove::VerificationDepth)return {score,{}};
+            int os=nullSuppressedSide,ou=nullSuppressedUntilPly;nullSuppressedSide=side;nullSuppressedUntilPly=ply+
+                SearchParameters::NullMove::SuppressionNumerator*(depth-R)/
+                SearchParameters::NullMove::SuppressionDenominator;
             TargetResult vr=TargetSearch(false,beta-1,beta,depth-R,prev,m1,m2,m3,b,false,ply,false);
             nullSuppressedSide=os;nullSuppressedUntilPly=ou;if(vr.value>=beta)return {score,{}};}
     }
     if(ss.excludedMove==0&&depth>=5&&!pv&&!inCheck&&std::abs(beta)<MateScore::Threshold){
-        const int raised=beta+189-45*int(improving);
+        const int raised=beta+SearchParameters::ProbCut::BetaMargin-
+            SearchParameters::ProbCut::ImprovingMargin*int(improving);
         ProbCutPicker probCutPicker(b,depth,ply,hit?tt.bestMove:0,
                                     raised-rawStaticEval);
         int tried=0;
@@ -1868,7 +1901,7 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
         const int childDepth=depth-1+extension;
         const bool lmr=depth>=3&&ss.moveCount>1&&
             (quiet||pruneQuiets||rawStaticEval+CapturedEndgameValue(*move)<=alpha||cutNode||
-             ttHitAverage/TtHitAverageWindow<375);
+             ttHitAverage/TtHitAverageWindow<SearchParameters::LMR::TtHitLowThreshold);
         const QuietHistoryValues quietHistory=quiet
             ? ReadQuietHistory(side,ply,movingPiece,*move) : QuietHistoryValues{};
         const int currentStat=quiet?quietHistory.statScore():0;
@@ -1877,33 +1910,44 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
         int lmrDepth=childDepth;
         if(lmr){
             int r=Reduction(improving,depth,ss.moveCount);
-            if(ttPv)r-=2;
-            if(ttHitAverage/TtHitAverageWindow>500)--r;
-            if(StackFrame(ply-1).moveCount>14)--r;if(singularLMR)r-=2;
+            if(ttPv)r-=SearchParameters::LMR::TtPvAdjustment;
+            if(ttHitAverage/TtHitAverageWindow>SearchParameters::LMR::TtHitHighThreshold)--r;
+            if(StackFrame(ply-1).moveCount>SearchParameters::LMR::PreviousMoveCountThreshold)--r;
+            if(singularLMR)r-=SearchParameters::LMR::SingularAdjustment;
             if(quiet){
-                if(ttCapture)++r;
-                if(cutNode)r+=2;
+                if(ttCapture)r+=SearchParameters::LMR::TtCaptureAdjustment;
+                if(cutNode)r+=SearchParameters::LMR::CutNodeAdjustment;
                 else if(movingPiece%8!=6 || std::abs(move->endPlace-move->beginPlace)!=2){
                     Move reverse=*move;std::swap(reverse.beginPlace,reverse.endPlace);
                     reverse.PublicFlag=0;reverse.promotionPiece=0;
-                    if(!MoveLogic::SEE_GE(b,reverse,0))r-=2;
+                    if(!MoveLogic::SEE_GE(b,reverse,0))r-=SearchParameters::LMR::EscapeCaptureAdjustment;
                 }
-                if(currentStat>=-102&&previousStat<-114)--r;
-                else if(previousStat>=-116&&currentStat<-154)++r;
-                r-=currentStat/16384;
-            } else if(depth<8&&ss.moveCount>2) ++r;
+                if(currentStat>=SearchParameters::LMR::GoodStatScore&&
+                   previousStat<SearchParameters::LMR::BadPreviousStatScore)--r;
+                else if(previousStat>=SearchParameters::LMR::GoodPreviousStatScore&&
+                        currentStat<SearchParameters::LMR::BadStatScore)++r;
+                r-=currentStat/SearchParameters::LMR::StatScoreDivisor;
+            } else if(depth<SearchParameters::LMR::ShallowCaptureDepth&&
+                      ss.moveCount>SearchParameters::LMR::LateCaptureMoveCount) ++r;
             r=std::clamp(r,0,std::max(0,childDepth-1));lmrDepth=childDepth-r;
         }
         if(ply>0&&NullMoveMaterialEligible(b,side)&&best>MateScore::MatedAtPly(SearchStackSize-1)){
             if(quiet&&!givesCheck){
                 const int combined=quietHistory.combinedHistory();
                 const SearchStackFrame& previousFrame=StackFrame(ply-1);
-                if(lmrDepth<4+(previousFrame.statScore>0||previousFrame.moveCount==1)&&
-                   quietHistory.c1<0&&quietHistory.c2<0)continue;
-                if(lmrDepth<6&&!inCheck&&rawStaticEval+235+172*lmrDepth<=alpha&&combined<25000)continue;
-                const int see=-(32-std::min(lmrDepth,18))*lmrDepth*lmrDepth;
+                if(lmrDepth<SearchParameters::CounterMovePruning::ReducedDepthBase+
+                    (previousFrame.statScore>0||previousFrame.moveCount==1)&&
+                   quietHistory.c1<SearchParameters::CounterMovePruning::ContinuationThreshold&&
+                   quietHistory.c2<SearchParameters::CounterMovePruning::ContinuationThreshold)continue;
+                if(lmrDepth<SearchParameters::ParentFutility::MaxReducedDepth&&!inCheck&&
+                   rawStaticEval+SearchParameters::ParentFutility::BaseMargin+
+                   SearchParameters::ParentFutility::DepthMargin*lmrDepth<=alpha&&
+                   combined<SearchParameters::History::ParentFutilityLimit)continue;
+                const int see=-(SearchParameters::SEE::QuietBase-
+                    std::min(lmrDepth,SearchParameters::SEE::QuietDepthCap))*lmrDepth*lmrDepth;
                 if(!MoveLogic::SEE_GE(b,*move,see))continue;
-            } else if(!MoveLogic::SEE_GE(b,*move,-194*depth))continue;
+            } else if(!MoveLogic::SEE_GE(b,*move,
+                       -SearchParameters::SEE::TacticalDepthMargin*depth))continue;
         }
         MissingInfoAboutPrevStateFromMove u(b,*move);GameLogic::DoMove(b,*move,prev,depth,ply,&u);
         if(BoardLogic::UnderAttack(b,b.pieces[side*8+6].front(),b.sideToMove)){GameLogic::UndoMove(b,*move,u);--ss.moveCount;continue;}
@@ -1913,7 +1957,8 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
         else {child=TargetSearch(false,-alpha-1,-alpha,lmrDepth,*move,m2,m3,prev,b,true,ply+1,lmr?true:!cutNode);value=-child.value;
             if(lmr&&value>alpha&&lmrDepth!=childDepth){child=TargetSearch(false,-alpha-1,-alpha,childDepth,*move,m2,m3,prev,b,true,ply+1,!cutNode);value=-child.value;
                 if(quiet){int bonus=value>alpha?StatBonus(childDepth):-StatBonus(childDepth);
-                    if(ply<PVSSearch::MaxKillerPly&&PVSSearch::killers[ply][0]==*move)bonus+=bonus/4;
+                    if(ply<PVSSearch::MaxKillerPly&&PVSSearch::killers[ply][0]==*move)
+                        bonus+=bonus/SearchParameters::History::LmrKillerBonusDivisor;
                     UpdateContinuationHistoriesByBonus(ply,movingPiece,*move,bonus);}}
             if(pv&&value>alpha&&value<beta){child=TargetSearch(true,-beta,-alpha,childDepth,*move,m2,m3,prev,b,true,ply+1,false);value=-child.value;}}
         GameLogic::UndoMove(b,*move,u); if(quiet)quietTried.push_back(move);else captureTried.push_back(move);
@@ -2283,7 +2328,8 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             }
         }
 
-        if (depth < 6 && staticValue - FutilityMargin(depth, improving) >= beta &&
+        if (depth < SearchParameters::ReverseFutility::MaxDepth &&
+            staticValue - FutilityMargin(depth, improving) >= beta &&
             staticValue < MateScore::Threshold)
         {
             retValue->value = staticValue;
@@ -2299,7 +2345,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
     if (isNullMoveAllowed && prevMove.promotionPiece != -1 && !isPVNode &&
         !nodeInCheck && !MAtESearch && depth >= 1 &&
         alpha > -159800 && beta < 159800 && !nullSuppressed &&
-        ss.statScore < 23397 && ss.excludedMove == 0)
+        ss.statScore < SearchParameters::NullMove::StatScoreLimit && ss.excludedMove == 0)
     {
         const int nonPawnMaterialCount =
             static_cast<int>(board4.pieces[turn * 8 + 2].size() +
@@ -2319,10 +2365,16 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
         {
             int staticEval = ss.staticEval;
             if (staticEval >= beta &&
-                staticEval >= beta - 32 * depth + 292 - int(improving) * 30)
+                staticEval >= beta - SearchParameters::NullMove::StaticEvalDepthSlope * depth +
+                    SearchParameters::NullMove::StaticEvalBase -
+                    int(improving) * SearchParameters::NullMove::ImprovingMargin)
             {
-                int R = (854 + 68 * depth) / 258 +
-                    std::min((staticEval - beta) / 192, 3);
+                int R = (SearchParameters::NullMove::Base +
+                         SearchParameters::NullMove::DepthSlope * depth) /
+                        SearchParameters::NullMove::Divisor +
+                    std::min((staticEval - beta) /
+                                 SearchParameters::NullMove::EvalDivisor,
+                             SearchParameters::NullMove::MaxEvalBonus);
                 R = std::min(R, depth - 1);
                 Move nullMove{};
                 nullMove.promotionPiece = -1;
@@ -2443,7 +2495,9 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
         if (!isPVNode && !nodeInCheck && !MAtESearch && depth >= ProbCutMinDepth &&
             beta < 159500 && alpha > -159500)
         {
-            const int probBeta = std::min(200000, beta + 189 - 45 * int(improving));
+            const int probBeta = std::min(200000,
+                beta + SearchParameters::ProbCut::BetaMargin -
+                SearchParameters::ProbCut::ImprovingMargin * int(improving));
             int forcingMovesTried = 0;
             MovePicker probPicker(board4, depth, depthGone, turn, prevMove,
                                   ttHit ? ttEntry.bestMove : 0);
@@ -2761,27 +2815,33 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 bool valueFutilityCandidate = false;
                 if (pruningContext && !highConfidenceMove &&
                     IsQuietMove(*move) &&
-                    expectedReducedDepth < 6)
+                    expectedReducedDepth < SearchParameters::ParentFutility::MaxReducedDepth)
                 {
                     if (staticEval == -200000)
                         staticEval = ss.staticEval;
-                    valueFutilityCandidate = staticEval + 235 +
-                        172 * expectedReducedDepth <= alpha && combinedHistory < 25000;
+                    valueFutilityCandidate = staticEval +
+                        SearchParameters::ParentFutility::BaseMargin +
+                        SearchParameters::ParentFutility::DepthMargin * expectedReducedDepth <= alpha &&
+                        combinedHistory < SearchParameters::History::ParentFutilityLimit;
                 }
                 const bool counterHistoryPruningCandidate = pruningContext &&
                     IsQuietMove(*move) &&
-                    expectedReducedDepth < 4 +
+                    expectedReducedDepth < SearchParameters::CounterMovePruning::ReducedDepthBase +
                         (ss.statScore > 0 || ss.moveCount == 1) &&
                     ContinuationHistoryScoreAt(depthGone, 1,
-                        board4.mainBoard[move->beginPlace], *move) < 0 &&
+                        board4.mainBoard[move->beginPlace], *move) <
+                            SearchParameters::CounterMovePruning::ContinuationThreshold &&
                     ContinuationHistoryScoreAt(depthGone, 2,
-                        board4.mainBoard[move->beginPlace], *move) < 0;
+                        board4.mainBoard[move->beginPlace], *move) <
+                            SearchParameters::CounterMovePruning::ContinuationThreshold;
                 const bool seePruningCandidate = pruningContext &&
                     !highConfidenceMove &&
                     ((IsQuietMove(*move) && move->value <
-                        -(32 - std::min(expectedReducedDepth, 18)) *
+                        -(SearchParameters::SEE::QuietBase -
+                          std::min(expectedReducedDepth, SearchParameters::SEE::QuietDepthCap)) *
                          expectedReducedDepth * expectedReducedDepth) ||
-                     (!IsQuietMove(*move) && move->value < -194 * depth));
+                     (!IsQuietMove(*move) && move->value <
+                         -SearchParameters::SEE::TacticalDepthMargin * depth));
 
                 boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
                 MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);

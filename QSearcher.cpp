@@ -9,6 +9,7 @@
 #include "PVSSearch.h"
 #include "RepetitionHistory.h"
 #include "Search.h"
+#include "SearchParameters.h"
 #include "TranspositionTable.h"
 #include <algorithm>
 #include <array>
@@ -124,7 +125,7 @@ Result SearchQ(Board& b,Move& prev,int alpha,int beta,int ply,int qDepth,bool pv
     if(!check){staticEval=hit&&tt.staticEval!=TT_NO_STATIC_EVAL?tt.staticEval:EvaluationLogic::Evaluate(b);best=staticEval;if(hit){uint8_t f=TTBaseFlag(tt.flag);if(f==TT_LOWER_BOUND&&ttValue>best)best=ttValue;else if(f==TT_UPPER_BOUND&&ttValue<best)best=ttValue;}if(best>=beta){TranspositionTable::Store(b.ZobristHashCode,MateScore::ToTranspositionTable(best,ply),ttDepth,TT_LOWER_BOUND,0,staticEval,pv);return {best,{}};}if(best>alpha)alpha=best;}
     bool includeChecks=qDepth>=QChecks;
     QMovePicker picker(b,qDepth,ply,check,prev,hit?tt.bestMove:0);
-    int futilityBase=best+154,legal=0,moveCount=0;uint16_t bestMove=0;std::string bestPv;
+    int futilityBase=best+SearchParameters::QSearch::FutilityMargin,legal=0,moveCount=0;uint16_t bestMove=0;std::string bestPv;
     while(Move*m=picker.Next()){++moveCount;bool capture=m->endPiece>0||(m->PublicFlag&Option::PowerTwo[6]);bool promo=m->promotionPiece>0;if(!m->givesCheckComputed){m->givesCheck=MoveLogic::MoveGivesCheck(b,*m);m->givesCheckComputed=true;}bool givesCheck=m->givesCheck;if(!check&&!capture&&!promo&&!(includeChecks&&givesCheck))continue;
         const bool advancedPawn=Type(b.mainBoard[m->beginPlace])==1&&
             ((side==0&&m->endPlace/8>=5)||(side==1&&m->endPlace/8<=2));
