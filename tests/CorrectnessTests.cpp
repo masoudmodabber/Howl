@@ -3196,6 +3196,109 @@ int RunFutilityCastlingRegressionTest()
     return 0;
 }
 
+int RunCastlingLegalityRegressionTest()
+{
+    auto generates = [](const char* fen, const std::string& expected) {
+        std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+        AttackerState emptyWhite{};
+        AttackerState emptyBlack{};
+        MoveList moves = MoveLogic::MoveGenerator(
+            *board, 4, 0, false, false, emptyWhite, emptyBlack, true);
+        bool found = false;
+        for (int i = 0; i < moves.count; ++i)
+            found |= MoveToString(*moves.moves[i]) == expected;
+        PVSSearch::deleteMoveList(moves);
+        return found;
+    };
+
+    const bool fromCheck = generates("k3r3/8/8/8/8/8/8/R3K2R w KQ - 0 1", "e1g1");
+    const bool throughCheck = generates("k4r2/8/8/8/8/8/8/R3K2R w KQ - 0 1", "e1g1");
+    const bool intoCheck = generates("k5r1/8/8/8/8/8/8/R3K2R w KQ - 0 1", "e1g1");
+    const bool legalCastle = generates("k7/8/8/8/8/8/8/R3K2R w KQ - 0 1", "e1g1");
+    if (fromCheck || throughCheck || intoCheck || !legalCastle)
+    {
+        std::cerr << "Focused castling start/transit/destination legality failed: "
+                  << fromCheck << '/' << throughCheck << '/' << intoCheck << '/'
+                  << legalCastle << '\n';
+        return 1;
+    }
+
+    std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(
+        "r3kr2/2p2p2/4bQ2/p3P3/2p3P1/q6P/2P1KRB1/3R4 b q - 0 34"));
+    Move previous{};
+    MoveList first = MoveLogic::MoveGenerator(*board, 4, 0);
+    Move* c6 = nullptr;
+    for (int i = 0; i < first.count; ++i)
+        if (MoveToString(*first.moves[i]) == "c7c6") c6 = first.moves[i];
+    if (!c6) { PVSSearch::deleteMoveList(first); return 1; }
+    MissingInfoAboutPrevStateFromMove undoC6(*board, *c6);
+    GameLogic::DoMove(*board, *c6, previous, 4, 0, &undoC6);
+
+    MoveList second = MoveLogic::MoveGenerator(*board, 3, 1);
+    Move* bc6 = nullptr;
+    for (int i = 0; i < second.count; ++i)
+        if (MoveToString(*second.moves[i]) == "g2c6") bc6 = second.moves[i];
+    if (!bc6) { PVSSearch::deleteMoveList(second); PVSSearch::deleteMoveList(first); return 1; }
+    MissingInfoAboutPrevStateFromMove undoBc6(*board, *bc6);
+    GameLogic::DoMove(*board, *bc6, *c6, 3, 1, &undoBc6);
+
+    AttackerState emptyWhite{};
+    AttackerState emptyBlack{};
+    MoveList replies = MoveLogic::MoveGenerator(
+        *board, 2, 2, false, false, emptyWhite, emptyBlack, true);
+    std::vector<std::string> legalReplies;
+    bool mateConfirmed = false;
+    for (int i = 0; i < replies.count; ++i)
+    {
+        Move& reply = *replies.moves[i];
+        MissingInfoAboutPrevStateFromMove undo(*board, reply);
+        GameLogic::DoMove(*board, reply, *bc6, 2, 2, &undo);
+        if (!BoardLogic::UnderAttack(*board, board->pieces[14].front(), board->sideToMove))
+        {
+            legalReplies.push_back(MoveToString(reply));
+            MoveList whiteMoves = MoveLogic::MoveGenerator(*board, 1, 3);
+            for (int j = 0; j < whiteMoves.count; ++j)
+            {
+                Move& mate = *whiteMoves.moves[j];
+                if (MoveToString(mate) != "c6d7") continue;
+                MissingInfoAboutPrevStateFromMove mateUndo(*board, mate);
+                GameLogic::DoMove(*board, mate, reply, 1, 3, &mateUndo);
+                const bool inCheck = BoardLogic::UnderAttack(
+                    *board, board->pieces[14].front(), !board->sideToMove);
+                MoveList finalMoves = MoveLogic::MoveGenerator(*board, 0, 4);
+                int legalFinalMoves = 0;
+                for (int k = 0; k < finalMoves.count; ++k)
+                {
+                    MissingInfoAboutPrevStateFromMove finalUndo(*board, *finalMoves.moves[k]);
+                    GameLogic::DoMove(*board, *finalMoves.moves[k], mate, 0, 4, &finalUndo);
+                    if (!BoardLogic::UnderAttack(
+                            *board, board->pieces[14].front(), board->sideToMove))
+                        ++legalFinalMoves;
+                    GameLogic::UndoMove(*board, *finalMoves.moves[k], finalUndo);
+                }
+                PVSSearch::deleteMoveList(finalMoves);
+                mateConfirmed = inCheck && legalFinalMoves == 0;
+                GameLogic::UndoMove(*board, mate, mateUndo);
+            }
+            PVSSearch::deleteMoveList(whiteMoves);
+        }
+        GameLogic::UndoMove(*board, reply, undo);
+    }
+    const bool ok = legalReplies.size() == 1 && legalReplies.front() == "e6d7" &&
+                    mateConfirmed;
+    PVSSearch::deleteMoveList(replies);
+    GameLogic::UndoMove(*board, *bc6, undoBc6);
+    PVSSearch::deleteMoveList(second);
+    GameLogic::UndoMove(*board, *c6, undoC6);
+    PVSSearch::deleteMoveList(first);
+    if (!ok)
+    {
+        std::cerr << "Bc6 castling regression legal reply set failed\n";
+        return 1;
+    }
+    return 0;
+}
+
 int RunUCIMovetime()
 {
     UCI::IsRelease = true;
@@ -5478,6 +5581,10 @@ int main(int argc, char* argv[])
             else if (std::string(argv[2]) == "futility_castling_regression")
             {
                 result = RunFutilityCastlingRegressionTest();
+            }
+            else if (std::string(argv[2]) == "castling_legality_regression")
+            {
+                result = RunCastlingLegalityRegressionTest();
             }
             else
             {

@@ -322,6 +322,16 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone, bo
     int *mainBoard = thisBoard.mainBoard;
     long long wholeBoard = whitePieces | blackPieces;
 
+    auto castleSquaresSafe = [&](bool white, int start, int transit, int destination)
+    {
+        const AttackerState opponentAttacks = white
+            ? SetBlackAttacker(thisBoard)
+            : SetWhiteAttacker(thisBoard);
+        return opponentAttacks.pieceCounts[start] == 0 &&
+               opponentAttacks.pieceCounts[transit] == 0 &&
+               opponentAttacks.pieceCounts[destination] == 0;
+    };
+
     int enemyKingPos = -1;
     long long enemyKingBit = 0;
     long long friendlySliderRayMask = 0;
@@ -1243,13 +1253,13 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone, bo
                             moveList.moves[moveList.count++] = newMove;
                         }
                     }
-                    if (thisBoard.whiteSmallCastle && (!onlyCapturesAndChecks || (includeQuietChecks && (AttackPlaces::LineMask[5][enemyKingPos] != 0 || AttackPlaces::LineMask[6][enemyKingPos] != 0))) && blackAttacker.pieceCounts[4] == 0 && blackAttacker.pieceCounts[5] == 0 && blackAttacker.pieceCounts[6] == 0 && mainBoard[5] == 0 && mainBoard[6] == 0)
+                    if (thisBoard.whiteSmallCastle && (!onlyCapturesAndChecks || (includeQuietChecks && (AttackPlaces::LineMask[5][enemyKingPos] != 0 || AttackPlaces::LineMask[6][enemyKingPos] != 0))) && castleSquaresSafe(true, 4, 5, 6) && mainBoard[5] == 0 && mainBoard[6] == 0)
                     {
                         Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][16]);
                         newMove->value = 50;
                         complicatedMoves[complicatedCount++] = newMove;
                     }
-                    if (thisBoard.whiteBigCastle && (!onlyCapturesAndChecks || (includeQuietChecks && (AttackPlaces::LineMask[3][enemyKingPos] != 0 || AttackPlaces::LineMask[2][enemyKingPos] != 0))) && blackAttacker.pieceCounts[4] == 0 && blackAttacker.pieceCounts[3] == 0 && blackAttacker.pieceCounts[2] == 0 && mainBoard[3] == 0 && mainBoard[2] == 0 && mainBoard[1] == 0)
+                    if (thisBoard.whiteBigCastle && (!onlyCapturesAndChecks || (includeQuietChecks && (AttackPlaces::LineMask[3][enemyKingPos] != 0 || AttackPlaces::LineMask[2][enemyKingPos] != 0))) && castleSquaresSafe(true, 4, 3, 2) && mainBoard[3] == 0 && mainBoard[2] == 0 && mainBoard[1] == 0)
                     {
                         Move *newMove = MoveCopy(PieceMoves::WhiteKingMoves[piecePosition][17]);
                         newMove->value = 50;
@@ -2156,13 +2166,13 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone, bo
                             moveList.moves[moveList.count++] = newMove;
                         }
                     }
-                    if (thisBoard.blackSmallCastle && (!onlyCapturesAndChecks || (includeQuietChecks && (AttackPlaces::LineMask[61][enemyKingPos] != 0 || AttackPlaces::LineMask[62][enemyKingPos] != 0))) && whiteAttacker.pieceCounts[60] == 0 && whiteAttacker.pieceCounts[61] == 0 && whiteAttacker.pieceCounts[62] == 0 && mainBoard[61] == 0 && mainBoard[62] == 0)
+                    if (thisBoard.blackSmallCastle && (!onlyCapturesAndChecks || (includeQuietChecks && (AttackPlaces::LineMask[61][enemyKingPos] != 0 || AttackPlaces::LineMask[62][enemyKingPos] != 0))) && castleSquaresSafe(false, 60, 61, 62) && mainBoard[61] == 0 && mainBoard[62] == 0)
                     {
                         Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][16]);
                         newMove->value = 25;
                         complicatedMoves[complicatedCount++] = newMove;
                     }
-                    if (thisBoard.blackBigCastle && (!onlyCapturesAndChecks || (includeQuietChecks && (AttackPlaces::LineMask[59][enemyKingPos] != 0 || AttackPlaces::LineMask[58][enemyKingPos] != 0))) && whiteAttacker.pieceCounts[60] == 0 && whiteAttacker.pieceCounts[59] == 0 && whiteAttacker.pieceCounts[58] == 0 && mainBoard[59] == 0 && mainBoard[58] == 0 && mainBoard[57] == 0)
+                    if (thisBoard.blackBigCastle && (!onlyCapturesAndChecks || (includeQuietChecks && (AttackPlaces::LineMask[59][enemyKingPos] != 0 || AttackPlaces::LineMask[58][enemyKingPos] != 0))) && castleSquaresSafe(false, 60, 59, 58) && mainBoard[59] == 0 && mainBoard[58] == 0 && mainBoard[57] == 0)
                     {
                         Move *newMove = MoveCopy(PieceMoves::BlackKingMoves[piecePosition][17]);
                         newMove->value = 25;
