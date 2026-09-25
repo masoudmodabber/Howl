@@ -82,6 +82,20 @@ inline void GenerateQueenEndGame(const int parameters[5], int output[28])
     std::fill(output + 13, output + 28, anchors[4]);
 }
 
+inline void GenerateCandQueenMiddleGame(const int parameters[4], int output[28])
+{
+    // Expands 4 parameters by tying the adjacent saturation increments p3=p4:
+    const int fullParameters[5] = {parameters[0], parameters[1], parameters[2], parameters[3], parameters[3]};
+    GenerateQueenMiddleGame(fullParameters, output);
+}
+
+inline void GenerateCandQueenEndGame(const int parameters[4], int output[28])
+{
+    // Expands 4 parameters by using the structural terminal slope constant 27:
+    const int fullParameters[5] = {parameters[0], parameters[1], parameters[2], 31, 27};
+    GenerateQueenEndGame(fullParameters, output);
+}
+
 } // namespace MobilityV2
 
 #endif // HOWL_MOBILITY_V2_H

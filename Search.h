@@ -30,6 +30,7 @@ public:
 
     static int maxDepth;
     static int64_t maxNodes;
+    static bool strictNodeLimit;
     static bool isMoveTime;
 
     static int moveCount;

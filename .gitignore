@@ -218,14 +218,43 @@ match-engines/
 tuner-corpus/
 spsa_state/
 spsa_state_*/
-.cloud_spsa.json
 *.tsv
+*.json
+/cleanup-report.md
+
+# Tuner sample directory remains visible for non-TSV/JSON inputs.
+!tuner-samples/
+
+# Superseded move-quality pilot output is reproducible and disposable.
+move-quality-pilot/
+
+# Transient local objects generated inside persistent tuning runs.
+move-quality-tuning/run/iterations/
+move-quality-tuning/run/train-checkpoints/
+move-quality-tuning/run/validation-checkpoints/
+move-quality-tuning/run/state/
+move-quality-tuning/run/vectors/
+move-quality-tuning/run/stockfish-cache/
+move-quality-tuning/run/logs/
+move-quality-tuning/structural-test/
+
+# Profiling and generated diagnostic plots.
+perf.data*
+gmon.out
+*.profraw
+*.profdata
+diagnostics/**/*.png
+diagnostics/**/*.jpg
+diagnostics/**/*.svg
 
 # Scratch / temporary investigation files
 scratch/
 
 # Diagnostics and benchmark artifacts
 diagnostics/
+search-sensitivity/
+evaluator-analysis/
+move-quality-tuning/
 
 # CTest outputs
 Testing/

@@ -182,6 +182,64 @@ public:
     static int QueenMoveCountValue[3][28];
     static int KingMoveCountValueMiddleGame[9];
     static int KingMoveCountValue[3][9];
+    // Experimental Representation Switch (Candidate Attack Model)
+    static bool UseExperimentalAttackModel;
+    static int AttackEndgameMultiplierPercent;
+    // Experimental Representation Switch (Candidate PieceSquare Model: 86 parameters)
+    static bool UseExperimentalPieceSquareModel;
+    // Experimental Representation Switch (Candidate QueenMobility Model: 8 parameters)
+    static bool UseExperimentalQueenMobilityModel;
+    // Experimental Representation Switch (Candidate KingSafety Model: 17 parameters)
+    static bool UseExperimentalKingSafetyModel;
+    // Experimental Representation Switch (Candidate EndgameWeights Model: 3 parameters)
+    static bool UseExperimentalEndgameWeightsModel;
+    static int CandLoneKingPushWeight;
+    static int CandLoneKingConfinementWeight;
+    static int CandLoneKingRestrictedNeighbourWeight;
+    // Experimental Representation Switch (Candidate Inline Model: 7 parameters)
+    static bool UseExperimentalInlineModel;
+    static int CandBishopOpenFilePawnScale;
+    static int CandTempoMiddleGame;
+    static int CandTempoEndGame;
+    static int CandOppositeColorBishopMiddleGameScalePermille;
+    static int CandOppositeColorBishopEndGameScalePermille;
+    static int CandEndgamePawnAdvancementRankMultiplier;
+    static int CandPieceAttackScalePercent;
+    // Experimental Representation Switch (Candidate RookFile Model: 4 parameters)
+    static bool UseExperimentalRookFileModel;
+    static int CandRookOpenFileMiddleGame;
+    static int CandRookOpenFileEndGame;
+    static int CandRookSemiOpenFileMiddleGame;
+    static int CandRookSemiOpenFileEndGame;
+    static int CandKingAttackerMinorWeight;
+    static int CandKingAttackerRookWeight;
+    static int CandKingAttackerQueenWeight;
+    static int CandKingDefenderPawnWeight;
+    static int CandKingDefenderMinorWeight;
+    static int CandKingDefenderRookWeight;
+    static int CandKingDefenderQueenWeight;
+    static int CandKingShelterSecondRankDanger;
+    static int CandKingShelterAdvancedPawnDanger;
+    static int CandKingShelterMissingPawnDanger;
+    static int CandKingUndefendedZoneDanger;
+    static int CandKingAdditionalZoneAttackerDanger;
+    static int CandKingSemiOpenLineDanger;
+    static int CandKingOpenLineDanger;
+    static int CandKingDiagonalLineDanger;
+    static int CandKingControlledEscapeDanger;
+    static int CandKingInfiltratedQueenWeight;
+    static int CandQueenMobilityMiddleGameParameters[4];
+    static int CandQueenMobilityEndGameParameters[4];
+    static int CandPawnPieceSquareMiddleGameParameters[5];
+    static int CandKnightPieceSquareMiddleGameParameters[10];
+    static int CandBishopPieceSquareMiddleGameParameters[11];
+    static int CandRookPieceSquareMiddleGameParameters[5];
+    static int CandQueenPieceSquareMiddleGameParameters[5];
+    static int CandPawnPieceSquareEndGameParameters[5];
+    static int CandKnightPieceSquareEndGameParameters[10];
+    static int CandBishopPieceSquareEndGameParameters[11];
+    static int CandRookPieceSquareEndGameParameters[5];
+    static int CandQueenPieceSquareEndGameParameters[5];
 
     static int PawnAttackValueMiddleGame[16];
     static int PawnAttackValue[3][16];

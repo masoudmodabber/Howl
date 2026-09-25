@@ -19,6 +19,28 @@ add_executable(howl_tuner
 target_include_directories(howl_tuner PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(howl_tuner PRIVATE fathom)
 
+add_executable(howl_search_tuner_objective
+    tools/SearchTunerObjective.cpp
+    ${TUNER_ENGINE_SOURCES}
+)
+target_include_directories(howl_search_tuner_objective PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(howl_search_tuner_objective PRIVATE fathom)
+
+add_executable(howl_eval_identifiability
+    tools/EvaluationIdentifiability.cpp
+    ${TUNER_ENGINE_SOURCES}
+)
+target_include_directories(howl_eval_identifiability PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(howl_eval_identifiability PRIVATE fathom)
+
+add_executable(howl_extract_canonical_responses
+    tools/ExtractCanonical192Responses.cpp
+    ${TUNER_ENGINE_SOURCES}
+)
+target_include_directories(howl_extract_canonical_responses PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_definitions(howl_extract_canonical_responses PRIVATE HOWL_CORRECTNESS_TESTING=1)
+target_link_libraries(howl_extract_canonical_responses PRIVATE fathom)
+
 include(CTest)
 
 if(BUILD_TESTING)

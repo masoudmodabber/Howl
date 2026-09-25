@@ -419,6 +419,64 @@ int Option::QueenMoveCountValueMiddleGame[28] = {};
 int Option::QueenMoveCountValue[3][28] = {};
 int Option::KingMoveCountValueMiddleGame[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 int Option::KingMoveCountValue[3][9] = {};
+bool Option::UseExperimentalAttackModel = true;
+int Option::AttackEndgameMultiplierPercent = 140;
+bool Option::UseExperimentalPieceSquareModel = true;
+bool Option::UseExperimentalQueenMobilityModel = true;
+bool Option::UseExperimentalKingSafetyModel = true;
+bool Option::UseExperimentalEndgameWeightsModel = true;
+bool Option::UseExperimentalInlineModel = true;
+
+int Option::CandLoneKingPushWeight = 22;
+int Option::CandLoneKingConfinementWeight = -10;
+int Option::CandLoneKingRestrictedNeighbourWeight = -26;
+
+int Option::CandBishopOpenFilePawnScale = 2;
+int Option::CandTempoMiddleGame = 16;
+int Option::CandTempoEndGame = 41;
+int Option::CandOppositeColorBishopMiddleGameScalePermille = 940;
+int Option::CandOppositeColorBishopEndGameScalePermille = 794;
+int Option::CandEndgamePawnAdvancementRankMultiplier = 2;
+int Option::CandPieceAttackScalePercent = 135;
+
+bool Option::UseExperimentalRookFileModel = true;
+int Option::CandRookOpenFileMiddleGame = 12;
+int Option::CandRookOpenFileEndGame = 2;
+int Option::CandRookSemiOpenFileMiddleGame = -4;
+int Option::CandRookSemiOpenFileEndGame = -26;
+
+int Option::CandKingAttackerMinorWeight = 9;
+int Option::CandKingAttackerRookWeight = 8;
+int Option::CandKingAttackerQueenWeight = 8;
+int Option::CandKingDefenderPawnWeight = 12;
+int Option::CandKingDefenderMinorWeight = 108;
+int Option::CandKingDefenderRookWeight = 6;
+int Option::CandKingDefenderQueenWeight = 135;
+int Option::CandKingShelterSecondRankDanger = 1;
+int Option::CandKingShelterAdvancedPawnDanger = 20;
+int Option::CandKingShelterMissingPawnDanger = 2;
+int Option::CandKingUndefendedZoneDanger = 4;
+int Option::CandKingAdditionalZoneAttackerDanger = 55;
+int Option::CandKingSemiOpenLineDanger = 36;
+int Option::CandKingOpenLineDanger = 26;
+int Option::CandKingDiagonalLineDanger = 9;
+int Option::CandKingControlledEscapeDanger = 22;
+int Option::CandKingInfiltratedQueenWeight = 19;
+
+int Option::CandQueenMobilityMiddleGameParameters[] = {-6, 3, 15, 4};
+int Option::CandQueenMobilityEndGameParameters[] = {10, 30, 33, 31};
+
+int Option::CandPawnPieceSquareMiddleGameParameters[] = {-52, 6, 14, -28, 6};
+int Option::CandKnightPieceSquareMiddleGameParameters[] = {-2, 0, 0, -5, -3, -2, 4, 4, -14, 29};
+int Option::CandBishopPieceSquareMiddleGameParameters[] = {-49, -8, -5, -1, -12, -77, 0, -2, 12, 24, 29};
+int Option::CandRookPieceSquareMiddleGameParameters[] = {-108, 6, 10, 10, 2};
+int Option::CandQueenPieceSquareMiddleGameParameters[] = {18, 0, -6, 14, -19};
+
+int Option::CandPawnPieceSquareEndGameParameters[] = {40, 6, -16, -18, 20};
+int Option::CandKnightPieceSquareEndGameParameters[] = {58, 14, 4, -2, 9, 12, 24, 12, 20, -24};
+int Option::CandBishopPieceSquareEndGameParameters[] = {83, 4, 9, -1, 18, 93, 10, 2, 12, 10, -33};
+int Option::CandRookPieceSquareEndGameParameters[] = {126, 10, -6, 32, -8};
+int Option::CandQueenPieceSquareEndGameParameters[] = {26, 8, 28, -58, 12};
 
 int Option::PawnAttackValueMiddleGame[] = {0, 0, 20, 20, 76, 86, 0, 0, 0, 0, 20, 20, 76, 86, 0, 0};
 int Option::PawnAttackValue[3][16] = {};
@@ -807,20 +865,45 @@ void Option::Initialize()
         MobilityV2::GenerateBishop(BishopMobilityEndGameParameters, BishopMoveCountValueEndGame);
         MobilityV2::GenerateRook(RookMobilityMiddleGameParameters, RookMoveCountValueMiddleGame);
         MobilityV2::GenerateRook(RookMobilityEndGameParameters, RookMoveCountValueEndGame);
-        MobilityV2::GenerateQueenMiddleGame(QueenMobilityMiddleGameParameters, QueenMoveCountValueMiddleGame);
-        MobilityV2::GenerateQueenEndGame(QueenMobilityEndGameParameters, QueenMoveCountValueEndGame);
 
-        PieceSquareModel::GeneratePawn(PawnPieceSquareMiddleGameParameters, PawnInValueWhiteMiddleGame);
-        PieceSquareModel::GenerateMinor(KnightPieceSquareMiddleGameParameters, KnightInValueWhiteMiddleGame);
-        PieceSquareModel::GenerateMinor(BishopPieceSquareMiddleGameParameters, BishopInValueWhiteMiddleGame);
-        PieceSquareModel::GenerateMajor(RookPieceSquareMiddleGameParameters, RookInValueWhiteMiddleGame);
-        PieceSquareModel::GenerateMajor(QueenPieceSquareMiddleGameParameters, QueenInValueWhiteMiddleGame);
+        if (__builtin_expect(!UseExperimentalQueenMobilityModel, 1))
+        {
+            MobilityV2::GenerateQueenMiddleGame(QueenMobilityMiddleGameParameters, QueenMoveCountValueMiddleGame);
+            MobilityV2::GenerateQueenEndGame(QueenMobilityEndGameParameters, QueenMoveCountValueEndGame);
+        }
+        else
+        {
+            MobilityV2::GenerateCandQueenMiddleGame(CandQueenMobilityMiddleGameParameters, QueenMoveCountValueMiddleGame);
+            MobilityV2::GenerateCandQueenEndGame(CandQueenMobilityEndGameParameters, QueenMoveCountValueEndGame);
+        }
+
+        if (__builtin_expect(!UseExperimentalPieceSquareModel, 1))
+        {
+            PieceSquareModel::GeneratePawn(PawnPieceSquareMiddleGameParameters, PawnInValueWhiteMiddleGame);
+            PieceSquareModel::GenerateMinor(KnightPieceSquareMiddleGameParameters, KnightInValueWhiteMiddleGame);
+            PieceSquareModel::GenerateMinor(BishopPieceSquareMiddleGameParameters, BishopInValueWhiteMiddleGame);
+            PieceSquareModel::GenerateMajor(RookPieceSquareMiddleGameParameters, RookInValueWhiteMiddleGame);
+            PieceSquareModel::GenerateMajor(QueenPieceSquareMiddleGameParameters, QueenInValueWhiteMiddleGame);
+            PieceSquareModel::GeneratePawn(PawnPieceSquareEndGameParameters, PawnInValueWhiteEndGame);
+            PieceSquareModel::GenerateMinor(KnightPieceSquareEndGameParameters, KnightInValueWhiteEndGame);
+            PieceSquareModel::GenerateMinor(BishopPieceSquareEndGameParameters, BishopInValueWhiteEndGame);
+            PieceSquareModel::GenerateMajor(RookPieceSquareEndGameParameters, RookInValueWhiteEndGame);
+            PieceSquareModel::GenerateMajor(QueenPieceSquareEndGameParameters, QueenInValueWhiteEndGame);
+        }
+        else
+        {
+            PieceSquareModel::GenerateCandPawn(CandPawnPieceSquareMiddleGameParameters, PawnInValueWhiteMiddleGame);
+            PieceSquareModel::GenerateCandMinor(CandKnightPieceSquareMiddleGameParameters, KnightInValueWhiteMiddleGame);
+            PieceSquareModel::GenerateMinor(CandBishopPieceSquareMiddleGameParameters, BishopInValueWhiteMiddleGame);
+            PieceSquareModel::GenerateCandMajor(CandRookPieceSquareMiddleGameParameters, RookInValueWhiteMiddleGame);
+            PieceSquareModel::GenerateCandMajor(CandQueenPieceSquareMiddleGameParameters, QueenInValueWhiteMiddleGame);
+            PieceSquareModel::GenerateCandPawn(CandPawnPieceSquareEndGameParameters, PawnInValueWhiteEndGame);
+            PieceSquareModel::GenerateCandMinor(CandKnightPieceSquareEndGameParameters, KnightInValueWhiteEndGame);
+            PieceSquareModel::GenerateMinor(CandBishopPieceSquareEndGameParameters, BishopInValueWhiteEndGame);
+            PieceSquareModel::GenerateCandMajor(CandRookPieceSquareEndGameParameters, RookInValueWhiteEndGame);
+            PieceSquareModel::GenerateCandMajor(CandQueenPieceSquareEndGameParameters, QueenInValueWhiteEndGame);
+        }
         PieceSquareModel::GenerateKing(KingPieceSquareMiddleGameParameters, KingInValueWhiteMiddleGame);
-        PieceSquareModel::GeneratePawn(PawnPieceSquareEndGameParameters, PawnInValueWhiteEndGame);
-        PieceSquareModel::GenerateMinor(KnightPieceSquareEndGameParameters, KnightInValueWhiteEndGame);
-        PieceSquareModel::GenerateMinor(BishopPieceSquareEndGameParameters, BishopInValueWhiteEndGame);
-        PieceSquareModel::GenerateMajor(RookPieceSquareEndGameParameters, RookInValueWhiteEndGame);
-        PieceSquareModel::GenerateMajor(QueenPieceSquareEndGameParameters, QueenInValueWhiteEndGame);
         PieceSquareModel::GenerateKing(KingPieceSquareEndGameParameters, KingInValueWhiteEndGame);
 
         charPowerTwo[0] = (char)1;

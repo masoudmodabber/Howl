@@ -20,16 +20,17 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
-# Ensure tools/ and repository root are on path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Ensure the repository root is importable when run from tools/matches/.
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from tools.self_match import (
-    EngineConfig,
-    GameResult,
-    MatchConfig,
-    play_single_game,
-    print_summary,
-)
+try:
+    from tools.matches.self_match import (
+        EngineConfig, GameResult, MatchConfig, play_single_game, print_summary,
+    )
+except ModuleNotFoundError:  # Flat /app/tools layout used by cloud workers.
+    from tools.self_match import (
+        EngineConfig, GameResult, MatchConfig, play_single_game, print_summary,
+    )
 
 # 10 diverse starting opening positions played with both colours (20 games default)
 DETERMINISTIC_OPENINGS: List[Tuple[str, str]] = [
@@ -276,7 +277,9 @@ class AzureCloudRunner:
         self.movetime_sec = movetime_sec
         self.inc_sec = inc_sec
         self.total_games = total_games
-        self.pgn_output = pgn_output or time.strftime("self-match-%Y-%m-%d-%H%M%S.pgn")
+        self.pgn_output = pgn_output or (
+            time.strftime("self-match-%Y-%m-%d-%H%M%S-") + uuid.uuid4().hex[:8] + ".pgn"
+        )
         self.pgn_output_is_default = pgn_output is None
         self.location = location
         self.candidate_regions = candidate_regions or CANDIDATE_REGIONS

@@ -41,6 +41,7 @@ bool Search::finiteSearch{false};
 
 int Search::maxDepth{-1};
 int64_t Search::maxNodes{-1};
+bool Search::strictNodeLimit{false};
 bool Search::isMoveTime{false};
 
 int Search::moveCount = 0;
@@ -1098,6 +1099,11 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         }
 
         if (maxDepth > 0 && recDepth >= maxDepth)
+        {
+            break;
+        }
+
+        if (maxNodes > 0 && (searchNodeCount >= maxNodes || recDepth >= 128))
         {
             break;
         }

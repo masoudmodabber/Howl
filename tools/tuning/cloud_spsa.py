@@ -72,7 +72,7 @@ class Runner:
         for executable in ("az", "ssh", "rsync"):
             if shutil.which(executable) is None:
                 raise RuntimeError(f"Required executable not found: {executable}")
-        if not (self.repo / "tools" / "spsa_tune.py").is_file():
+        if not (self.repo / "tools" / "tuning" / "fishtest_spsa.py").is_file():
             raise RuntimeError(f"Not a Howl repository: {self.repo}")
         if not self.args.dry_run:
             result = self._az("account", "show", capture=True, check=False)
@@ -309,6 +309,7 @@ class Runner:
             "--exclude", "diagnostics/",
             "--exclude", "scratch/",
             "--exclude", "tuner-corpus/",
+            "--include", "move-quality-tuning/parameter-manifest.tsv",
             "--exclude", "*.tsv",
             "--exclude", "benchmarks/results.md",
             "--exclude", ".DS_Store",
@@ -331,6 +332,7 @@ class Runner:
             self._rsync(f"{local_state}/", f"{DEFAULT_REMOTE_REPO}/spsa_state/")
         elif self.args.resume:
             remote_state = self._ssh(
+                f"test -f {DEFAULT_REMOTE_REPO}/spsa_state/state.json || "
                 f"test -f {DEFAULT_REMOTE_REPO}/spsa_state/spsa_checkpoint.json",
                 capture=True, check=False,
             )
@@ -349,7 +351,7 @@ class Runner:
         )
         spsa = (
             f"cd {DEFAULT_REMOTE_REPO} && "
-            "python3 -u tools/spsa_tune.py --concurrency 8 "
+            "python3 -u tools/tuning/fishtest_spsa.py --concurrency 8 --wall-clock "
             f"--syzygy-path {DEFAULT_REMOTE_SYZYGY} --state-dir spsa_state "
             "--repo-root . --build-dir build 2>&1 | tee -a spsa_cloud.log"
         )
@@ -381,7 +383,8 @@ class Runner:
                 f"cd {DEFAULT_REMOTE_REPO} && "
                 f"printf '%s\\n' '---SPSA---'; tmux has-session -t {TMUX_SESSION} 2>/dev/null && echo running || echo stopped; "
                 "printf '%s\\n' '---CHECKPOINT---' && "
-                "test -f spsa_state/spsa_checkpoint.json && cat spsa_state/spsa_checkpoint.json || true; "
+                "test -f spsa_state/state.json && cat spsa_state/state.json || "
+                "(test -f spsa_state/spsa_checkpoint.json && cat spsa_state/spsa_checkpoint.json || true); "
                 "printf '%s\\n' '---LATEST---' && "
                 "grep -E '\\[SPSA [0-9]+/[0-9]+\\].*Plus .*theta dL1=' spsa_cloud.log 2>/dev/null | tail -1 || true",
                 capture=True, check=False,
@@ -396,9 +399,11 @@ class Runner:
                 checkpoint = json.loads(checkpoint_text)
             except json.JSONDecodeError:
                 pass
-        valid_state = bool(checkpoint) and "completed_iterations" in checkpoint and "current_iteration" in checkpoint
-        completed = checkpoint.get("completed_iterations", 0) if valid_state else 0
-        current: Any = checkpoint.get("current_iteration") if valid_state else "unavailable"
+        classic_state = bool(checkpoint) and checkpoint.get("algorithm") == "fishtest-classic"
+        legacy_state = bool(checkpoint) and "completed_iterations" in checkpoint and "current_iteration" in checkpoint
+        valid_state = classic_state or legacy_state
+        completed = checkpoint.get("batch", checkpoint.get("completed_iterations", 0)) if valid_state else 0
+        current: Any = completed + 1 if classic_state else checkpoint.get("current_iteration", "unavailable")
         started = self.metadata.get("started_at")
         elapsed = "unknown"
         if started:
@@ -473,7 +478,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--vm-size", default=DEFAULT_VM_SIZE)
     parser.add_argument("--admin-user", default=DEFAULT_ADMIN_USER)
     parser.add_argument("--max-runtime-hours", type=float, default=DEFAULT_RUNTIME_HOURS)
-    parser.add_argument("--repo-root", default=str(Path(__file__).resolve().parent.parent))
+    parser.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[2]))
     parser.add_argument("--local-syzygy", default="~/syzygy/3-4-5-wdl")
     parser.add_argument("--ssh-key", default=None, help="Private SSH key; its .pub file is used for VM creation")
     parser.add_argument("--metadata", default=DEFAULT_METADATA)

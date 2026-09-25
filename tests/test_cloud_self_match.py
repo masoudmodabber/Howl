@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Unit and functional tests for tools/cloud_self_match.py
+Unit and functional tests for tools/matches/cloud_self_match.py
 """
 
 import json
@@ -10,7 +10,7 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-from tools.cloud_self_match import (
+from tools.matches.cloud_self_match import (
     AzureCloudRunner,
     generate_task_specs,
     DETERMINISTIC_OPENINGS,
@@ -22,7 +22,7 @@ from tools.cloud_self_match import (
     CONTAINER_CPU,
     CANDIDATE_REGIONS,
 )
-from tools.self_match import GameResult
+from tools.matches.self_match import GameResult
 
 
 class TestCloudSelfMatch(unittest.TestCase):
@@ -676,4 +676,3 @@ class TestCloudSelfMatch(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
