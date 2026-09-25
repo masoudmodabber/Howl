@@ -148,7 +148,7 @@ az login
 ### Running Cloud Self Matches
 Run 20 games (10 openings played twice with colours swapped) in parallel on ACI at 5m + 1.5s time control:
 ```bash
-python tools/cloud_self_match.py \
+python tools/matches/cloud_self_match.py \
   ./match-engines/howl-old \
   ./build/howl \
   --time 300 \
@@ -159,12 +159,12 @@ python tools/cloud_self_match.py \
 
 Preview resource provisioning and opening assignments without deploying:
 ```bash
-python tools/cloud_self_match.py ./match-engines/howl-old ./build/howl --time 300 --inc 1.5 --games 20 --dry-run
+python tools/matches/cloud_self_match.py ./match-engines/howl-old ./build/howl --time 300 --inc 1.5 --games 20 --dry-run
 ```
 
 ### Expected Output
 - Live single-line game progress for each finished cloud worker instance
-- Aggregated win/draw/loss scores and per-opening breakdown matching `tools/self_match.py`
+- Aggregated win/draw/loss scores and per-opening breakdown matching `tools/matches/self_match.py`
 - Combined PGN saved locally to `--pgn` destination
 
 ### Disposable Cleanup

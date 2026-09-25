@@ -17,6 +17,34 @@
 #include "PassedPawnSetup.h"
 #include "HashMemoryBudget.h"
 #include "UCI.h"
+#include "tuner/TunerEvaluationState.h"
+#include "tuner/TunerParameter.h"
+#include "tuner/TunerEvaluator.h"
+#include <cmath>
+
+static std::string FamilyName(Tuner::ParameterFamily family)
+{
+    switch (family)
+    {
+    case Tuner::ParameterFamily::PieceValue: return "PieceValue";
+    case Tuner::ParameterFamily::PawnStructure: return "PawnStructure";
+    case Tuner::ParameterFamily::PassedPawnV2: return "PassedPawnV2";
+    case Tuner::ParameterFamily::PieceSquare: return "PieceSquare";
+    case Tuner::ParameterFamily::KnightMobility: return "KnightMobility";
+    case Tuner::ParameterFamily::BishopMobility: return "BishopMobility";
+    case Tuner::ParameterFamily::RookMobility: return "RookMobility";
+    case Tuner::ParameterFamily::QueenMobility: return "QueenMobility";
+    case Tuner::ParameterFamily::Attack: return "Attack";
+    case Tuner::ParameterFamily::Inline: return "Inline";
+    case Tuner::ParameterFamily::RookFile: return "RookFile";
+    case Tuner::ParameterFamily::KnightOutpost: return "KnightOutpost";
+    case Tuner::ParameterFamily::IsolatedPawn: return "IsolatedPawn";
+    case Tuner::ParameterFamily::RookBehindPassedPawn: return "RookBehindPassedPawn";
+    case Tuner::ParameterFamily::EndgameWeights: return "EndgameWeights";
+    case Tuner::ParameterFamily::KingSafety: return "KingSafety";
+    default: return "SelectionOnly";
+    }
+}
 
 void InitializeEngine()
 {
@@ -108,15 +136,73 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    std::string fen;
-    for (int i = 1; i < argc; ++i)
+    bool jsonOutput = false;
+    std::string scaleFamily;
+    double scaleFactor = 1.0;
+    std::string movesStr;
+    int argStart = 1;
+    while (argStart < argc)
     {
-        if (i > 1) fen += " ";
+        std::string arg = argv[argStart];
+        if (arg == "--json")
+        {
+            jsonOutput = true;
+            argStart++;
+        }
+        else if (arg == "--candidate-attack")
+        {
+            Option::UseExperimentalAttackModel = true;
+            argStart++;
+        }
+        else if (arg == "--candidate-piecesquare")
+        {
+            Option::UseExperimentalPieceSquareModel = true;
+            argStart++;
+        }
+        else if (arg == "--scale-family" && argStart + 2 < argc)
+        {
+            scaleFamily = argv[argStart + 1];
+            scaleFactor = std::stod(argv[argStart + 2]);
+            argStart += 3;
+        }
+        else if (arg == "--moves" && argStart + 1 < argc)
+        {
+            movesStr = argv[argStart + 1];
+            argStart += 2;
+        }
+        else break;
+    }
+
+    std::string fen;
+    for (int i = argStart; i < argc; ++i)
+    {
+        if (i > argStart) fen += " ";
         fen += argv[i];
     }
 
     InitializeEngine();
     EvaluationLogic::ClearEvalCacheForTesting();
+
+    bool customEval = false;
+    Tuner::TunerEvaluationState customState;
+    if (!scaleFamily.empty())
+    {
+        const Tuner::TunerRegistry registry = Tuner::TunerRegistry::CreateRegistry();
+        if (customState.LoadFromRegistry(registry))
+        {
+            for (size_t i = 0; i < registry.Size(); ++i)
+            {
+                const auto& param = registry[i];
+                if (FamilyName(param.family) == scaleFamily)
+                {
+                    int* ptr = customState.GetParameterPointer(param.family, param.semanticIndex);
+                    if (ptr) *ptr = static_cast<int>(std::round(*ptr * scaleFactor));
+                }
+            }
+            customState.Derive();
+            customEval = true;
+        }
+    }
 
     std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
     if (!board)
@@ -125,7 +211,69 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    std::unique_ptr<LastFourMoves> moveHistory;
+    if (!movesStr.empty())
+    {
+        std::string fullMoves = (movesStr.rfind("moves ", 0) == 0) ? movesStr : ("moves " + movesStr);
+        moveHistory.reset(UCI::MakeMoves(fullMoves, *board));
+    }
+
     EvaluationBreakdown bd = EvaluationLogic::EvaluateDetailed(*board);
+    if (customEval)
+    {
+        int score = Tuner::TunerEvaluator::Evaluate(*board, customState);
+        bd.sideToMoveTotal = score;
+        bd.whitePerspectiveTotal = board->sideToMove ? -score : score;
+    }
+
+    if (jsonOutput)
+    {
+        std::cout << "{\n"
+                  << "  \"fen\": \"" << fen << "\",\n"
+                  << "  \"side_to_move\": \"" << (board->sideToMove ? "black" : "white") << "\",\n"
+                  << "  \"phase\": " << bd.phase << ",\n"
+                  << "  \"raw_total\": " << bd.unscaledTotal << ",\n"
+                  << "  \"unscaled_total\": " << bd.unscaledTotal << ",\n"
+                  << "  \"scaled_total\": " << bd.scaledTotal << ",\n"
+                  << "  \"white_perspective_total\": " << bd.whitePerspectiveTotal << ",\n"
+                  << "  \"side_to_move_total\": " << bd.sideToMoveTotal << ",\n"
+                  << "  \"opposite_color_bishop_scale\": " << bd.oppositeColorBishopScale << ",\n"
+                  << "  \"draw_adjustment_applied\": " << (bd.drawAdjustmentApplied ? "true" : "false") << ",\n"
+                  << "  \"owners\": {\n"
+                  << "    \"base_position\": " << bd.basePositionTotal << ",\n"
+                  << "    \"pawns\": " << bd.pawnsTotal << ",\n"
+                  << "    \"pieces\": " << bd.piecesTotal << ",\n"
+                  << "    \"king\": " << bd.kingTotal << ",\n"
+                  << "    \"threats\": " << bd.threatsTotal << ",\n"
+                  << "    \"endgame\": " << bd.endgameTotal << ",\n"
+                  << "    \"tempo\": " << bd.tempoNet << "\n"
+                  << "  },\n"
+                  << "  \"components\": {\n"
+                  << "    \"material\": {\"white\": " << bd.whiteMaterial << ", \"black\": " << bd.blackMaterial << ", \"net\": " << bd.materialNet << "},\n"
+                  << "    \"piece_balance\": {\"scale\": " << bd.pieceBalance << ", \"net\": " << bd.pieceEvaluation << "},\n"
+                  << "    \"bishop_pair\": {\"white\": " << bd.whiteBishopPair << ", \"black\": " << bd.blackBishopPair << ", \"net\": " << bd.bishopPairNet << "},\n"
+                  << "    \"mobility\": {\"net\": " << bd.mobilityNet << "},\n"
+                  << "    \"piece_attacks\": {\"net\": " << bd.pieceAttacksNet << "},\n"
+                  << "    \"piece_square\": {\"net\": " << (bd.basePositionTotal - bd.bishopPairNet - bd.pieceEvaluation) << "},\n"
+                  << "    \"rook_file\": {\"white\": " << bd.whiteRookFileBonus << ", \"black\": " << bd.blackRookFileBonus << ", \"net\": " << bd.rookFileBonusNet << "},\n"
+                  << "    \"king_placement\": {\"white\": " << bd.whiteKingPlacement << ", \"black\": " << bd.blackKingPlacement << ", \"net\": " << bd.kingPlacementNet << "},\n"
+                  << "    \"pawn_shield\": {\"white\": " << bd.whitePawnShield << ", \"black\": " << bd.blackPawnShield << ", \"net\": " << bd.pawnShieldNet << "},\n"
+                  << "    \"king_danger\": {\"white\": " << bd.whiteKingDanger << ", \"black\": " << bd.blackKingDanger << ", \"net\": " << bd.kingAttackNet << "},\n"
+                  << "    \"king_safety_total\": {\"net\": " << bd.kingSafetyTotal << "},\n"
+                  << "    \"pawn_base\": {\"net\": " << bd.pawnBaseNet << "},\n"
+                  << "    \"passed_pawn_king_race\": {\"net\": " << bd.passedPawnKingRaceNet << "},\n"
+                  << "    \"passed_pawn_minor_accessibility\": {\"net\": " << bd.passedPawnMinorAccessibilityNet << "},\n"
+                  << "    \"passed_pawn_corridor_safety\": {\"net\": " << bd.passedPawnCorridorSafetyNet << "},\n"
+                  << "    \"rook_behind_passed_pawn\": {\"net\": " << bd.rookBehindPassedPawnNet << "},\n"
+                  << "    \"pawn_structure_total\": {\"net\": " << bd.pawnStructureNet << "},\n"
+                  << "    \"rook_connection\": {\"net\": " << bd.rookConnectionNet << "},\n"
+                  << "    \"lone_king_guidance\": {\"net\": " << bd.loneKingMateGuidance << "},\n"
+                  << "    \"endgame_scaling\": {\"scale\": " << bd.oppositeColorBishopScale << ", \"draw_adjustment\": " << (bd.drawAdjustmentApplied ? "true" : "false") << "},\n"
+                  << "    \"tempo\": {\"net\": " << bd.tempoNet << "}\n"
+                  << "  }\n"
+                  << "}\n";
+        return 0;
+    }
 
     std::cout << "FEN: " << fen << "\n";
     std::cout << "Side to move: " << (board->sideToMove ? "Black" : "White")

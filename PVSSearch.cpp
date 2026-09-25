@@ -1727,7 +1727,8 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
         return {q->value,q->printString};
     }
     ++Search::searchNodeCount;
-    if ((Search::searchNodeCount & 2047) == 0) Search::CheckLimits();
+    if (Search::strictNodeLimit || (Search::searchNodeCount & 2047) == 0)
+        Search::CheckLimits();
     if (Search::stopRequested.load(std::memory_order_relaxed)) return {0,{}};
     alpha=std::max(alpha,MateScore::MatedAtPly(ply));
     beta=std::min(beta,MateScore::MateAtPly(ply+1));

@@ -1622,25 +1622,35 @@ int ShelterDanger(Board& board, bool whiteKing, int kingSquare, const Evaluation
         {
             continue;
         }
-        danger += secondRankPawn ? Option::KingShelterSecondRankDanger
-                                 : (fartherPawn ? Option::KingShelterAdvancedPawnDanger
-                                               : Option::KingShelterMissingPawnDanger);
-
-        bool fileHasEnemyPawn = false;
-        if (ctx)
+        if (Option::UseExperimentalKingSafetyModel)
         {
-            fileHasEnemyPawn = (enemyPawnFiles & (1 << file)) != 0;
+            danger += secondRankPawn ? Option::CandKingShelterSecondRankDanger
+                                     : (fartherPawn ? Option::CandKingShelterAdvancedPawnDanger
+                                                   : Option::CandKingShelterMissingPawnDanger);
+            // CandKingShelterOpenFileDanger is 0 (excised)
         }
         else
         {
-            for (int pawn : enemyPawns)
+            danger += secondRankPawn ? Option::KingShelterSecondRankDanger
+                                     : (fartherPawn ? Option::KingShelterAdvancedPawnDanger
+                                                   : Option::KingShelterMissingPawnDanger);
+
+            bool fileHasEnemyPawn = false;
+            if (ctx)
             {
-                fileHasEnemyPawn |= pawn % 8 == file;
+                fileHasEnemyPawn = (enemyPawnFiles & (1 << file)) != 0;
             }
-        }
-        if (!secondRankPawn && !fartherPawn && !fileHasEnemyPawn)
-        {
-            danger += Option::KingShelterOpenFileDanger;
+            else
+            {
+                for (int pawn : enemyPawns)
+                {
+                    fileHasEnemyPawn |= pawn % 8 == file;
+                }
+            }
+            if (!secondRankPawn && !fartherPawn && !fileHasEnemyPawn)
+            {
+                danger += Option::KingShelterOpenFileDanger;
+            }
         }
     }
     return danger;
@@ -1655,12 +1665,18 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const Evaluati
         local.InitializeAttacks();
         return EvaluateKingDanger(board, whiteKing, &local, needDetails);
     }
-    const int attackerWeight[7] = {0, Option::KingAttackerPawnWeight,
-        Option::KingAttackerMinorWeight, Option::KingAttackerMinorWeight,
-        Option::KingAttackerRookWeight, Option::KingAttackerQueenWeight, 0};
-    const int defenderWeight[7] = {0, Option::KingDefenderPawnWeight,
-        Option::KingDefenderMinorWeight, Option::KingDefenderMinorWeight,
-        Option::KingDefenderRookWeight, Option::KingDefenderQueenWeight, 0};
+    const int attackerWeight[7] = {0,
+        Option::UseExperimentalKingSafetyModel ? 0 : Option::KingAttackerPawnWeight,
+        Option::UseExperimentalKingSafetyModel ? Option::CandKingAttackerMinorWeight : Option::KingAttackerMinorWeight,
+        Option::UseExperimentalKingSafetyModel ? Option::CandKingAttackerMinorWeight : Option::KingAttackerMinorWeight,
+        Option::UseExperimentalKingSafetyModel ? Option::CandKingAttackerRookWeight : Option::KingAttackerRookWeight,
+        Option::UseExperimentalKingSafetyModel ? Option::CandKingAttackerQueenWeight : Option::KingAttackerQueenWeight, 0};
+    const int defenderWeight[7] = {0,
+        Option::UseExperimentalKingSafetyModel ? Option::CandKingDefenderPawnWeight : Option::KingDefenderPawnWeight,
+        Option::UseExperimentalKingSafetyModel ? Option::CandKingDefenderMinorWeight : Option::KingDefenderMinorWeight,
+        Option::UseExperimentalKingSafetyModel ? Option::CandKingDefenderMinorWeight : Option::KingDefenderMinorWeight,
+        Option::UseExperimentalKingSafetyModel ? Option::CandKingDefenderRookWeight : Option::KingDefenderRookWeight,
+        Option::UseExperimentalKingSafetyModel ? Option::CandKingDefenderQueenWeight : Option::KingDefenderQueenWeight, 0};
     const int kingSquare = whiteKing ? ctx->whiteKingSq : ctx->blackKingSq;
     const bool attackingWhite = !whiteKing;
     const PrecomputedKingZone& zone = KingZonesData.zones[kingSquare];
@@ -1710,14 +1726,15 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const Evaluati
                     restrictedBetweenSquares |= AttackPlaces::BetweenMask[square][target] & attackingPawnAttacks;
                 }
                 if ((type == 3 || type == 5) && (hits & Option::PowerTwo[kingSquare]))
-                    diagonalPressure += Option::KingDiagonalLineDanger;
+                    diagonalPressure += Option::UseExperimentalKingSafetyModel ? Option::CandKingDiagonalLineDanger : Option::KingDiagonalLineDanger;
             }
             if (type >= 4)
             {
                 for (int file = minFile; file <= maxFile; ++file)
                     if (fileOpenness[file] && (hits & (0x0101010101010101ULL << file)))
                         filePressure += fileOpenness[file] == 2
-                            ? Option::KingOpenLineDanger : Option::KingSemiOpenLineDanger;
+                            ? (Option::UseExperimentalKingSafetyModel ? Option::CandKingOpenLineDanger : Option::KingOpenLineDanger)
+                            : (Option::UseExperimentalKingSafetyModel ? Option::CandKingSemiOpenLineDanger : Option::KingSemiOpenLineDanger);
                 if (type == 4) rookHits |= hits;
                 else queenHits |= hits;
             }
@@ -1732,8 +1749,8 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const Evaluati
     const int enemyKingSquare = attackingWhite ? ctx->whiteKingSq : ctx->blackKingSq;
     additionalUndefendedAttackers += __builtin_popcountll(ctx->attacks[enemyKingSquare] & undefended);
     const int undefendedKingZoneDanger =
-        undefendedSquareCount * Option::KingUndefendedZoneDanger +
-        std::max(0, additionalUndefendedAttackers) * Option::KingAdditionalZoneAttackerDanger;
+        undefendedSquareCount * (Option::UseExperimentalKingSafetyModel ? Option::CandKingUndefendedZoneDanger : Option::KingUndefendedZoneDanger) +
+        std::max(0, additionalUndefendedAttackers) * (Option::UseExperimentalKingSafetyModel ? Option::CandKingAdditionalZoneAttackerDanger : Option::KingAdditionalZoneAttackerDanger);
     const uint64_t ownOccupancy = whiteKing ? board.whitePieces : board.blackPieces;
     const int occupiedEscapes = __builtin_popcountll(neighbours & ownOccupancy);
     const int controlledEscapes = __builtin_popcountll(neighbours & ~ownOccupancy & enemyControl);
@@ -1741,9 +1758,8 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const Evaluati
     const int edgeDirections = 9 - zone.count;
     const int phaseVal = ctx->phase;
     const bool hasHeavyMatingBattery = phaseVal >= 12 && (queenHits & rookHits & undefended) != 0;
-    const int escapeDanger = controlledEscapes * Option::KingControlledEscapeDanger
-                           + (occupiedEscapes + edgeDirections) * Option::KingBlockedEscapeDanger
-                           + std::max(0, 3 - safeEscapes) * Option::KingTrappedEscapeDanger;
+    const int escapeDanger = controlledEscapes * (Option::UseExperimentalKingSafetyModel ? Option::CandKingControlledEscapeDanger : Option::KingControlledEscapeDanger)
+                           + (Option::UseExperimentalKingSafetyModel ? 0 : ((occupiedEscapes + edgeDirections) * Option::KingBlockedEscapeDanger + std::max(0, 3 - safeEscapes) * Option::KingTrappedEscapeDanger));
     const int balanceDanger = std::max(0, attackerParticipation - defenderParticipation) +
                               std::max(0, attackerCount - defenderCount) * 4;
     int shelterDanger = ShelterDanger(board, whiteKing, kingSquare, ctx);
@@ -1763,7 +1779,7 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const Evaluati
         const int distance = attackingWhite ? kingSquare / 8 - pawn / 8
                                             : pawn / 8 - kingSquare / 8;
         if (distance < 1 || distance > 3) continue;
-        int storm = (4 - distance) * Option::KingShelterAdvancedPawnDanger;
+        int storm = (4 - distance) * (Option::UseExperimentalKingSafetyModel ? Option::CandKingShelterAdvancedPawnDanger : Option::KingShelterAdvancedPawnDanger);
         const int forward = pawn + (attackingWhite ? 8 : -8);
         if (forward >= 0 && forward < 64 &&
             board.mainBoard[forward] == (whiteKing ? 1 : 9)) storm /= 2;
@@ -1794,15 +1810,15 @@ KingDangerResult EvaluateKingDanger(Board& board, bool whiteKing, const Evaluati
     const int defensiveRestriction = __builtin_popcountll(restrictedBetweenSquares) * 6;
     const uint64_t pinnedShelter = ctx->absolutelyPinnedPieces[ownSide] &
         (whiteKing ? board.whitePawns : board.blackPawns);
-    const int pinnedShelterDanger = __builtin_popcountll(pinnedShelter) *
-        Option::KingPinnedShelterPawnWeight;
+    const int pinnedShelterDanger = Option::UseExperimentalKingSafetyModel ? 0 :
+        (__builtin_popcountll(pinnedShelter) * Option::KingPinnedShelterPawnWeight);
     int infiltratedQueenDanger = 0;
     for (int queen : board.pieces[enemySide * 8 + 5])
         if (whiteKing ? queen / 8 <= 1 : queen / 8 >= 6)
-            infiltratedQueenDanger += Option::KingInfiltratedQueenWeight;
+            infiltratedQueenDanger += Option::UseExperimentalKingSafetyModel ? Option::CandKingInfiltratedQueenWeight : Option::KingInfiltratedQueenWeight;
     int rawDanger = attackerParticipation * 2 + safeCheckWeight + escapeDanger +
                     lineDanger + shelterDanger + pawnStorm + balanceDanger + undefendedKingZoneDanger +
-                    defensiveRestriction + (hasHeavyMatingBattery ? Option::KingHeavyBatteryDanger : 0);
+                    defensiveRestriction + ((!Option::UseExperimentalKingSafetyModel && hasHeavyMatingBattery) ? Option::KingHeavyBatteryDanger : 0);
     rawDanger += pinnedShelterDanger + infiltratedQueenDanger;
 
     const int queenCount = board.pieces[attackingWhite ? 5 : 13].size();
@@ -2111,9 +2127,22 @@ int LoneKingMateGuidanceWithWeights(Board &board, int base, int edgeWeight,
         }
     }
 
-    const int guidance = base - edgeWeight * edgeSteps + cornerWeight * cornerSteps
-                       - confinementWeight * confinementSupport
-                       - restrictedNeighbourWeight * (8 - safeNeighbours);
+    int guidance = 0;
+    if (Option::UseExperimentalEndgameWeightsModel)
+    {
+        // Candidate 3: Monotonic tied push parameter (canonical 72/22 ratio preserved)
+        const int pushTerm = (Option::CandLoneKingPushWeight * 72 / 22) * edgeSteps
+                           + Option::CandLoneKingPushWeight * cornerSteps;
+        guidance = 36 + pushTerm
+                 - Option::CandLoneKingConfinementWeight * confinementSupport
+                 - Option::CandLoneKingRestrictedNeighbourWeight * (8 - safeNeighbours);
+    }
+    else
+    {
+        guidance = base - edgeWeight * edgeSteps + cornerWeight * cornerSteps
+                 - confinementWeight * confinementSupport
+                 - restrictedNeighbourWeight * (8 - safeNeighbours);
+    }
     return whiteWinning ? guidance : -guidance;
 }
 
@@ -2122,16 +2151,18 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     long long piecesBinary = thisBoard.whitePieces | thisBoard.blackPieces;
     MyList (&pieces)[15] = thisBoard.pieces;
 
-    int whitePieceEvaluation = pieces[1].size() * Option::PawnValue + pieces[2].size() * Option::KnightValue + pieces[3].size() * (Option::BishopValue + (8 - (pieces[1].size() + pieces[9].size())) * Option::BishopOpenFilePawnScale) + pieces[4].size() * Option::RookValue + pieces[5].size() * Option::QueenValue;
+    const int bishopScale = Option::UseExperimentalInlineModel ? Option::CandBishopOpenFilePawnScale : Option::BishopOpenFilePawnScale;
+    int whitePieceEvaluation = pieces[1].size() * Option::PawnValue + pieces[2].size() * Option::KnightValue + pieces[3].size() * (Option::BishopValue + (8 - (pieces[1].size() + pieces[9].size())) * bishopScale) + pieces[4].size() * Option::RookValue + pieces[5].size() * Option::QueenValue;
 
-    int blackPieceEvaluation = pieces[9].size() * Option::PawnValue + pieces[10].size() * Option::KnightValue + pieces[11].size() * (Option::BishopValue + (8 - (pieces[1].size() + pieces[9].size())) * Option::BishopOpenFilePawnScale) + pieces[12].size() * Option::RookValue + pieces[13].size() * Option::QueenValue;
+    int blackPieceEvaluation = pieces[9].size() * Option::PawnValue + pieces[10].size() * Option::KnightValue + pieces[11].size() * (Option::BishopValue + (8 - (pieces[1].size() + pieces[9].size())) * bishopScale) + pieces[12].size() * Option::RookValue + pieces[13].size() * Option::QueenValue;
     const double pieceBalance = 1.0;
     int pieceEvaluation = whitePieceEvaluation - blackPieceEvaluation;
     // Bishop pair
     int whiteBishopPair = 0;
     int blackBishopPair = 0;
     const int totalPawns = pieces[1].size() + pieces[9].size();
-    const int bpBonus = std::max(0, Option::BishopPairValue - 2 - totalPawns * 3);
+    const int rawBp = Option::BishopPairValue;
+    const int bpBonus = std::max(0, rawBp - 2 - totalPawns * 3);
     if (pieces[3].size() == 2 && ((pieces[3][0] / 8 + pieces[3][0] % 8) % 2) != ((pieces[3][1] / 8 + pieces[3][1] % 8) % 2))    
     {
         whiteBishopPair = bpBonus;
@@ -2248,14 +2279,18 @@ int EvaluateInternal(Board &thisBoard, EvaluationBreakdown *breakdown)
     // Rook Connection
     int rookValue = 0;
     // Temp
-    const int taperedTempo = TaperGroup1Value(Option::TempoMiddleGame, Option::TempoEndGame, phase);
+    const int tempoMG = Option::UseExperimentalInlineModel ? Option::CandTempoMiddleGame : Option::TempoMiddleGame;
+    const int tempoEG = Option::UseExperimentalInlineModel ? Option::CandTempoEndGame : Option::TempoEndGame;
+    const int taperedTempo = TaperGroup1Value(tempoMG, tempoEG, phase);
     int temp = (!thisBoard.sideToMove) ? taperedTempo : -taperedTempo;
 
     double oppositeColorBishop = 1.0;
     if (pieces[3].size() == 1 && pieces[11].size() == 1 && ((pieces[3].front() / 8 + pieces[3].front() % 8) % 2) != ((pieces[11].front() / 8 + pieces[11].front() % 8) % 2))
     {
-        oppositeColorBishop = ((Option::OppositeColorBishopMiddleGameScalePermille / 1000.0) * phase
-                             + (Option::OppositeColorBishopEndGameScalePermille / 1000.0) * (24 - phase)) / 24;
+        const int ocbMG = Option::UseExperimentalInlineModel ? Option::CandOppositeColorBishopMiddleGameScalePermille : Option::OppositeColorBishopMiddleGameScalePermille;
+        const int ocbEG = Option::UseExperimentalInlineModel ? Option::CandOppositeColorBishopEndGameScalePermille : Option::OppositeColorBishopEndGameScalePermille;
+        oppositeColorBishop = ((ocbMG / 1000.0) * phase
+                             + (ocbEG / 1000.0) * (24 - phase)) / 24;
     }
 
     const int loneKingMateGuidance = EvaluationLogic::LoneKingMateGuidance(
@@ -2525,6 +2560,7 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int phase, const Ev
     const int isolatedPenalty = IsolatedPawnPenalty(phase);
     const int whiteKingSq = ctx ? ctx->whiteKingSq : thisBoard.pieces[6].front();
     const int blackKingSq = ctx ? ctx->blackKingSq : thisBoard.pieces[14].front();
+    const int pawnAdvMultiplier = Option::UseExperimentalInlineModel ? Option::CandEndgamePawnAdvancementRankMultiplier : Option::EndgamePawnAdvancementRankMultiplier;
     for (int pawnPlace : thisBoard.pieces[1])
     {
         if (IsIsolatedPawn(whitePawns, pawnPlace))
@@ -2533,7 +2569,7 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int phase, const Ev
         const uint64_t bit = 1ULL << pawnPlace;
         if (!(shared.strictPassedPawns[0] & bit) && !(scoredConnected[0] & bit))
             goForwardPawnWhite += TaperGroup3Value(
-                0, (pawnPlace / 8) * Option::EndgamePawnAdvancementRankMultiplier, phase);
+                0, (pawnPlace / 8) * pawnAdvMultiplier, phase);
     }
     int whitePawnSum = doubledPawnValueWhite + isolatedPawnValueWhite + goForwardPawnWhite + pawnChainWhite;
 
@@ -2549,7 +2585,7 @@ int EvaluationLogic::GetPawnStructureValue(Board &thisBoard, int phase, const Ev
         const uint64_t bit = 1ULL << pawnPlace;
         if (!(shared.strictPassedPawns[1] & bit) && !(scoredConnected[1] & bit))
             goForwardPawnBlack += TaperGroup3Value(
-                0, (7 - pawnPlace / 8) * Option::EndgamePawnAdvancementRankMultiplier, phase);
+                0, (7 - pawnPlace / 8) * pawnAdvMultiplier, phase);
     }
     int blackPawnSum = doubledPawnValueBlack + isolatedPawnValueBlack + goForwardPawnBlack + pawnChainBlack;
 
@@ -2707,11 +2743,15 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase, 
                         bool enemyPawn = (thisBoard.blackPawns & fileMask) != 0;
                         if (!enemyPawn)
                         {
-                            whiteRookFileBonus += TaperGroup2Value(Option::RookOpenFileMiddleGame, Option::RookOpenFileEndGame, phase);
+                            const int openMG = Option::UseExperimentalRookFileModel ? Option::CandRookOpenFileMiddleGame : Option::RookOpenFileMiddleGame;
+                            const int openEG = Option::UseExperimentalRookFileModel ? Option::CandRookOpenFileEndGame : Option::RookOpenFileEndGame;
+                            whiteRookFileBonus += TaperGroup2Value(openMG, openEG, phase);
                         }
                         else
                         {
-                            whiteRookFileBonus += TaperGroup2Value(Option::RookSemiOpenFileMiddleGame, Option::RookSemiOpenFileEndGame, phase);
+                            const int semiMG = Option::UseExperimentalRookFileModel ? Option::CandRookSemiOpenFileMiddleGame : Option::RookSemiOpenFileMiddleGame;
+                            const int semiEG = Option::UseExperimentalRookFileModel ? Option::CandRookSemiOpenFileEndGame : Option::RookSemiOpenFileEndGame;
+                            whiteRookFileBonus += TaperGroup2Value(semiMG, semiEG, phase);
                         }
                     }
                     moveCount = 0;
@@ -2884,11 +2924,15 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase, 
                         bool enemyPawn = (thisBoard.whitePawns & fileMask) != 0;
                         if (!enemyPawn)
                         {
-                            blackRookFileBonus += TaperGroup2Value(Option::RookOpenFileMiddleGame, Option::RookOpenFileEndGame, phase);
+                            const int openMG = Option::UseExperimentalRookFileModel ? Option::CandRookOpenFileMiddleGame : Option::RookOpenFileMiddleGame;
+                            const int openEG = Option::UseExperimentalRookFileModel ? Option::CandRookOpenFileEndGame : Option::RookOpenFileEndGame;
+                            blackRookFileBonus += TaperGroup2Value(openMG, openEG, phase);
                         }
                         else
                         {
-                            blackRookFileBonus += TaperGroup2Value(Option::RookSemiOpenFileMiddleGame, Option::RookSemiOpenFileEndGame, phase);
+                            const int semiMG = Option::UseExperimentalRookFileModel ? Option::CandRookSemiOpenFileMiddleGame : Option::RookSemiOpenFileMiddleGame;
+                            const int semiEG = Option::UseExperimentalRookFileModel ? Option::CandRookSemiOpenFileEndGame : Option::RookSemiOpenFileEndGame;
+                            blackRookFileBonus += TaperGroup2Value(semiMG, semiEG, phase);
                         }
                     }
                     moveCount = 0;
@@ -2964,12 +3008,48 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase, 
                     if (type == 1 && ((ctx.pawnAttacks[victimSide] & (1ULL << attacker)) ||
                         ((ctx.doubleAttacks[victimSide] & (1ULL << attacker)) &&
                          !(ctx.doubleAttacks[attackingSide] & (1ULL << attacker))))) continue;
-                    const int value = type == 1 ? taperedGroup1Table(Option::PawnAttackValue, victimType)
-                        : type == 2 ? taperedGroup1Table(Option::KnightAttackValue, victimType)
-                        : type == 3 ? taperedGroup1Table(Option::BishopAttackValue, victimType)
-                        : type == 4 ? taperedGroup2Table(Option::RookAttackValue, victimType)
-                        : type == 5 ? taperedGroup1Table(Option::QueenAttackValue, victimType)
-                                    : taperedTable(Option::KingAttackValue, victimType);
+                    int value = 0;
+                    if (__builtin_expect(!Option::UseExperimentalAttackModel, 1))
+                    {
+                        value = type == 1 ? taperedGroup1Table(Option::PawnAttackValue, victimType)
+                            : type == 2 ? taperedGroup1Table(Option::KnightAttackValue, victimType)
+                            : type == 3 ? taperedGroup1Table(Option::BishopAttackValue, victimType)
+                            : type == 4 ? taperedGroup2Table(Option::RookAttackValue, victimType)
+                            : type == 5 ? taperedGroup1Table(Option::QueenAttackValue, victimType)
+                                        : taperedTable(Option::KingAttackValue, victimType);
+                    }
+                    else
+                    {
+                        // Candidate 1: Tiered Threat Matrix (10 parameters with deterministic support-weighted mapping)
+                        // Attacker type: 1=Pawn, 2=Knight, 3=Bishop, 4=Rook, 5=Queen, 6=King (unreachable/0)
+                        // Victim type: 1=Pawn, 2=Knight, 3=Bishop, 4=Rook, 5=Queen
+                        int mgVal = 0;
+                        if (type == 1) // Pawn attacker
+                        {
+                            if (victimType == 2 || victimType == 3) mgVal = 20;       // Threat_PawnOnMinor_MG
+                            else if (victimType == 4 || victimType == 5) mgVal = 84;  // Threat_PawnOnMajor_MG
+                        }
+                        else if (type == 2 || type == 3) // Minor attacker (N or B)
+                        {
+                            if (victimType == 1) mgVal = 7;                           // Threat_MinorOnPawn_MG
+                            else if (victimType == 2 || victimType == 3) mgVal = 24;  // Threat_MinorOnMinor_MG
+                            else if (victimType == 4 || victimType == 5) mgVal = 41;  // Threat_MinorOnMajor_MG
+                        }
+                        else if (type == 4) // Rook attacker
+                        {
+                            if (victimType == 1) mgVal = -1;                          // Threat_RookOnPawn_MG
+                            else if (victimType == 2 || victimType == 3) mgVal = 15;  // Threat_RookOnMinor_MG
+                            else if (victimType == 5) mgVal = 24;                     // Threat_RookOnQueen_MG
+                        }
+                        else if (type == 5) // Queen attacker
+                        {
+                            if (victimType == 1) mgVal = 3;                           // Threat_QueenOnPawn_MG
+                            else if (victimType >= 2 && victimType <= 4) mgVal = 10;  // Threat_QueenOnPiece_MG
+                        }
+                        // King attacker (type 6) is identically 0
+                        const int egVal = (mgVal * Option::AttackEndgameMultiplierPercent) / 100;
+                        value = (mgVal * phase + egVal * (24 - phase)) / 24;
+                    }
                     best = std::max(best, std::max(0, value));
                 }
             total += best;
@@ -2979,7 +3059,8 @@ MovementResult EvaluationLogic::PieceMoveCountFast(Board &thisBoard, int phase, 
     };
     whiteAttackValue = threatScore(0);
     blackAttackValue = threatScore(1);
-    int scaledAttackNet = ((whiteAttackValue - blackAttackValue) * Option::PieceAttackScalePercent) / 100;
+    const int attackScale = Option::UseExperimentalInlineModel ? Option::CandPieceAttackScalePercent : Option::PieceAttackScalePercent;
+    int scaledAttackNet = ((whiteAttackValue - blackAttackValue) * attackScale) / 100;
     int rookFileNet = whiteRookFileBonus - blackRookFileBonus;
 
     const auto spaceUnits = [&](int side) {

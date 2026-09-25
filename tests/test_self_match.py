@@ -11,9 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import chess
 
-# Ensure tools directory is on path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "tools")))
-import self_match
+from tools.matches import self_match
 
 
 class TestSelfMatchHarness(unittest.TestCase):
@@ -81,7 +79,7 @@ class TestSelfMatchHarness(unittest.TestCase):
         mock_white = MockEngine(["e2e4"])
         mock_black = MockEngine(["e7e2"])
 
-        with patch("self_match.UCIEngineProcess", side_effect=[mock_white, mock_black]):
+        with patch("tools.matches.self_match.UCIEngineProcess", side_effect=[mock_white, mock_black]):
             res = self_match.play_single_game(
                 game_idx=1,
                 pos_name="Standard",
@@ -116,7 +114,7 @@ class TestSelfMatchHarness(unittest.TestCase):
         mock_white = MockEngine(["f2f3", "g2g4"])
         mock_black = MockEngine(["e7e5", "d8h4"])
 
-        with patch("self_match.UCIEngineProcess", side_effect=[mock_white, mock_black]):
+        with patch("tools.matches.self_match.UCIEngineProcess", side_effect=[mock_white, mock_black]):
             res = self_match.play_single_game(
                 game_idx=1,
                 pos_name="Standard",
@@ -155,7 +153,7 @@ class TestSelfMatchHarness(unittest.TestCase):
             def close(self):
                 pass
 
-        with patch("self_match.UCIEngineProcess", side_effect=[NormalEngine(), CrashEngine()]):
+        with patch("tools.matches.self_match.UCIEngineProcess", side_effect=[NormalEngine(), CrashEngine()]):
             res = self_match.play_single_game(
                 game_idx=1,
                 pos_name="French Defense Advance",

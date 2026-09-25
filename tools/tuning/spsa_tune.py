@@ -278,6 +278,7 @@ class UCIEngineProcess:
         winc_ms: int,
         binc_ms: int,
         timeout_sec: float,
+        nodes_per_move: Optional[int] = None,
     ) -> Optional[str]:
         if starting_fen == chess.STARTING_FEN:
             pos_cmd = "position startpos"
@@ -288,7 +289,8 @@ class UCIEngineProcess:
             pos_cmd += " moves " + " ".join(moves)
 
         self._send(pos_cmd)
-        go_cmd = f"go wtime {max(1, wtime_ms)} btime {max(1, btime_ms)} winc {winc_ms} binc {binc_ms}"
+        go_cmd = (f"go nodes {nodes_per_move}" if nodes_per_move is not None else
+                  f"go wtime {max(1, wtime_ms)} btime {max(1, btime_ms)} winc {winc_ms} binc {binc_ms}")
         self._send(go_cmd)
 
         start_time = time.monotonic()
@@ -337,6 +339,7 @@ class SingleGameTask:
     inc_sec: float
     cpu_core: int
     uci_options: Dict[str, Any]
+    nodes_per_move: Optional[int] = None
 
 
 @dataclass
@@ -445,7 +448,8 @@ def _run_single_game_worker(task: SingleGameTask) -> SingleGameOutput:
             opp_role = task.black_role if side == chess.WHITE else task.white_role
 
             curr_clock_ms = wtime_ms if side == chess.WHITE else btime_ms
-            timeout_sec = (curr_clock_ms / 1000.0) + 15.0
+            timeout_sec = (120.0 if task.nodes_per_move is not None else
+                           (curr_clock_ms / 1000.0) + 15.0)
 
             t0 = time.monotonic()
             move_str = None
@@ -458,6 +462,7 @@ def _run_single_game_worker(task: SingleGameTask) -> SingleGameOutput:
                     winc_ms=winc_ms,
                     binc_ms=binc_ms,
                     timeout_sec=timeout_sec,
+                    nodes_per_move=task.nodes_per_move,
                 )
             except EngineCrashError as e:
                 result_str = "0-1" if side == chess.WHITE else "1-0"
@@ -483,7 +488,7 @@ def _run_single_game_worker(task: SingleGameTask) -> SingleGameOutput:
             if move_str is None:
                 result_str = "0-1" if side == chess.WHITE else "1-0"
                 winner = opp_role
-                termination = f"Timeout / No move returned ({role})"
+                termination = f"Timeout / No move returned ({role}) at {board.fen()}"
                 is_valid = False
                 error_msg = termination
                 break
@@ -1390,7 +1395,7 @@ class SPSATuner:
         except KeyboardInterrupt:
             print(f"\n[SPSA] Tuning safely stopped by user (Ctrl+C).")
             print(f"[SPSA] Last valid checkpoint preserved at iteration {self.completed_iterations}.")
-            print(f"[SPSA] You can resume at any time by rerunning tools/spsa_tune.py.")
+            print(f"[SPSA] You can resume at any time by rerunning tools/tuning/spsa_tune.py.")
 
 
 # =============================================================================

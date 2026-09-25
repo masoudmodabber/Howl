@@ -113,7 +113,7 @@ Result SearchQ(Board& b,Move& prev,int alpha,int beta,int ply,int qDepth,bool pv
 {
     if(Search::stopRequested.load(std::memory_order_relaxed))return {0,{}};
     if(ply>0&&RepetitionHistory::IsRepetition(b.ZobristHashCode))return {0,{}};
-    ++Search::searchNodeCount;if((Search::searchNodeCount&2047)==0)Search::CheckLimits();
+    ++Search::searchNodeCount;if(Search::strictNodeLimit||(Search::searchNodeCount&2047)==0)Search::CheckLimits();
     int side=b.sideToMove?1:0;
     bool check=BoardLogic::UnderAttack(b,b.pieces[side*8+6].front(),!b.sideToMove);
     if(ply>=PVSSearch::MaxKillerPly-1)
