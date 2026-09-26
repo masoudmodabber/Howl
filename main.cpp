@@ -11,6 +11,8 @@
 #include "KingSetup.h"
 #include "Option.h"
 #include "PassedPawnSetup.h"
+#include "NNUEEvaluator.h"
+#include "ExperimentalEvaluator.h"
 
 int main(int argc, char* argv[])
 {
@@ -44,6 +46,8 @@ int main(int argc, char* argv[])
     setvbuf(stdout, nullptr, _IONBF, 0);    // fully unbuffer stdout
     UCI uci;
     uci.MainAsync();
+    auto p = NNUEEvaluator::GetProfile();
+    std::cerr << "NNUE_PROFILE forward " << p.forwardCalls << " " << p.forwardMs << " update " << p.updateCalls << " " << p.updateMs << " rebuild " << p.rebuildCalls << " " << p.rebuildMs << " save " << p.snapshotSaveCalls << " " << p.snapshotSaveMs << " restore " << p.snapshotRestoreCalls << " " << p.snapshotRestoreMs << "\n";
 
     return 0;
 }

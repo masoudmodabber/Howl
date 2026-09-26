@@ -63,10 +63,13 @@ def play_game(
     black_name = "Howl-Production" if cand_color == chess.WHITE else "Howl-Candidate"
 
     engine_procs = {}
-    uci_opts = {"Hash": 32}
+    candidate_opts = {"Hash": 32, "Evaluator": "NNUE"}
+    production_opts = {"Hash": 32, "Evaluator": "Classical"}
 
     try:
-        engine_procs[chess.WHITE] = UCIEngineProcess(white_bin, uci_opts)
+        engine_procs[chess.WHITE] = UCIEngineProcess(
+            white_bin, candidate_opts if cand_color == chess.WHITE else production_opts
+        )
     except Exception as e:
         return {
             "game_idx": game_idx,
@@ -85,7 +88,9 @@ def play_game(
         }
 
     try:
-        engine_procs[chess.BLACK] = UCIEngineProcess(black_bin, uci_opts)
+        engine_procs[chess.BLACK] = UCIEngineProcess(
+            black_bin, candidate_opts if cand_color == chess.BLACK else production_opts
+        )
     except Exception as e:
         engine_procs[chess.WHITE].close()
         return {
@@ -226,6 +231,7 @@ def play_game(
         "cand_score": cand_score,
         "prod_score": prod_score,
         "termination": termination,
+        "moves": " ".join(played_moves),
         "plies": len(played_moves),
         "nodes": total_nodes,
         "crashes": crashes,
@@ -343,7 +349,7 @@ def main():
 
     # Write games TSV
     with open(out_dir / "games.tsv", "w", newline="", encoding="utf-8") as f:
-        fields = ["game_idx", "opening_id", "cand_color", "result", "winner", "cand_score", "prod_score", "termination", "plies", "nodes", "crashes", "illegal_moves", "timeouts"]
+        fields = ["game_idx", "opening_id", "cand_color", "result", "winner", "cand_score", "prod_score", "termination", "moves", "plies", "nodes", "crashes", "illegal_moves", "timeouts"]
         writer = csv.DictWriter(f, fieldnames=fields, delimiter="\t")
         writer.writeheader()
         for r in results:

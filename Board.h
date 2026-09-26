@@ -2,7 +2,17 @@
 #define BOARD_H
 
 #include <vector>
+#include <array>
 #include "MyList.h"
+
+struct NNUEState
+{
+    std::array<float, 256> whiteAccumulator{};
+    std::array<float, 256> blackAccumulator{};
+    int whiteKingSquare = -1;
+    int blackKingSquare = -1;
+    bool initialized = false;
+};
 
 class Board
 {
@@ -22,6 +32,8 @@ public:
     int unpassentPlace;
     int mainBoard[64];
     MyList pieces[15];
+    NNUEState nnueState;
+    std::vector<NNUEState> nnueSnapshots;
 
     Board *MakeCopy();
     static bool AreBoardsEqual(Board &board1, Board &board2, bool requireExactPieceOrder = false);

@@ -6,6 +6,7 @@
 #include "Search.h"
 #include "BoardLogic.h"
 #include "EvaluationLogic.h"
+#include "ExperimentalEvaluator.h"
 #include "QSearcher.h"
 #include "MoveLogic.h"
 #include "UCI.h"
@@ -1737,7 +1738,7 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
     const int side=b.sideToMove?1:0;
     const bool inCheck=BoardLogic::UnderAttack(b,b.pieces[side*8+6].front(),!b.sideToMove);
     if (ply >= SearchStackSize - 1)
-        return {inCheck ? 0 : EvaluationLogic::Evaluate(b), {}};
+        return {inCheck ? 0 : ExperimentalEvaluator::Evaluate(b), {}};
     SearchStackFrame& ss=StackFrame(ply);
     ss.ply=ply; ss.currentMove=prev;
     ss.hasCurrentMove=prev.beginPlace>=0&&prev.endPlace>=0&&prev.promotionPiece!=-1;
@@ -1809,7 +1810,7 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
             rawStaticEval=ss.staticEval;
         else if(hit&&tt.staticEval!=TT_NO_STATIC_EVAL) rawStaticEval=tt.staticEval;
         else {
-            rawStaticEval=EvaluationLogic::Evaluate(b)-
+            rawStaticEval=ExperimentalEvaluator::Evaluate(b)-
                 ss.statScore/SearchParameters::StaticEvaluation::StatScoreDivisor;
             if(ss.excludedMove==0)
                 TranspositionTable::Store(key,0,-128,TT_EVAL_ONLY,0,rawStaticEval,pv);
@@ -2289,7 +2290,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             ss.staticEval = -StackFrame(depthGone - 1).staticEval;
         else
         {
-            ss.staticEval = EvaluationLogic::Evaluate(board4);
+        ss.staticEval = ExperimentalEvaluator::Evaluate(board4);
             if (prevMove.promotionPiece != -1)
                 ss.staticEval -= ss.statScore / 512;
         }
