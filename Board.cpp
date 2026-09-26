@@ -32,6 +32,8 @@ Board* Board::MakeCopy()
     copiedBoard->blackBigCastle = blackBigCastle;
     copiedBoard->unpassentPlace = unpassentPlace;
     copiedBoard->ZobristHashCode = ZobristHashCode;
+    copiedBoard->nnueState = nnueState;
+    copiedBoard->nnueSnapshots = nnueSnapshots;
     return copiedBoard;
 }
 

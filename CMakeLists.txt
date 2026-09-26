@@ -44,6 +44,14 @@ target_link_libraries(howl_extract_canonical_responses PRIVATE fathom)
 include(CTest)
 
 if(BUILD_TESTING)
+    add_executable(howl_structured_nnue_weights_test
+        tests/StructuredNNUEWeightsTest.cpp StructuredNNUEWeights.cpp
+    )
+    target_include_directories(howl_structured_nnue_weights_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    add_executable(howl_structured_nnue_rebuild_test
+        tests/StructuredNNUERebuildTest.cpp StructuredNNUEEvaluator.cpp StructuredNNUEWeights.cpp BoardInitializer.cpp Option.cpp
+    )
+    target_include_directories(howl_structured_nnue_rebuild_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     set(TEST_ENGINE_SOURCES ${SOURCES})
     list(REMOVE_ITEM TEST_ENGINE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
 
@@ -54,6 +62,14 @@ if(BUILD_TESTING)
     target_include_directories(howl_correctness_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_definitions(howl_correctness_tests PRIVATE HOWL_CORRECTNESS_TESTING=1)
     target_link_libraries(howl_correctness_tests PRIVATE fathom)
+
+    add_executable(howl_nnue_tests
+        tests/NNUEPrototypeTests.cpp
+        ${TEST_ENGINE_SOURCES}
+    )
+    target_include_directories(howl_nnue_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(howl_nnue_tests PRIVATE fathom)
+    add_test(NAME nnue_prototype COMMAND howl_nnue_tests)
 
     add_executable(howl_benchmark
         tests/Benchmark.cpp

@@ -10,6 +10,7 @@
 #include <iostream>
 #include "BoardInitializer.h"
 #include "RepetitionHistory.h"
+#include "NNUEEvaluator.h"
 #include <algorithm>
 
 void GameLogic::HaveReachedToMoveSequence(Move &move, Move &prevMove, int depth, int depthGone)
@@ -23,6 +24,7 @@ void GameLogic::HaveReachedToMoveSequence(Move &move, Move &prevMove, int depth,
 
 void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int depth, int depthGone, MissingInfoAboutPrevStateFromMove* missingInfo)
 {
+    NNUEEvaluator::SaveSnapshot(thisBoard);
     if (UCI::IsTest())
         HaveReachedToMoveSequence(thisMove, prevMove, depth, depthGone);
     int beginPlace = thisMove.beginPlace;
@@ -75,6 +77,7 @@ void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int dep
     }
     ChangeSide(thisBoard);
     SetCastleFlags(thisBoard, thisMove);
+    NNUEEvaluator::UpdateAfterMove(thisBoard, thisMove, thisBoard.nnueSnapshots.back());
     RepetitionHistory::Push(thisBoard.ZobristHashCode);
 }
 
@@ -799,6 +802,7 @@ void GameLogic::Unpassent(Board &thisBoard, Move &thisMove, MissingInfoAboutPrev
 
 void GameLogic::UndoMove(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevStateFromMove &missingInfo)
 {
+    NNUEState previous = NNUEEvaluator::RestoreSnapshot(thisBoard);
     UnSideChange(thisBoard, thisMove);
     if (thisMove.promotionPiece >= 0)
     {
@@ -846,6 +850,8 @@ void GameLogic::UndoMove(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevS
         UnSetUnpassentPlace(thisBoard, thisMove, missingInfo.previousUnpassentPlace);
     }
     RepetitionHistory::Pop();
+    thisBoard.nnueState = previous;
+    thisBoard.nnueSnapshots.pop_back();
 }
 
 void GameLogic::UnSetUnpassentPlace(Board& thisBoard, Move& thisMove, int previousUnpassentPlace)
