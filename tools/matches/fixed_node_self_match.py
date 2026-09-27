@@ -12,6 +12,7 @@ Supports:
 from __future__ import annotations
 
 import argparse
+import hashlib
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import csv
 import json
@@ -50,6 +51,7 @@ def play_game(
     prod_bin: str,
     nodes_per_move: int,
     cpu_core: int,
+    candidate_weights: Optional[str],
 ) -> dict[str, Any]:
     if hasattr(os, "sched_setaffinity"):
         try:
@@ -63,7 +65,9 @@ def play_game(
     black_name = "Howl-Production" if cand_color == chess.WHITE else "Howl-Candidate"
 
     engine_procs = {}
-    candidate_opts = {"Hash": 32, "Evaluator": "NNUE"}
+    candidate_opts = {"Hash": 32, "Evaluator": "StructuredNNUE" if candidate_weights else "NNUE"}
+    if candidate_weights:
+        candidate_opts["StructuredNNUEWeights"] = candidate_weights
     production_opts = {"Hash": 32, "Evaluator": "Classical"}
 
     try:
@@ -277,6 +281,7 @@ def main():
     parser.add_argument("--nodes", type=int, default=20000, help="Fixed nodes per move")
     parser.add_argument("--concurrency", type=int, default=16, help="Concurrent games")
     parser.add_argument("--out-dir", default="evaluator-analysis/redesign/attack/match", help="Output directory")
+    parser.add_argument("--candidate-weights", help="StructuredNNUE candidate weights path")
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -308,7 +313,7 @@ def main():
 
     with ProcessPoolExecutor(max_workers=args.concurrency) as pool:
         futures = {
-            pool.submit(play_game, t[0], t[1], t[2], t[3], args.candidate, args.production, args.nodes, t[4]): t[0]
+            pool.submit(play_game, t[0], t[1], t[2], t[3], args.candidate, args.production, args.nodes, t[4], args.candidate_weights): t[0]
             for t in tasks
         }
         for future in as_completed(futures):
@@ -373,6 +378,8 @@ def main():
         "timeouts": total_timeouts,
         "avg_nodes_per_move": avg_nodes_per_move,
         "wall_time_sec": wall_time,
+        "candidate_weights": os.path.abspath(args.candidate_weights) if args.candidate_weights else None,
+        "candidate_weights_sha256": hashlib.sha256(Path(args.candidate_weights).read_bytes()).hexdigest() if args.candidate_weights else None,
     }
 
     with open(out_dir / "summary.json", "w", encoding="utf-8") as f:
