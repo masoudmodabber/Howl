@@ -44,6 +44,8 @@ target_link_libraries(howl_extract_canonical_responses PRIVATE fathom)
 include(CTest)
 
 if(BUILD_TESTING)
+    set(TEST_ENGINE_SOURCES ${SOURCES})
+    list(REMOVE_ITEM TEST_ENGINE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
     add_executable(howl_structured_nnue_weights_test
         tests/StructuredNNUEWeightsTest.cpp StructuredNNUEWeights.cpp
     )
@@ -52,9 +54,12 @@ if(BUILD_TESTING)
         tests/StructuredNNUERebuildTest.cpp StructuredNNUEEvaluator.cpp StructuredNNUEWeights.cpp BoardInitializer.cpp Option.cpp
     )
     target_include_directories(howl_structured_nnue_rebuild_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    set(TEST_ENGINE_SOURCES ${SOURCES})
-    list(REMOVE_ITEM TEST_ENGINE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
-
+    add_executable(howl_structured_nnue_incremental_validator
+        tests/StructuredNNUEIncrementalValidator.cpp
+        ${TEST_ENGINE_SOURCES}
+    )
+    target_include_directories(howl_structured_nnue_incremental_validator PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(howl_structured_nnue_incremental_validator PRIVATE fathom)
     add_executable(howl_correctness_tests
         tests/CorrectnessTests.cpp
         ${TEST_ENGINE_SOURCES}

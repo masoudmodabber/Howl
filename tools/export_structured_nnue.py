@@ -4,8 +4,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
-MAGIC=b'HOWLSTRC'; VERSION=1
-ORDER=('base.weight','real.weight','b','f1.weight','f1.bias','f2.weight','f2.bias','out.weight','out.bias','scalar.weight','sres.weight')
+MAGIC=b'HOWLSTRC'; VERSION=2
+ORDER=('ft.weight','ft_bias','f1.weight','f1.bias','f2.weight','f2.bias','out.weight','out.bias')
 
 def write(path,tensors):
     with open(path,'wb') as f:
@@ -26,7 +26,10 @@ def read(path):
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('checkpoint');p.add_argument('output');a=p.parse_args()
-    ck=torch.load(a.checkpoint,map_location='cpu',weights_only=False); tensors=ck['model']; missing=[x for x in ORDER if x not in tensors]
+    ck=torch.load(a.checkpoint,map_location='cpu',weights_only=False); tensors=ck['model'].copy()
+    if 'real.weight' in tensors and 'factor.weight' in tensors:
+        tensors['ft.weight']=tensors.pop('real.weight')+tensors.pop('factor.weight').repeat(64,1)
+    missing=[x for x in ORDER if x not in tensors]
     if missing: raise ValueError(f'missing tensors: {missing}')
     print('tensors:')
     for name in ORDER: print(name,tuple(tensors[name].shape),tensors[name].numel(),tensors[name].dtype)
