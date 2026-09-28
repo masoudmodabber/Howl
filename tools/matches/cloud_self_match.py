@@ -24,13 +24,43 @@ from typing import Any, Dict, List, Optional, Tuple
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 try:
+    from tools.matches import self_match as _self_match
     from tools.matches.self_match import (
         EngineConfig, GameResult, MatchConfig, play_single_game, print_summary,
     )
 except ModuleNotFoundError:  # Flat /app/tools layout used by cloud workers.
+    from tools import self_match as _self_match
     from tools.self_match import (
         EngineConfig, GameResult, MatchConfig, play_single_game, print_summary,
     )
+
+VALID_EVALUATORS = {"Classical", "NNUE", "NNUEStaticLinear", "StructuredNNUE"}
+
+def _validate_evaluator_config(evaluator: str, weights: str, role: str) -> None:
+    if evaluator not in VALID_EVALUATORS:
+        raise ValueError(f"invalid {role} evaluator: {evaluator}")
+    if evaluator == "StructuredNNUE" and not weights:
+        raise ValueError(f"--{role}-weights is required for StructuredNNUE")
+
+
+def _configure_engine_processes(old_evaluator: str, new_evaluator: str, old_weights: str, new_weights: str):
+    base = _self_match.UCIEngineProcess
+    configurations = {}
+
+    class ConfiguredUCIEngineProcess(base):
+        def __init__(self, path: str):
+            super().__init__(path)
+            evaluator, weights = configurations[os.path.abspath(path)]
+            self._send(f"setoption name Evaluator value {evaluator}")
+            if evaluator == "StructuredNNUE":
+                self._send(f"setoption name StructuredNNUEWeights value {weights}")
+            self._send("isready")
+            while self._read_line() != "readyok":
+                pass
+
+    configurations[os.path.abspath("/app/howl-old")] = (old_evaluator, old_weights)
+    configurations[os.path.abspath("/app/howl-new")] = (new_evaluator, new_weights)
+    return base, ConfiguredUCIEngineProcess, configurations
 
 # 10 diverse starting opening positions played with both colours (20 games default)
 DETERMINISTIC_OPENINGS: List[Tuple[str, str]] = [
@@ -242,11 +272,16 @@ def generate_task_specs(
     return tasks
 
 
-def run_worker_game(task: CloudTaskSpec, old_engine_path: str, new_engine_path: str) -> GameResult:
+def run_worker_game(task: CloudTaskSpec, old_engine_path: str, new_engine_path: str, old_evaluator: str = "Classical", new_evaluator: str = "Classical", old_weights: str = "", new_weights: str = "") -> GameResult:
     """
     Executes a single game worker run (used inside Docker / ACI or local simulation).
     """
-    return play_single_game(
+    base_process, configured_process, configurations = _configure_engine_processes(old_evaluator, new_evaluator, old_weights, new_weights)
+    configurations[os.path.abspath(old_engine_path)] = (old_evaluator, old_weights)
+    configurations[os.path.abspath(new_engine_path)] = (new_evaluator, new_weights)
+    _self_match.UCIEngineProcess = configured_process
+    try:
+        return play_single_game(
         game_idx=task.game_index,
         pos_name=task.pos_name,
         starting_fen=task.starting_fen,
@@ -257,6 +292,8 @@ def run_worker_game(task: CloudTaskSpec, old_engine_path: str, new_engine_path: 
         base_time_sec=task.movetime_sec,
         inc_sec=task.inc_sec,
     )
+    finally:
+        _self_match.UCIEngineProcess = base_process
 
 
 class AzureCloudRunner:
@@ -271,6 +308,10 @@ class AzureCloudRunner:
         location: str = "eastus",
         candidate_regions: Optional[List[str]] = None,
         dry_run: bool = False,
+        old_evaluator: str = "Classical",
+        new_evaluator: str = "Classical",
+        old_weights: str = "",
+        new_weights: str = "",
     ):
         self.old_path = os.path.abspath(old_path)
         self.new_path = os.path.abspath(new_path)
@@ -284,6 +325,12 @@ class AzureCloudRunner:
         self.location = location
         self.candidate_regions = candidate_regions or CANDIDATE_REGIONS
         self.dry_run = dry_run
+        _validate_evaluator_config(old_evaluator, old_weights, "old")
+        _validate_evaluator_config(new_evaluator, new_weights, "new")
+        self.old_evaluator = old_evaluator
+        self.new_evaluator = new_evaluator
+        self.old_weights = old_weights
+        self.new_weights = new_weights
 
         match_id = uuid.uuid4().hex[:8]
         self.rg_name = f"howl-match-rg-{match_id}"
@@ -537,6 +584,10 @@ ENTRYPOINT ["python", "-u", "/app/tools/cloud_self_match.py"]
                     "inc_sec": task.inc_sec,
                     "old_engine": "/app/howl-old",
                     "new_engine": "/app/howl-new",
+                    "old_evaluator": self.old_evaluator,
+                    "new_evaluator": self.new_evaluator,
+                    "old_weights": self.old_weights,
+                    "new_weights": self.new_weights,
                 })
                 b64_payload = base64.b64encode(task_json.encode("utf-8")).decode("utf-8")
                 cmd_args = ["python", "-u", "/app/tools/cloud_self_match.py", "--worker-payload", b64_payload]
@@ -848,6 +899,10 @@ def main() -> int:
         default=None,
         help="Output file for this run's PGN games (default: self-match-YYYY-MM-DD-HHMMSS.pgn)",
     )
+    parser.add_argument("--old-evaluator", default="Classical")
+    parser.add_argument("--new-evaluator", default="Classical")
+    parser.add_argument("--old-weights", default="")
+    parser.add_argument("--new-weights", default="")
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -875,7 +930,7 @@ def main() -> int:
             movetime_sec=task_data["movetime_sec"],
             inc_sec=task_data["inc_sec"],
         )
-        res = run_worker_game(task, task_data["old_engine"], task_data["new_engine"])
+        res = run_worker_game(task, task_data["old_engine"], task_data["new_engine"], task_data["old_evaluator"], task_data["new_evaluator"], task_data.get("old_weights", ""), task_data.get("new_weights", ""))
         print("\n=== GAME_RESULT_JSON ===")
         print(json.dumps({
             "game_index": res.game_index,
@@ -898,6 +953,16 @@ def main() -> int:
         print(f"Error: --games must be a positive even integer (received {args.games}).", file=sys.stderr)
         return 1
 
+    _validate_evaluator_config(args.old_evaluator, args.old_weights, "old")
+    _validate_evaluator_config(args.new_evaluator, args.new_weights, "new")
+    print("Configuration:")
+    print(f"  old executable: {args.old}")
+    print(f"  old evaluator:  {args.old_evaluator}")
+    if args.old_evaluator == "StructuredNNUE": print(f"  old weights:    {args.old_weights}")
+    print(f"  new executable: {args.new}")
+    print(f"  new evaluator:  {args.new_evaluator}")
+    if args.new_evaluator == "StructuredNNUE": print(f"  new weights:    {args.new_weights}")
+
     runner = AzureCloudRunner(
         old_path=args.old,
         new_path=args.new,
@@ -906,6 +971,10 @@ def main() -> int:
         total_games=args.games,
         pgn_output=args.pgn,
         dry_run=args.dry_run,
+        old_evaluator=args.old_evaluator,
+        new_evaluator=args.new_evaluator,
+        old_weights=args.old_weights,
+        new_weights=args.new_weights,
     )
 
     results = runner.run()
