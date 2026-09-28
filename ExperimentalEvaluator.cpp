@@ -10,23 +10,32 @@
 
 namespace { ExperimentalEvaluator::Mode mode = ExperimentalEvaluator::Mode::Classical; StructuredNNUEEvaluator structured; bool structuredLoaded=false; std::string structuredWeightsPath; }
 
+namespace {
+StructuredNNUEEvaluator& GetStructuredEvaluator()
+{
+    if (structuredWeightsPath.empty()) throw std::runtime_error("StructuredNNUE selected but StructuredNNUEWeights was not supplied");
+    if (!structuredLoaded) {
+        const std::string resolved=std::filesystem::absolute(structuredWeightsPath).string();
+        structured.Load(resolved);
+        structuredLoaded=true;
+        std::cerr << "StructuredNNUE weights: " << resolved << "\n";
+    }
+    return structured;
+}
+}
+
 void ExperimentalEvaluator::SetMode(Mode value) { mode = value; }
 void ExperimentalEvaluator::SetStructuredNNUEWeightsPath(const std::string& path) { structuredWeightsPath=path; structuredLoaded=false; }
 ExperimentalEvaluator::Mode ExperimentalEvaluator::GetMode() { return mode; }
+void ExperimentalEvaluator::PrepareStructured(Board& board) { if (!board.nnueState.initialized) GetStructuredEvaluator().Rebuild(board); }
+void ExperimentalEvaluator::UpdateStructuredAfterMove(Board& board, const Move& move, const NNUEState& previous) { GetStructuredEvaluator().UpdateAfterMove(board, move, previous); }
 
 int ExperimentalEvaluator::Evaluate(Board& board)
 {
     if (mode == Mode::Classical)
         return EvaluationLogic::Evaluate(board);
     if (mode == Mode::StructuredNNUE) {
-        if (structuredWeightsPath.empty()) throw std::runtime_error("StructuredNNUE selected but StructuredNNUEWeights was not supplied");
-        if (!structuredLoaded) {
-            const std::string resolved=std::filesystem::absolute(structuredWeightsPath).string();
-            structured.Load(resolved);
-            structuredLoaded=true;
-            std::cerr << "StructuredNNUE weights: " << resolved << "\n";
-        }
-        return static_cast<int>(std::lround(structured.Evaluate(board)));
+        return static_cast<int>(std::lround(GetStructuredEvaluator().Evaluate(board)));
     }
     if (!board.nnueState.initialized)
         NNUEEvaluator::Rebuild(board);

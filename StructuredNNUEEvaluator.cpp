@@ -64,7 +64,7 @@ float StructuredNNUEEvaluator::Evaluate(Board& b) const {
 float StructuredNNUEEvaluator::Evaluate(Board& b) const {
     if(!b.nnueState.initialized) Rebuild(b); auto* w1=tensor("f1.weight");auto* b1=tensor("f1.bias");auto* w2=tensor("f2.weight");auto* b2=tensor("f2.bias");auto* wo=tensor("out.weight");float bo=tensor("out.bias")[0];
     const auto& wa=b.nnueState.whiteAccumulator;const auto& ba=b.nnueState.blackAccumulator;bool stmBlack=b.sideToMove;const auto& s=stmBlack?ba:wa;const auto& q=stmBlack?wa:ba;std::array<float,32>h{},h2{};
-    for(int i=0;i<32;++i){float z=b1[i];for(int j=0;j<256;++j)z+=w1[i*512+j]*std::clamp(s[j],0.f,1.f)+w1[i*512+256+j]*std::clamp(q[j],0.f,1.f);h[i]=std::clamp(z,0.f,1.f);}
-    for(int i=0;i<32;++i){float z=b2[i];for(int j=0;j<32;++j)z+=w2[i*32+j]*h[j];h2[i]=std::clamp(z,0.f,1.f);}
+    for(int i=0;i<32;++i){float z=b1[i];for(int j=0;j<256;++j)z+=w1[i*512+j]*std::clamp(s[j],0.f,1.f)+w1[i*512+256+j]*std::clamp(q[j],0.f,1.f);h[i]=std::max(0.f,z);}
+    for(int i=0;i<32;++i){float z=b2[i];for(int j=0;j<32;++j)z+=w2[i*32+j]*h[j];h2[i]=std::max(0.f,z);}
     float result=bo;for(int i=0;i<32;++i)result+=wo[i]*h2[i];return result;
 }
