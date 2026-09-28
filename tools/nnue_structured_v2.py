@@ -101,6 +101,7 @@ def stream_rows(paths, min_knodes, validation, max_validation=None, seed=1, epoc
 
 def stream_epoch_single(n,opt,paths,device,args,epoch,training=True):
     stats={'raw':0,'rejected':0,'accepted':0,'train':0,'validation':0,'cp':0,'mate':0,'white':0,'black':0}; cov=np.zeros(FEATURES,dtype=np.int64); start=time.time()
+    accepted_limit = getattr(args, 'validation_limit' if args.validation else 'train_limit', None)
     batches=queue.Queue(maxsize=max(1,getattr(args,'prefetch',4))); sentinel=object()
     def producer():
         rows=[]
@@ -120,6 +121,8 @@ def stream_epoch_single(n,opt,paths,device,args,epoch,training=True):
                                 tensors=list(cached_batch(rows,'cpu'))
                                 if device.type=='cuda': tensors=[t.pin_memory() if t.device.type=='cpu' else t for t in tensors]
                                 batches.put((tensors,len(rows))); rows=[]
+                            if accepted_limit is not None and stats['accepted'] >= accepted_limit:
+                                raise StopIteration
                             if args.smoke and stats['accepted']>=args.smoke: raise StopIteration
             if rows:
                 tensors=list(cached_batch(rows,'cpu'))
@@ -169,6 +172,7 @@ def stream_epoch(n,opt,paths,device,args,epoch,training=True):
     if workers<=0:
         return stream_epoch_single(n,opt,paths,device,args,epoch,training)
     stats={'raw':0,'rejected':0,'accepted':0,'train':0,'validation':0,'cp':0,'mate':0,'white':0,'black':0}; cov=np.zeros(FEATURES,dtype=np.int64); start=time.time()
+    accepted_limit = getattr(args, 'validation_limit' if args.validation else 'train_limit', None)
     ctx=mp.get_context('fork'); tasks=ctx.Queue(maxsize=max(1,int(getattr(args,'prefetch',8)))); results=ctx.Queue(maxsize=max(1,int(getattr(args,'prefetch',8))))
     stop=threading.Event(); workers_list=[]
     def worker():
@@ -195,7 +199,7 @@ def stream_epoch(n,opt,paths,device,args,epoch,training=True):
                             is_val=((si*1000003+gi*9176+ri*37+17)%50)==0
                             if is_val!=args.validation: continue
                             rows.append((fen,cp,mate)); stats['accepted']+=1; stats['validation' if is_val else 'train']+=1; stats['mate' if mate is not None else 'cp']+=1; stats['black' if fen.split()[1]=='b' else 'white']+=1
-                            if args.smoke and stats['accepted']>=args.smoke:
+                            if accepted_limit is not None and stats['accepted']>=accepted_limit:
                                 stop_after_chunk=True
                                 break
                         if rows:
@@ -265,6 +269,8 @@ def run_stream(a):
         if a.smoke: break
 def evaluate_stream(n,paths,a):
     rows=[]; preds=[]; targets=[]; cps=[]; mates=[]; accepted=0
+    validation_limit = getattr(a, 'validation_limit', None)
+    limit = validation_limit if validation_limit is not None else a.max_validation
     for si,path in enumerate(paths):
         pf=pq.ParquetFile(path)
         for gi in range(pf.num_row_groups):
@@ -277,10 +283,10 @@ def evaluate_stream(n,paths,a):
                         x,bl,y,m=cached_batch(rows,'cpu')
                         with torch.no_grad(): preds.extend(n(x,bl,m).numpy()); targets.extend(y.numpy())
                         cps.extend([normalize_teacher_pov(r[2],r[3],r[1])[0] for r in rows]); mates.extend([normalize_teacher_pov(r[2],r[3],r[1])[1] for r in rows]); rows.clear()
-                    if a.max_validation and accepted>=a.max_validation: break
-                if a.max_validation and accepted>=a.max_validation: break
-            if a.max_validation and accepted>=a.max_validation: break
-        if a.max_validation and accepted>=a.max_validation: break
+                    if limit and accepted>=limit: break
+                if limit and accepted>=limit: break
+            if limit and accepted>=limit: break
+        if limit and accepted>=limit: break
     if rows:
         x,bl,y,m=cached_batch(rows,'cpu')
         with torch.no_grad(): preds.extend(n(x,bl,m).numpy()); targets.extend(y.numpy())

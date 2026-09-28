@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 
-static constexpr const char* WEIGHTS="/tmp/howl-nnue-structured-v2/epoch-1.weights";
+static constexpr const char* WEIGHTS="/tmp/howl-v3-relu-cont-full-2/epoch-5.weights";
 static void require(bool ok,const std::string& s){if(!ok)throw std::runtime_error(s);}
 static float diff(const NNUEState&a,const NNUEState&b,bool white){float d=0;const auto&x=white?a.whiteAccumulator:a.blackAccumulator;const auto&y=white?b.whiteAccumulator:b.blackAccumulator;for(int i=0;i<256;++i)d=std::max(d,std::fabs(x[i]-y[i]));return d;}
 static bool same(const NNUEState&a,const NNUEState&b,float&wd,float&bd){wd=diff(a,b,true);bd=diff(a,b,false);return wd<=1e-5f&&bd<=1e-5f&&a.whiteKingSquare==b.whiteKingSquare&&a.blackKingSquare==b.blackKingSquare;}
@@ -39,8 +39,20 @@ static Result oneUninitialized(const char* name,const char* fen,const char* uci,
     GameLogic::UndoMove(*board,*move,info); float uw,ub; r.undo=same(board->nnueState,before,uw,ub); delete move; return r;
 }
 int main(){try{
-    Option::Initialize(); AttackPlaces::Initialize(); BoardInitializer::Initialize(); PieceMoves::Initialize(); MoveLogic::Initialize(); KingSetup::Initialize(); PassedPawnSetup::Initialize(); ExperimentalEvaluator::SetMode(ExperimentalEvaluator::Mode::StructuredNNUE);
+    Option::Initialize(); AttackPlaces::Initialize(); BoardInitializer::Initialize(); PieceMoves::Initialize(); MoveLogic::Initialize(); KingSetup::Initialize(); PassedPawnSetup::Initialize(); ExperimentalEvaluator::SetStructuredNNUEWeightsPath(WEIGHTS); ExperimentalEvaluator::SetMode(ExperimentalEvaluator::Mode::StructuredNNUE);
     StructuredNNUEEvaluator e;e.Load(WEIGHTS);
+    {
+        auto root=make("r1bq1rk1/pp2bpp1/4p2p/2nN4/7B/4PN2/PPQ2PPP/R3KB1R b KQ - 0 11");
+        Move* move=ChessStringManipulation::ConvertTextToMove("e6e5",*root); require(move,"orientation move conversion failed");
+        MissingInfoAboutPrevStateFromMove info(*root,*move); GameLogic::DoMove(*root,*move,info);
+        const int whiteLeaf=ExperimentalEvaluator::Evaluate(*root);
+        auto black=make("r1bq1rk1/pp2bpp1/7p/2nNp3/7B/4PN2/PPQ2PPP/R3KB1R b KQ - 0 12");
+        const int blackLeaf=ExperimentalEvaluator::Evaluate(*black);
+        require(whiteLeaf>0,"white-to-move StructuredNNUE leaf is not positive");
+        require(blackLeaf<0,"black-to-move StructuredNNUE leaf is not negative");
+        std::cout<<"orientation leaves: | white "<<whiteLeaf<<" | black "<<blackLeaf<<" | PASS\n";
+        GameLogic::UndoMove(*root,*move,info); delete move;
+    }
     std::vector<Result> rs;
     rs.push_back(one("quiet non-king","rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1","g1f3",e));
     rs.push_back(one("normal capture","4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1","e4d5",e));

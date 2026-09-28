@@ -26,13 +26,8 @@ void GameLogic::HaveReachedToMoveSequence(Move &move, Move &prevMove, int depth,
 
 void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int depth, int depthGone, MissingInfoAboutPrevStateFromMove* missingInfo)
 {
-    static StructuredNNUEEvaluator structured;
-    static bool structuredLoaded=false;
     bool useStructured=ExperimentalEvaluator::GetMode()==ExperimentalEvaluator::Mode::StructuredNNUE;
-    if(useStructured){
-        if(!structuredLoaded){structured.Load("/tmp/howl-nnue-structured-v2/epoch-1.weights");structuredLoaded=true;}
-        if(!thisBoard.nnueState.initialized) structured.Rebuild(thisBoard);
-    }
+    if(useStructured) ExperimentalEvaluator::PrepareStructured(thisBoard);
     NNUEEvaluator::SaveSnapshot(thisBoard);
     if (UCI::IsTest())
         HaveReachedToMoveSequence(thisMove, prevMove, depth, depthGone);
@@ -88,7 +83,7 @@ void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int dep
     SetCastleFlags(thisBoard, thisMove);
     if (!useStructured)
         NNUEEvaluator::UpdateAfterMove(thisBoard, thisMove, thisBoard.nnueSnapshots.back());
-    if (useStructured) structured.UpdateAfterMove(thisBoard,thisMove,thisBoard.nnueSnapshots.back());
+    if (useStructured) ExperimentalEvaluator::UpdateStructuredAfterMove(thisBoard,thisMove,thisBoard.nnueSnapshots.back());
     RepetitionHistory::Push(thisBoard.ZobristHashCode);
 }
 
