@@ -7,6 +7,7 @@
 #include "Board.h"
 #include "BoardMaker.h"
 #include "EvaluationLogic.h"
+#include "ExperimentalEvaluator.h"
 #include "Option.h"
 #include "tuner/TunerEvaluationState.h"
 #include "tuner/TunerEvaluator.h"
@@ -31,6 +32,7 @@ public:
     static EvaluationVerificationResult RunVerification()
     {
         Option::Initialize();
+        ExperimentalEvaluator::SetMode(ExperimentalEvaluator::Mode::Classical);
         TunerRegistry registry = TunerRegistry::CreateRegistry();
         TunerEvaluationState state;
         state.LoadFromRegistry(registry);
@@ -59,7 +61,7 @@ public:
                 continue;
             }
 
-            int prodScore = EvaluationLogic::Evaluate(*board);
+            int prodScore = ExperimentalEvaluator::Evaluate(*board);
             int tunerScore = TunerEvaluator::Evaluate(*board, state);
 
             result.positionsCompared++;

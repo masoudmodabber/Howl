@@ -66,12 +66,14 @@ def play_game(
     black_name = "Howl-Production" if cand_color == chess.WHITE else "Howl-Candidate"
 
     engine_procs = {}
-    candidate_opts = {"Hash": 32, "Evaluator": "StructuredNNUE" if candidate_weights else "NNUE"}
+    candidate_opts = {"Hash": 32}
     if candidate_weights:
         candidate_opts["StructuredNNUEWeights"] = candidate_weights
-    production_opts = {"Hash": 32, "Evaluator": "StructuredNNUE" if production_weights else "Classical"}
+    production_opts = {"Hash": 32}
     if production_weights:
         production_opts["StructuredNNUEWeights"] = production_weights
+    else:
+        production_opts["BenchmarkEvaluator"] = "Classical"
 
     try:
         engine_procs[chess.WHITE] = UCIEngineProcess(

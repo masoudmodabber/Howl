@@ -51,9 +51,10 @@ def _configure_engine_processes(old_evaluator: str, new_evaluator: str, old_weig
         def __init__(self, path: str):
             super().__init__(path)
             evaluator, weights = configurations[os.path.abspath(path)]
-            self._send(f"setoption name Evaluator value {evaluator}")
             if evaluator == "StructuredNNUE":
                 self._send(f"setoption name StructuredNNUEWeights value {weights}")
+            else:
+                self._send(f"setoption name BenchmarkEvaluator value {evaluator}")
             self._send("isready")
             while self._read_line() != "readyok":
                 pass

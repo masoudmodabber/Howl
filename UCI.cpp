@@ -219,8 +219,7 @@ void UCI::Run(std::istream& in, std::ostream& out)
             out << "option name Hash type spin min 8 max 1024 default 40\n";
             out << "option name SyzygyPath type string default <empty>\n";
             out << "option name SyzygyProbeLimit type spin default 5 min 0 max 7\n";
-            out << "option name Evaluator type combo default Classical var Classical var NNUE var NNUEStaticLinear var StructuredNNUE\n";
-            out << "option name StructuredNNUEWeights type string default <empty>\n";
+            out << "option name StructuredNNUEWeights type string default weights/structured-v3-epoch5.weights\n";
             out << "uciok\n" << std::flush;
         }
         else if (order == "isready")
@@ -352,15 +351,9 @@ void UCI::Run(std::istream& in, std::ostream& out)
                 ApplyHashOptionCommand(order, out);
                 continue;
             }
-            if (order.rfind("setoption name Evaluator value ", 0) == 0)
-            {
-                const std::string value = order.substr(31);
-                ExperimentalEvaluator::SetMode(value == "StructuredNNUE"
-                    ? ExperimentalEvaluator::Mode::StructuredNNUE
-                    : value == "NNUEStaticLinear"
-                    ? ExperimentalEvaluator::Mode::NNUEStaticLinear
-                    : value == "NNUE" ? ExperimentalEvaluator::Mode::NNUE
-                    : ExperimentalEvaluator::Mode::Classical);
+            if (order.rfind("setoption name BenchmarkEvaluator value ", 0) == 0) {
+                const std::string value = order.substr(41);
+                ExperimentalEvaluator::SetMode(value == "Classical" ? ExperimentalEvaluator::Mode::Classical : ExperimentalEvaluator::Mode::StructuredNNUE);
                 continue;
             }
             if (order.rfind("setoption name StructuredNNUEWeights value ", 0) == 0)
