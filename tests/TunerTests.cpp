@@ -5,6 +5,7 @@
 #include "PassedPawnSetup.h"
 #include "PieceMoves.h"
 #include "tuner/TunerCoordinateDescent.h"
+#include "ExperimentalEvaluator.h"
 #include "tuner/TunerEvaluationVerifier.h"
 
 #include <iostream>
@@ -151,15 +152,16 @@ int TestParityRegression()
 {
     constexpr const char* fen =
         "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8";
+    ExperimentalEvaluator::SetMode(ExperimentalEvaluator::Mode::Classical);
     Tuner::TunerRegistry registry = Tuner::TunerRegistry::CreateRegistry();
     Tuner::TunerEvaluationState state;
     state.LoadFromRegistry(registry);
     std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
     if (!board) return 1;
-    const int productionScore = EvaluationLogic::Evaluate(*board);
+    const int classicalScore = ExperimentalEvaluator::Evaluate(*board);
     const int tunerScore = Tuner::TunerEvaluator::Evaluate(*board, state);
-    if (tunerScore != productionScore)
-        std::cerr << "Parity mismatch: production=" << productionScore << " tuner=" << tunerScore << '\n';
+    if (tunerScore != classicalScore)
+        std::cerr << "Parity mismatch: classical=" << classicalScore << " tuner=" << tunerScore << '\n';
     const auto verifierResult = Tuner::TunerEvaluationVerifier::RunVerification();
     if (!verifierResult.allMatched)
     {
@@ -168,7 +170,7 @@ int TestParityRegression()
                   << " tuner=" << verifierResult.tunerScore << '\n';
         return 1;
     }
-    return tunerScore == productionScore ? 0 : 1;
+    return tunerScore == classicalScore ? 0 : 1;
 }
 
 template <std::size_t N>

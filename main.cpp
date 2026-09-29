@@ -3,6 +3,7 @@
 //#include <malloc.h>
 
 #include <iostream>
+#include <filesystem>
 #include "UCI.h"
 #include "AttackPlaces.h"
 #include "BoardInitializer.h"
@@ -44,6 +45,9 @@ int main(int argc, char* argv[])
 
     // belt-and-braces (some libcs ignore unitbuf when piped):
     setvbuf(stdout, nullptr, _IONBF, 0);    // fully unbuffer stdout
+    const auto defaultWeights = (std::filesystem::path(argv[0]).parent_path().parent_path() / "weights" / "structured-v3-epoch5.weights").lexically_normal().string();
+    ExperimentalEvaluator::SetStructuredNNUEWeightsPath(defaultWeights);
+    ExperimentalEvaluator::SetMode(ExperimentalEvaluator::Mode::StructuredNNUE);
     UCI uci;
     uci.MainAsync();
     auto p = NNUEEvaluator::GetProfile();

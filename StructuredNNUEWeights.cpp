@@ -6,7 +6,7 @@
 
 namespace { template<class T> T read(std::ifstream& f){ T x{}; f.read(reinterpret_cast<char*>(&x),sizeof(x)); if(!f) throw std::runtime_error("truncated structured NNUE file"); return x; } }
 void StructuredNNUEWeights::Load(const std::string& path){
-    std::ifstream f(path,std::ios::binary); if(!f) throw std::runtime_error("cannot open structured NNUE file");
+    std::ifstream f(path,std::ios::binary); if(!f) throw std::runtime_error("cannot open structured NNUE file: " + path);
     std::array<char,8> magic{}; f.read(magic.data(),8); if(std::string(magic.data(),8)!="HOWLSTRC") throw std::runtime_error("bad structured NNUE magic");
     if(read<std::uint32_t>(f)!=2) throw std::runtime_error("bad structured NNUE version");
     const std::uint32_t count=read<std::uint32_t>(f); if(count!=8) throw std::runtime_error("bad structured NNUE tensor count");
