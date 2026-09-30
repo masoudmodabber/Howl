@@ -13,6 +13,7 @@ public:
     std::size_t ParameterCount() const { return weights.ParameterCount(); }
 private:
     StructuredNNUEWeights weights;
+    std::array<float, 32 * 512> transposedF1Weights{};
     static int cls(int piece, bool whitePerspective);
     float* tensor(const char* name) const;
     void AddPiece(Board& board, int piece, int square) const;
