@@ -108,7 +108,9 @@ def main():
         torch.save({'epoch': epoch, 'model': n.state_dict(), 'optimizer': opt.state_dict()},
                    os.path.join(a.output, f'epoch-{epoch}.pt'))
         print('epoch', epoch, 'train_wdl', loss, 'train_seconds', seconds,
-              'accepted', st['accepted'], 'validation_rows', vst['validation'], flush=True)
+              'accepted', st['accepted'], 'positions_per_second', st['accepted'] / max(seconds, 1e-9),
+              'batches_per_second', st.get('batches', 0) / max(seconds, 1e-9),
+              'validation_rows', vst['validation'], flush=True)
 
 
 if __name__ == '__main__':

@@ -261,3 +261,4 @@ Testing/
 
 # Tooling and IDE
 .codex/
+checkpoints/*.pt
