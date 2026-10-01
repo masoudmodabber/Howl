@@ -522,10 +522,11 @@ namespace
     public:
         MovePicker(Board& boardValue, int depthValue, int depthGoneValue,
                    int turnValue, const Move& previousMoveValue,
-                   uint16_t ttMoveValue)
+                   uint16_t ttMoveValue, MovePickerAttackerCache* attackerCacheValue = nullptr)
             : board(boardValue), depth(depthValue), depthGone(depthGoneValue),
               turn(turnValue), previousMove(previousMoveValue), packedTTMove(ttMoveValue),
-              packedCounterMove(CounterMoveFor(boardValue, depthGoneValue)) {}
+              packedCounterMove(CounterMoveFor(boardValue, depthGoneValue)),
+              attackerCache(attackerCacheValue) {}
 
         MovePicker(const MovePicker&) = delete;
         MovePicker& operator=(const MovePicker&) = delete;
@@ -544,6 +545,13 @@ namespace
                     break;
                 case Stage::GoodTactical:
                     GenerateTactical();
+                    if (goodCursor == 0 && goodCount > 1)
+                    {
+                        std::stable_sort(goodTactical.begin(), goodTactical.begin() + goodCount,
+                            [this](uint8_t a, uint8_t b) {
+                                return entries[a].key > entries[b].key;
+                            });
+                    }
                     if (Move* move = Select(goodTactical, goodCount, goodCursor))
                         return move;
                     stage = Stage::KillerOne;
@@ -570,6 +578,13 @@ namespace
                         break;
                     }
                     ScoreAndClassifyQuiets();
+                    if (strongQuietCursor == 0 && strongQuietCount > 1)
+                    {
+                        std::stable_sort(strongQuiets.begin(), strongQuiets.begin() + strongQuietCount,
+                            [this](uint8_t a, uint8_t b) {
+                                return entries[a].key > entries[b].key;
+                            });
+                    }
                     if (Move* move = Select(strongQuiets, strongQuietCount, strongQuietCursor))
                         return move;
                     stage = Stage::RemainingQuiets;
@@ -581,6 +596,13 @@ namespace
                         break;
                     }
                     ScoreAndClassifyQuiets();
+                    if (remainingQuietCursor == 0 && remainingQuietCount > 1)
+                    {
+                        std::stable_sort(remainingQuiets.begin(), remainingQuiets.begin() + remainingQuietCount,
+                            [this](uint8_t a, uint8_t b) {
+                                return entries[a].key > entries[b].key;
+                            });
+                    }
                     if (Move* move = Select(remainingQuiets, remainingQuietCount,
                                             remainingQuietCursor))
                         return move;
@@ -588,6 +610,13 @@ namespace
                     break;
                 case Stage::BadTactical:
                     GenerateTactical();
+                    if (badCursor == 0 && badCount > 1)
+                    {
+                        std::stable_sort(badTactical.begin(), badTactical.begin() + badCount,
+                            [this](uint8_t a, uint8_t b) {
+                                return entries[a].key > entries[b].key;
+                            });
+                    }
                     if (Move* move = Select(badTactical, badCount, badCursor))
                         return move;
                     stage = Stage::Done;
@@ -672,29 +701,13 @@ namespace
 
         Move* Select(std::array<uint8_t, 256>& indices, int count, int& cursor)
         {
-            if (cursor >= count)
-                return nullptr;
-            int best = cursor;
-            for (int i = cursor + 1; i < count; ++i)
+            while (cursor < count)
             {
-                if (entries[indices[i]].returned)
-                    continue;
-                if (entries[indices[best]].returned ||
-                    entries[indices[i]].key > entries[indices[best]].key)
-                    best = i;
+                const int index = indices[cursor++];
+                if (!entries[index].returned)
+                    return MarkReturned(index);
             }
-            std::swap(indices[cursor], indices[best]);
-            const int index = indices[cursor++];
-            return entries[index].returned ? Select(indices, count, cursor) : MarkReturned(index);
-        }
-
-        void EnsureAttackers()
-        {
-            if (attackersReady)
-                return;
-            whiteAttacker = MoveLogic::SetWhiteAttacker(board);
-            blackAttacker = MoveLogic::SetBlackAttacker(board);
-            attackersReady = true;
+            return nullptr;
         }
 
         void Score(int index)
@@ -702,14 +715,18 @@ namespace
             Entry& entry = entries[index];
             if (entry.scored)
                 return;
-            EnsureAttackers();
+            const AttackerState& white = attackerCache ? attackerCache->GetWhite(board) :
+                (attackersReady ? whiteAttacker : (whiteAttacker = MoveLogic::SetWhiteAttacker(board)));
+            const AttackerState& black = attackerCache ? attackerCache->GetBlack(board) :
+                (attackersReady ? blackAttacker : (blackAttacker = MoveLogic::SetBlackAttacker(board)));
+            attackersReady = true;
             Move& m = GetMove(entry);
             if (!m.givesCheckComputed)
             {
                 m.givesCheck = MoveLogic::MoveGivesCheck(board, m);
                 m.givesCheckComputed = true;
             }
-            MoveLogic::ScoreMove(board, m, whiteAttacker, blackAttacker);
+            MoveLogic::ScoreMove(board, m, white, black);
             entry.scored = true;
         }
 
@@ -905,6 +922,7 @@ namespace
         int ttEntry = -1;
         AttackerState whiteAttacker{};
         AttackerState blackAttacker{};
+        MovePickerAttackerCache* attackerCache = nullptr;
         bool tacticalGenerated = false;
         bool quietsGenerated = false;
         bool quietsScored = false;
@@ -2468,8 +2486,9 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
         deleteMoveList(shadowMoveList);
     }
 #endif
+    MovePickerAttackerCache nodeAttackerCache;
     MovePicker movePicker(board4, depth, depthGone, turn, prevMove,
-                          ttHit ? ttEntry.bestMove : 0);
+                          ttHit ? ttEntry.bestMove : 0, &nodeAttackerCache);
 #if HOWL_CORRECTNESS_TESTING
     const bool hasTTMove = movePicker.HasTTMove();
     if (ttHit && ttEntry.bestMove != 0)
@@ -2502,7 +2521,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 SearchParameters::ProbCut::ImprovingMargin * int(improving));
             int forcingMovesTried = 0;
             MovePicker probPicker(board4, depth, depthGone, turn, prevMove,
-                                  ttHit ? ttEntry.bestMove : 0);
+                                  ttHit ? ttEntry.bestMove : 0, &nodeAttackerCache);
             for (int i = 0; i < ProbCutPickerLimit &&
                          forcingMovesTried < ProbCutMaxCandidatesBase + 2 * int(cutNode); ++i)
             {

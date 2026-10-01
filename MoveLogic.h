@@ -105,6 +105,16 @@ struct AttackerState {
     int orderingScores[64] = {};
 };
 
+struct MovePickerAttackerCache {
+    AttackerState whiteAttacker{};
+    AttackerState blackAttacker{};
+    bool whiteValid = false;
+    bool blackValid = false;
+
+    inline const AttackerState& GetWhite(Board& board);
+    inline const AttackerState& GetBlack(Board& board);
+};
+
 class MoveLogic
 {
 public:
@@ -147,5 +157,25 @@ private:
     static ExchangeChessCache ExchangeCacheWithoutBeginPiece;
     static bool initialized;
 };
+
+inline const AttackerState& MovePickerAttackerCache::GetWhite(Board& board)
+{
+    if (!whiteValid)
+    {
+        whiteAttacker = MoveLogic::SetWhiteAttacker(board);
+        whiteValid = true;
+    }
+    return whiteAttacker;
+}
+
+inline const AttackerState& MovePickerAttackerCache::GetBlack(Board& board)
+{
+    if (!blackValid)
+    {
+        blackAttacker = MoveLogic::SetBlackAttacker(board);
+        blackValid = true;
+    }
+    return blackAttacker;
+}
 
 #endif
