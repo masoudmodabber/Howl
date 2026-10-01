@@ -231,8 +231,19 @@ float NNUEEvaluator::Evaluate(const Board& board)
 
 void NNUEEvaluator::ResetProfile() { profile = {}; }
 NNUEEvaluator::Profile NNUEEvaluator::GetProfile() { return profile; }
-void NNUEEvaluator::SaveSnapshot(Board& board) { auto t=std::chrono::steady_clock::now(); board.nnueSnapshots.push_back(board.nnueState); ++profile.snapshotSaveCalls; profile.snapshotSaveMs += std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-t).count(); }
-NNUEState NNUEEvaluator::RestoreSnapshot(Board& board) { auto t=std::chrono::steady_clock::now(); NNUEState s=board.nnueSnapshots.back(); ++profile.snapshotRestoreCalls; profile.snapshotRestoreMs += std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-t).count(); return s; }
+void NNUEEvaluator::SaveSnapshot(Board& board) {
+    if (board.nnueSnapshotCount < Board::MaxNNUESnapshots) {
+        board.nnueSnapshots[board.nnueSnapshotCount++] = board.nnueState;
+    }
+    ++profile.snapshotSaveCalls;
+}
+NNUEState NNUEEvaluator::RestoreSnapshot(Board& board) {
+    ++profile.snapshotRestoreCalls;
+    if (board.nnueSnapshotCount > 0) {
+        return board.nnueSnapshots[board.nnueSnapshotCount - 1];
+    }
+    return board.nnueState;
+}
 
 void NNUEEvaluator::SaveWeights(const std::string& path)
 {

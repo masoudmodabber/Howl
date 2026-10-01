@@ -33,7 +33,11 @@ Board* Board::MakeCopy()
     copiedBoard->unpassentPlace = unpassentPlace;
     copiedBoard->ZobristHashCode = ZobristHashCode;
     copiedBoard->nnueState = nnueState;
-    copiedBoard->nnueSnapshots = nnueSnapshots;
+    copiedBoard->nnueSnapshotCount = nnueSnapshotCount;
+    for (int i = 0; i < nnueSnapshotCount; ++i)
+    {
+        copiedBoard->nnueSnapshots[i] = nnueSnapshots[i];
+    }
     return copiedBoard;
 }
 
