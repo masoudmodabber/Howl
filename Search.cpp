@@ -1207,12 +1207,11 @@ bool Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
         return false;
     }
 
-    // Remove and delete moves marked for deletion
+    // Remove moves from the ordering view; their values belong to MoveList.
     for (const Move& delMove : movesToDelete) {
         for (int i = 0; i < moveList.count; ) {
             Move* m = moveList.moves[i];
             if (m->beginPlace == delMove.beginPlace && m->endPlace == delMove.endPlace && m->promotionPiece == delMove.promotionPiece) {
-                delete m;
                 for (int j = i; j < moveList.count - 1; ++j) {
                     moveList.moves[j] = moveList.moves[j + 1];
                 }

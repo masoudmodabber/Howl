@@ -6,14 +6,88 @@
 #include "Board.h"
 #include <cstddef>
 #include <cstdint>
+#include <cassert>
+#include <new>
+#include <type_traits>
 
 struct MoveList {
-    Move* moves[256];
+    static constexpr int Capacity = 256;
+    // Construct only generated values; an eager Move[256] default-constructs
+    // thousands of unused slots per search node.
+    using Slot = std::aligned_storage_t<sizeof(Move), alignof(Move)>;
+    Slot storage[Capacity];
+    Move* moves[Capacity];
     int count = 0;
+    int used = 0;
+
+    MoveList() = default;
+    MoveList(const MoveList& other) { *this = other; }
+    MoveList(MoveList&& other) noexcept { *this = other; }
+    ~MoveList() { Clear(); }
+    Move* At(int index) { return std::launder(reinterpret_cast<Move*>(&storage[index])); }
+    const Move* At(int index) const { return std::launder(reinterpret_cast<const Move*>(&storage[index])); }
+    void Clear()
+    {
+        for (int i = 0; i < used; ++i)
+            At(i)->~Move();
+        used = 0;
+        count = 0;
+    }
+    MoveList& operator=(const MoveList& other)
+    {
+        if (this == &other)
+            return *this;
+        Clear();
+        for (int i = 0; i < other.used; ++i)
+            ::new (&storage[i]) Move(*other.At(i));
+        used = other.used;
+        count = other.count;
+        for (int i = 0; i < count; ++i)
+        {
+            if (!other.moves[i])
+            {
+                moves[i] = nullptr;
+                continue;
+            }
+            const auto offset = reinterpret_cast<std::uintptr_t>(other.moves[i]) -
+                reinterpret_cast<std::uintptr_t>(other.storage);
+            assert(offset % sizeof(Slot) == 0 && offset / sizeof(Slot) < static_cast<std::size_t>(used));
+            moves[i] = At(static_cast<int>(offset / sizeof(Slot)));
+        }
+        return *this;
+    }
+    MoveList& operator=(MoveList&& other) noexcept { return *this = other; }
+
+    Move* AppendCopy(const Move* source)
+    {
+        assert(used < Capacity);
+        Move* result = ::new (&storage[used++]) Move{};
+        result->beginPlace = source->beginPlace;
+        result->CastleFlag = source->CastleFlag;
+        result->endPlace = source->endPlace;
+        result->promotionPiece = source->promotionPiece;
+        result->PublicFlag = source->PublicFlag;
+        result->unpassentPlace = source->unpassentPlace;
+        result->moveCount = source->moveCount;
+        return result;
+    }
+    Move* AppendValue(const Move& source)
+    {
+        assert(used < Capacity);
+        Move* result = ::new (&storage[used++]) Move(source);
+        moves[count++] = result;
+        return result;
+    }
+    void Discard(Move* candidate)
+    {
+        assert(used > 0 && candidate == At(used - 1));
+        candidate->~Move();
+        --used;
+    }
 };
 
 struct DeferredMove {
-    const Move* templateMove = nullptr;
+    Move templateMove{};
     int endPiece = 0;
     int customValue = 0;
     bool hasCustomValue = false;
@@ -30,6 +104,7 @@ public:
     static void Initialize();
     static MoveList MoveGenerator(Board &thisBoard, int depth, int depthGone, bool onlyCapturesAndChecks = false, bool includeQuietChecks = true);
     static MoveList MoveGenerator(Board &thisBoard, int depth, int depthGone, bool onlyCapturesAndChecks, bool scoreAndSort, const AttackerState& whiteAttacker, const AttackerState& blackAttacker, bool includeQuietChecks = true);
+    static void MoveGeneratorInto(Board &thisBoard, int depth, int depthGone, bool onlyCapturesAndChecks, bool scoreAndSort, const AttackerState& whiteAttacker, const AttackerState& blackAttacker, MoveList& moveList, bool includeQuietChecks = true);
     static MoveList QSearchStage1Generator(Board &thisBoard, int depth, int depthGone, DeferredMove* deferredMoves, int& deferredCount, const Move& prevMove = Move{}, bool includeQuietChecks = true, bool deepResolution = false);
     static MoveList MaterializeStage2(Board &thisBoard, int depth, int depthGone, const DeferredMove* deferredMoves, int deferredCount);
     static bool HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int depthGone);
