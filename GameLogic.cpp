@@ -81,9 +81,12 @@ void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int dep
     }
     ChangeSide(thisBoard);
     SetCastleFlags(thisBoard, thisMove);
+    const NNUEState& activeSnapshot = (thisBoard.nnueSnapshotCount > 0)
+        ? thisBoard.nnueSnapshots[thisBoard.nnueSnapshotCount - 1]
+        : thisBoard.nnueState;
     if (!useStructured)
-        NNUEEvaluator::UpdateAfterMove(thisBoard, thisMove, thisBoard.nnueSnapshots.back());
-    if (useStructured) ExperimentalEvaluator::UpdateStructuredAfterMove(thisBoard,thisMove,thisBoard.nnueSnapshots.back());
+        NNUEEvaluator::UpdateAfterMove(thisBoard, thisMove, activeSnapshot);
+    if (useStructured) ExperimentalEvaluator::UpdateStructuredAfterMove(thisBoard,thisMove,activeSnapshot);
     RepetitionHistory::Push(thisBoard.ZobristHashCode);
 }
 
@@ -857,7 +860,10 @@ void GameLogic::UndoMove(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevS
     }
     RepetitionHistory::Pop();
     thisBoard.nnueState = previous;
-    thisBoard.nnueSnapshots.pop_back();
+    if (thisBoard.nnueSnapshotCount > 0)
+    {
+        --thisBoard.nnueSnapshotCount;
+    }
 }
 
 void GameLogic::UnSetUnpassentPlace(Board& thisBoard, Move& thisMove, int previousUnpassentPlace)

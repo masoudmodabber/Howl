@@ -33,7 +33,9 @@ public:
     int mainBoard[64];
     MyList pieces[15];
     NNUEState nnueState;
-    std::vector<NNUEState> nnueSnapshots;
+    static constexpr int MaxNNUESnapshots = 128;
+    int nnueSnapshotCount = 0;
+    std::array<NNUEState, MaxNNUESnapshots> nnueSnapshots;
 
     Board *MakeCopy();
     static bool AreBoardsEqual(Board &board1, Board &board2, bool requireExactPieceOrder = false);
