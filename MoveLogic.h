@@ -76,7 +76,6 @@ struct MoveList {
         result->promotionPiece = source->promotionPiece;
         result->PublicFlag = source->PublicFlag;
         result->unpassentPlace = source->unpassentPlace;
-        result->moveCount = source->moveCount;
         return result;
     }
 

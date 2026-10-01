@@ -658,10 +658,6 @@ namespace
             Entry& entry = entries[entryCount];
             entry.listId = listId;
             entry.moveIndex = moveIndex;
-            Move& m = GetMove(entry);
-            m.depth = depth;
-            m.depthGone = depthGone;
-            m.moveCount = Search::moveCount;
             entry.returned = false;
             entry.scored = false;
             return entryCount++;
