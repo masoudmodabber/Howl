@@ -2086,9 +2086,18 @@ void MoveLogic::ScoreMove(Board& thisBoard, Move& move, const AttackerState& whi
 
 namespace
 {
-constexpr int SeeValue[7] = {0, 100, 350, 350, 550, 975, 2500};
+constexpr int SeeValue[16] = {
+    0, 100, 350, 350, 550, 975, 2500, 0,
+    0, 100, 350, 350, 550, 975, 2500, 0
+};
 
-bool SeeAttacks(int piece, int from, int target, std::uint64_t occupancy)
+inline int SafeSeeValue(int piece)
+{
+    const int norm = (piece >= 0 && piece < 16) ? NormalizeExchangePiece(piece) : 0;
+    return (norm >= 0 && norm <= 6) ? SeeValue[norm] : 0;
+}
+
+inline bool SeeAttacks(int piece, int from, int target, std::uint64_t occupancy)
 {
     const bool white = piece < 8;
     const int type = NormalizeExchangePiece(piece);
@@ -2098,9 +2107,15 @@ bool SeeAttacks(int piece, int from, int target, std::uint64_t occupancy)
     case 1: return ((white ? AttackPlaces::WhitePawnAttackPlaces[from]
                            : AttackPlaces::BlackPawnAttackPlaces[from]) & targetBit) != 0;
     case 2: return (AttackPlaces::KnightAttackPlaces[from] & targetBit) != 0;
-    case 3: return (AttackPlaces::BishopAttack[from][target] & occupancy) == targetBit;
-    case 4: return (AttackPlaces::RookAttack[from][target] & occupancy) == targetBit;
-    case 5: return (AttackPlaces::QueenAttack[from][target] & occupancy) == targetBit;
+    case 3:
+        if (!(AttackPlaces::BishopPseudoAttacks[from] & targetBit)) return false;
+        return (AttackPlaces::BishopAttack[from][target] & occupancy) == targetBit;
+    case 4:
+        if (!(AttackPlaces::RookPseudoAttacks[from] & targetBit)) return false;
+        return (AttackPlaces::RookAttack[from][target] & occupancy) == targetBit;
+    case 5:
+        if (!(AttackPlaces::QueenPseudoAttacks[from] & targetBit)) return false;
+        return (AttackPlaces::QueenAttack[from][target] & occupancy) == targetBit;
     case 6: return (AttackPlaces::KingAttackPlaces[from] & targetBit) != 0;
     default: return false;
     }
@@ -2113,7 +2128,7 @@ struct SeePosition
     std::uint64_t occupancy = 0;
     int kingSquare[2] = {-1, -1};
 
-    void remove(int piece, int square)
+    inline void remove(int piece, int square)
     {
         if (!piece) return;
         pieceBoards[piece] &= ~Option::PowerTwo[square];
@@ -2121,7 +2136,7 @@ struct SeePosition
         occupancy &= ~Option::PowerTwo[square];
     }
 
-    void add(int piece, int square)
+    inline void add(int piece, int square)
     {
         pieceBoards[piece] |= Option::PowerTwo[square];
         pieces[square] = piece;
@@ -2147,21 +2162,54 @@ bool SeeSquareAttacked(const SeePosition& position, int square, bool byWhite)
     return false;
 }
 
+
 int SeeExchange(SeePosition& position, int target, bool white)
 {
     int best = 0;
     const int capturedPiece = position.pieces[target];
-    const int victim = NormalizeExchangePiece(capturedPiece);
+    const int victimValue = SafeSeeValue(capturedPiece);
     const int offset = white ? 0 : 8;
+    const std::uint64_t occ = position.occupancy;
+
     for (int attackerType = 1; attackerType <= 6; ++attackerType)
     {
         const int attacker = offset + attackerType;
         std::uint64_t candidates = position.pieceBoards[attacker];
+        if (!candidates)
+            continue;
+
+        // Quick geometric pre-filtering of candidates
+        if (attackerType == 1)
+        {
+            candidates &= (white ? AttackPlaces::BlackPawnAttackPlaces[target]
+                                 : AttackPlaces::WhitePawnAttackPlaces[target]);
+        }
+        else if (attackerType == 2)
+        {
+            candidates &= AttackPlaces::KnightAttackPlaces[target];
+        }
+        else if (attackerType == 3)
+        {
+            candidates &= AttackPlaces::BishopPseudoAttacks[target];
+        }
+        else if (attackerType == 4)
+        {
+            candidates &= AttackPlaces::RookPseudoAttacks[target];
+        }
+        else if (attackerType == 5)
+        {
+            candidates &= AttackPlaces::QueenPseudoAttacks[target];
+        }
+        else if (attackerType == 6)
+        {
+            candidates &= AttackPlaces::KingAttackPlaces[target];
+        }
+
         while (candidates)
         {
             const int from = __builtin_ctzll(candidates);
             candidates &= candidates - 1;
-            if (!SeeAttacks(attacker, from, target, position.occupancy))
+            if (!SeeAttacks(attacker, from, target, occ))
                 continue;
             const bool promotes = attackerType == 1 &&
                 ((white && target >= 56) || (!white && target < 8));
@@ -2182,7 +2230,7 @@ int SeeExchange(SeePosition& position, int target, bool white)
                 {
                     const int promotionGain = promotes
                         ? SeeValue[resultType] - SeeValue[1] : 0;
-                    best = std::max(best, SeeValue[victim] + promotionGain -
+                    best = std::max(best, victimValue + promotionGain -
                                           SeeExchange(position, target, !white));
                 }
                 position.remove(resultPiece, target);
@@ -2198,28 +2246,36 @@ int SeeExchange(SeePosition& position, int target, bool white)
 
 bool MoveLogic::SEE_GE(Board& board, Move& move, int threshold)
 {
-    SeePosition position;
-    for (int square = 0; square < 64; ++square)
-    {
-        const int piece = board.mainBoard[square];
-        if (!piece) continue;
-        position.add(piece, square);
-        if (NormalizeExchangePiece(piece) == 6)
-            position.kingSquare[piece < 8 ? 0 : 1] = square;
-    }
     const bool white = !board.sideToMove;
-    const int movingPiece = position.pieces[move.beginPlace];
     const bool enPassant = (move.PublicFlag & Option::PowerTwo[6]) != 0;
+    const int movingPiece = board.mainBoard[move.beginPlace];
     const int capturedPiece = enPassant
-        ? position.pieces[move.endPlace + (white ? -8 : 8)]
-        : position.pieces[move.endPlace];
-    const int captured = NormalizeExchangePiece(capturedPiece);
-    const int promoted = move.promotionPiece > 0
+        ? board.mainBoard[move.endPlace + (white ? -8 : 8)]
+        : board.mainBoard[move.endPlace];
+    const int capturedValue = SafeSeeValue(capturedPiece);
+    const int promotedNorm = move.promotionPiece > 0
         ? NormalizeExchangePiece(move.promotionPiece) : NormalizeExchangePiece(movingPiece);
-    const int initialGain = SeeValue[captured] +
-        (move.promotionPiece > 0 ? SeeValue[promoted] - SeeValue[1] : 0);
+    const int promotionGain = (move.promotionPiece > 0)
+        ? (SeeValue[promotedNorm] - SeeValue[1]) : 0;
+    const int initialGain = capturedValue + promotionGain;
+
+    // Early threshold cutoff: if even capturing without any counter-captures cannot reach threshold,
+    // we can immediately reject without building SeePosition.
     if (initialGain < threshold)
         return false;
+
+    SeePosition position;
+    for (int p = 1; p <= 14; ++p)
+    {
+        for (int i = 0; i < board.pieces[p].count; ++i)
+        {
+            const int sq = board.pieces[p].data[i];
+            position.add(p, sq);
+        }
+    }
+    position.kingSquare[0] = board.pieces[6].count > 0 ? board.pieces[6].front() : -1;
+    position.kingSquare[1] = board.pieces[14].count > 0 ? board.pieces[14].front() : -1;
+
 
     position.remove(movingPiece, move.beginPlace);
     if (enPassant)
@@ -2229,7 +2285,7 @@ bool MoveLogic::SEE_GE(Board& board, Move& move, int threshold)
     }
     else
         position.remove(capturedPiece, move.endPlace);
-    const int resultPiece = white ? promoted : promoted + 8;
+    const int resultPiece = white ? promotedNorm : promotedNorm + 8;
     position.add(resultPiece, move.endPlace);
     if (NormalizeExchangePiece(movingPiece) == 6)
         position.kingSquare[white ? 0 : 1] = move.endPlace;
