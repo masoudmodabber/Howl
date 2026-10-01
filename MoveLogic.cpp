@@ -2059,9 +2059,6 @@ void MoveLogic::ScoreAndSortMoves(Board& thisBoard, MoveList& moveList, int dept
     {
         Move& move = moveList[i];
         ScoreMove(thisBoard, move, whiteAttacker, blackAttacker);
-        move.depth = depth;
-        move.depthGone = depthGone;
-        move.moveCount = Search::moveCount;
     }
     std::sort(moveList.begin(), moveList.end(), [](const Move& a, const Move& b)
               { return b.value < a.value; });
@@ -3545,7 +3542,6 @@ Move *MoveLogic::MoveCopy(Move *move)
     newMove->promotionPiece = move->promotionPiece;
     newMove->PublicFlag = move->PublicFlag;
     newMove->unpassentPlace = move->unpassentPlace;
-    newMove->moveCount = move->moveCount;
     newMove->givesCheck = false;
     newMove->givesCheckComputed = false;
     return newMove;
