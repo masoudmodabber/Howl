@@ -211,7 +211,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     int rootTurn = board4.sideToMove ? 1 : 0;
     for (int i = 0; i < moveList.count; ++i)
     {
-        Move *m = moveList.moves[i];
+        Move *m = &moveList[i];
         MissingInfoAboutPrevStateFromMove undo(board4, *m);
         GameLogic::DoMove(board4, *m, move4, -2, -2, &undo);
         bool legal = !BoardLogic::UnderAttack(board4, board4.pieces[rootTurn * 8 + 6].front(), board4.sideToMove);
@@ -291,7 +291,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     alpha = 0;
     beta = 0;
     int value = -200000;
-    int prevCompletedScore = moveList.moves[0]->value;
+    int prevCompletedScore = moveList[0].value;
 
     struct LastCompletedRootResult
     {
@@ -362,18 +362,15 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
 
         SearchForCheckUpdate();
 
-        std::vector<Move *> completedRootOrder(moveList.moves,
-                                               moveList.moves + moveList.count);
         std::vector<Move> completedRootMoves;
         completedRootMoves.reserve(moveList.count);
-        for (Move *rootMove : completedRootOrder)
-            completedRootMoves.push_back(*rootMove);
+        for (int i = 0; i < moveList.count; ++i)
+            completedRootMoves.push_back(moveList[i]);
         const auto restoreCompletedRootState = [&]()
         {
             for (int i = 0; i < moveList.count; ++i)
             {
-                *completedRootOrder[i] = completedRootMoves[i];
-                moveList.moves[i] = completedRootOrder[i];
+                moveList[i] = completedRootMoves[i];
             }
             bestMove = lastCompletedRootResult.bestMove;
             ponderMove = lastCompletedRootResult.ponderMove;
@@ -434,7 +431,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                         }
                     }
 
-                    Move *move = moveList.moves[counter];
+                    Move *move = &moveList[counter];
                     bool rootMoveExactMate = false;
                     bool rootMoveRepetitionResult = false;
                     int value = -200000;
@@ -618,8 +615,8 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 prevCompletedScore = lastCompletedRootResult.score;
                 iterationCompleted = true;
 
-                std::sort(moveList.moves, moveList.moves + moveList.count, [](Move *a, Move *b) {
-                    return b->value < a->value;
+                std::sort(moveList.begin(), moveList.end(), [](const Move &a, const Move &b) {
+                    return b.value < a.value;
                 });
                 break;
             }
@@ -661,7 +658,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     }
                 }
 
-                Move *move = moveList.moves[counter];
+                Move *move = &moveList[counter];
                 bool rootMoveReceivedFullSearch = false;
                 bool rootMoveExactMate = false;
                 bool rootMoveAuthoritativeResult = false;
@@ -940,7 +937,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
 
             int iterScore = iterationHasAuthoritativeResult
                 ? authoritativeIterationScore
-                : moveList.moves[0]->value;
+                : moveList[0].value;
             bool iterationMateExact = IsMateScore(iterScore);
             bool exactBestMoveFound = false;
             for (const MovePrintValue *rootResult : movesPrintValue)
@@ -1071,17 +1068,17 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         }
         completedBestMove = bestMove;
         completedPonderMove = ponderMove;
-        std::sort(moveList.moves, moveList.moves + moveList.count, [](Move *a, Move *b)
-                  { return b->value < a->value; });
+        std::sort(moveList.begin(), moveList.end(), [](const Move &a, const Move &b)
+                  { return b.value < a.value; });
         if (!bestMove.empty())
         {
             for (int i = 0; i < moveList.count; ++i)
             {
-                if (ChessStringManipulation::PVToString(*moveList.moves[i], 0, false, board4) == bestMove)
+                if (ChessStringManipulation::PVToString(moveList[i], 0, false, board4) == bestMove)
                 {
                     if (i != 0)
                     {
-                        std::swap(moveList.moves[0], moveList.moves[i]);
+                        std::swap(moveList[0], moveList[i]);
                     }
                     break;
                 }
@@ -1144,7 +1141,7 @@ bool Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
             completedAll = false;
             break;
         }
-        Move *move = moveList.moves[i];
+        Move *move = &moveList[i];
         auto boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
         MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
         GameLogic::DoMove(board4, *move, move4, -2, -2, missingInfoAboutPrevStateFromMove);
@@ -1210,10 +1207,10 @@ bool Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
     // Remove moves from the ordering view; their values belong to MoveList.
     for (const Move& delMove : movesToDelete) {
         for (int i = 0; i < moveList.count; ) {
-            Move* m = moveList.moves[i];
-            if (m->beginPlace == delMove.beginPlace && m->endPlace == delMove.endPlace && m->promotionPiece == delMove.promotionPiece) {
+            Move& m = moveList[i];
+            if (m.beginPlace == delMove.beginPlace && m.endPlace == delMove.endPlace && m.promotionPiece == delMove.promotionPiece) {
                 for (int j = i; j < moveList.count - 1; ++j) {
-                    moveList.moves[j] = moveList.moves[j + 1];
+                    moveList[j] = moveList[j + 1];
                 }
                 --moveList.count;
             } else {
@@ -1222,11 +1219,11 @@ bool Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
         }
     }
 
-    std::sort(moveList.moves, moveList.moves + moveList.count, [](const Move *a, const Move *b)
-              { return b->value < a->value; });
+    std::sort(moveList.begin(), moveList.end(), [](const Move &a, const Move &b)
+              { return b.value < a.value; });
 
-    bestMove = ChessStringManipulation::PVToString(*(moveList.moves[0]), 0, false, board4);
-    CalculateAndDisplayScore(moveList.moves[0]->value, exactMate);
+    bestMove = ChessStringManipulation::PVToString(moveList[0], 0, false, board4);
+    CalculateAndDisplayScore(moveList[0].value, exactMate);
 
     int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
     int64_t safeNodeCount = searchNodeCount;
@@ -1236,19 +1233,19 @@ bool Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
         int K = std::min(Option::MultiPV, moveList.count);
         for (int i = 0; i < K; i++)
         {
-            CalculateAndDisplayScore(moveList.moves[i]->value, false);
+            CalculateAndDisplayScore(moveList[i].value, false);
             std::cout << "info depth 1 multipv " << (i + 1)
                       << " score " << Score
                       << " time " << elapsed_ms
                       << " nodes " << safeNodeCount
                       << " tbhits " << tablebaseHits.load(std::memory_order_relaxed)
                       << " nps " << nps
-                      << " pv " << ChessStringManipulation::PVToString(*(moveList.moves[i]), 0, false, board4) << '\n';
+                      << " pv " << ChessStringManipulation::PVToString(moveList[i], 0, false, board4) << '\n';
         }
     }
     else
     {
-        std::string infoStr = "info depth 1 time " + std::to_string(elapsed_ms) + " nodes " + std::to_string(searchNodeCount) + " tbhits " + std::to_string(tablebaseHits.load(std::memory_order_relaxed)) + " nps " + std::to_string(nps) + " pv " + ChessStringManipulation::PVToString(*(moveList.moves[0]), 1, mated, board4) + " score " + Score;
+        std::string infoStr = "info depth 1 time " + std::to_string(elapsed_ms) + " nodes " + std::to_string(searchNodeCount) + " tbhits " + std::to_string(tablebaseHits.load(std::memory_order_relaxed)) + " nps " + std::to_string(nps) + " pv " + ChessStringManipulation::PVToString(moveList[0], 1, mated, board4) + " score " + Score;
         DiagnosticLogger::Log("EMIT_INFO", infoStr, DiagnosticLogger::currentSearchId.load());
         std::cout << infoStr << '\n';
     }

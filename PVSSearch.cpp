@@ -606,9 +606,13 @@ namespace
         int GeneratedCount() const { return entryCount; }
 
     private:
+        static constexpr uint8_t ListTactical = 0;
+        static constexpr uint8_t ListQuiet = 1;
+
         struct Entry
         {
-            Move* move = nullptr;
+            uint8_t listId = 0;
+            uint8_t moveIndex = 0;
             int key = 0;
             bool returned = false;
             bool scored = false;
@@ -627,6 +631,16 @@ namespace
             Done
         };
 
+        Move& GetMove(const Entry& entry)
+        {
+            return entry.listId == ListTactical ? tacticalMoves[entry.moveIndex] : quietMoves[entry.moveIndex];
+        }
+
+        const Move& GetMove(const Entry& entry) const
+        {
+            return entry.listId == ListTactical ? tacticalMoves[entry.moveIndex] : quietMoves[entry.moveIndex];
+        }
+
         bool MatchesTT(const Move& move) const
         {
             if (packedTTMove == 0)
@@ -637,15 +651,17 @@ namespace
                        TTMoveHelper::UnpackPromotion(packedTTMove);
         }
 
-        int Add(Move* move)
+        int Add(uint8_t listId, uint8_t moveIndex)
         {
             if (entryCount >= static_cast<int>(entries.size()))
                 return -1;
             Entry& entry = entries[entryCount];
-            entry.move = move;
-            entry.move->depth = depth;
-            entry.move->depthGone = depthGone;
-            entry.move->moveCount = Search::moveCount;
+            entry.listId = listId;
+            entry.moveIndex = moveIndex;
+            Move& m = GetMove(entry);
+            m.depth = depth;
+            m.depthGone = depthGone;
+            m.moveCount = Search::moveCount;
             entry.returned = false;
             entry.scored = false;
             return entryCount++;
@@ -655,10 +671,10 @@ namespace
         {
             entries[index].returned = true;
             Score(index);
-            return entries[index].move;
+            return &GetMove(entries[index]);
         }
 
-        Move* Select(std::array<int, 256>& indices, int count, int& cursor)
+        Move* Select(std::array<uint8_t, 256>& indices, int count, int& cursor)
         {
             if (cursor >= count)
                 return nullptr;
@@ -691,12 +707,13 @@ namespace
             if (entry.scored)
                 return;
             EnsureAttackers();
-            if (!entry.move->givesCheckComputed)
+            Move& m = GetMove(entry);
+            if (!m.givesCheckComputed)
             {
-                entry.move->givesCheck = MoveLogic::MoveGivesCheck(board, *entry.move);
-                entry.move->givesCheckComputed = true;
+                m.givesCheck = MoveLogic::MoveGivesCheck(board, m);
+                m.givesCheckComputed = true;
             }
-            MoveLogic::ScoreMove(board, *entry.move, whiteAttacker, blackAttacker);
+            MoveLogic::ScoreMove(board, m, whiteAttacker, blackAttacker);
             entry.scored = true;
         }
 
@@ -733,30 +750,31 @@ namespace
                 board, depth, depthGone, true, false, emptyWhite, emptyBlack, tacticalMoves, false);
             for (int i = 0; i < tacticalMoves.count; ++i)
             {
-                Move* candidate = tacticalMoves.moves[i];
-                if (candidate->endPiece % 8 == 6)
+                const Move& candidate = tacticalMoves[i];
+                if (candidate.endPiece % 8 == 6)
                     continue;
-                const int index = Add(candidate);
+                const int index = Add(ListTactical, static_cast<uint8_t>(i));
                 if (index >= 0)
                 {
-                    const int movingPiece = board.mainBoard[entries[index].move->beginPlace];
-                    const int capturedPiece = entries[index].move->endPiece;
+                    Move& m = GetMove(entries[index]);
+                    const int movingPiece = board.mainBoard[m.beginPlace];
+                    const int capturedPiece = m.endPiece;
                     static constexpr int MgValue[7] = {0, 100, 320, 330, 500, 900, 0};
                     const int victimType = capturedPiece % 8;
                     entries[index].key = SearchParameters::MoveOrdering::CaptureVictimMultiplier *
                         MgValue[std::min(victimType, 6)] +
                         captureHistory[std::clamp(movingPiece, 0, 14)]
-                                      [entries[index].move->endPlace]
+                                      [m.endPlace]
                                       [std::clamp(capturedPiece % 8, 0, 6)];
-                    if (MatchesTT(*entries[index].move))
+                    if (MatchesTT(m))
                         ttEntry = index;
-                    if (MoveLogic::SEE_GE(board, *entries[index].move,
+                    if (MoveLogic::SEE_GE(board, m,
                                          -SearchParameters::SEE::GoodCaptureCoefficient *
                                          entries[index].key /
                                          SearchParameters::MoveOrdering::GoodCaptureSeeDivisor))
-                        goodTactical[goodCount++] = index;
+                        goodTactical[goodCount++] = static_cast<uint8_t>(index);
                     else
-                        badTactical[badCount++] = index;
+                        badTactical[badCount++] = static_cast<uint8_t>(index);
                 }
             }
         }
@@ -772,11 +790,12 @@ namespace
             for (int i = 0; i < quietEntryCount; ++i)
             {
                 const int index = quietEntries[i];
+                const Move& m = GetMove(entries[index]);
                 if (!entries[index].returned &&
-                    entries[index].move->beginPlace == killer.beginPlace &&
-                    entries[index].move->endPlace == killer.endPlace &&
-                    (entries[index].move->promotionPiece > 0
-                         ? entries[index].move->promotionPiece : 0) == killer.promotionPiece)
+                    m.beginPlace == killer.beginPlace &&
+                    m.endPlace == killer.endPlace &&
+                    (m.promotionPiece > 0
+                         ? m.promotionPiece : 0) == killer.promotionPiece)
                     return MarkReturned(index);
             }
             return nullptr;
@@ -790,7 +809,8 @@ namespace
             for (int i = 0; i < quietEntryCount; ++i)
             {
                 const int index = quietEntries[i];
-                if (!entries[index].returned && MatchesPackedMove(*entries[index].move, packedMove))
+                const Move& m = GetMove(entries[index]);
+                if (!entries[index].returned && MatchesPackedMove(m, packedMove))
                     return MarkReturned(index);
             }
             return nullptr;
@@ -807,14 +827,14 @@ namespace
                 board, depth, depthGone, false, false, emptyWhite, emptyBlack, quietMoves, true);
             for (int i = 0; i < quietMoves.count; ++i)
             {
-                Move* candidate = quietMoves.moves[i];
-                if (IsQuietMove(*candidate))
+                const Move& candidate = quietMoves[i];
+                if (IsQuietMove(candidate))
                 {
-                    const int index = Add(candidate);
+                    const int index = Add(ListQuiet, static_cast<uint8_t>(i));
                     if (index >= 0)
                     {
-                        quietEntries[quietEntryCount++] = index;
-                        if (MatchesTT(*entries[index].move))
+                        quietEntries[quietEntryCount++] = static_cast<uint8_t>(index);
+                        if (MatchesTT(GetMove(entries[index])))
                             ttEntry = index;
                     }
                 }
@@ -846,17 +866,18 @@ namespace
             for (int i = 0; i < quietEntryCount; ++i)
             {
                 const int index = quietEntries[i];
-                if (entries[index].returned || IsKiller(*entries[index].move))
+                const Move& m = GetMove(entries[index]);
+                if (entries[index].returned || IsKiller(m))
                     continue;
                 Score(index);
-                const int currentPiece = board.mainBoard[entries[index].move->beginPlace];
+                const int currentPiece = board.mainBoard[m.beginPlace];
                 entries[index].key = QuietOrderingScore(
-                    turn, depthGone, currentPiece, *entries[index].move);
+                    turn, depthGone, currentPiece, m);
                 if (entries[index].key >=
                     SearchParameters::MoveOrdering::StrongQuietDepthCoefficient * depth)
-                    strongQuiets[strongQuietCount++] = index;
+                    strongQuiets[strongQuietCount++] = static_cast<uint8_t>(index);
                 else
-                    remainingQuiets[remainingQuietCount++] = index;
+                    remainingQuiets[remainingQuietCount++] = static_cast<uint8_t>(index);
             }
         }
 
@@ -867,14 +888,14 @@ namespace
         const Move& previousMove;
         uint16_t packedTTMove;
         uint16_t packedCounterMove;
-        MoveList tacticalMoves{};
-        MoveList quietMoves{};
-        std::array<Entry, 256> entries{};
-        std::array<int, 256> goodTactical{};
-        std::array<int, 256> badTactical{};
-        std::array<int, 256> quietEntries{};
-        std::array<int, 256> strongQuiets{};
-        std::array<int, 256> remainingQuiets{};
+        MoveList tacticalMoves;
+        MoveList quietMoves;
+        std::array<Entry, 256> entries;
+        std::array<uint8_t, 256> goodTactical;
+        std::array<uint8_t, 256> badTactical;
+        std::array<uint8_t, 256> quietEntries;
+        std::array<uint8_t, 256> strongQuiets;
+        std::array<uint8_t, 256> remainingQuiets;
         int entryCount = 0;
         int goodCount = 0;
         int badCount = 0;
@@ -1636,7 +1657,7 @@ public:
         moves = MoveLogic::MoveGenerator(board, depth, ply, true, false);
         for (int i = 0; i < moves.count; ++i)
         {
-            Move* move = moves.moves[i];
+            Move* move = &moves[i];
             if (move->endPiece == 0 && move->promotionPiece <= 0)
                 continue;
             if (!MoveLogic::SEE_GE(board, *move, seeThreshold))
@@ -1669,10 +1690,10 @@ public:
 private:
     struct Entry { Move* move; int score; bool returned; };
     Board& board;
-    MoveList moves{};
+    MoveList moves;
     uint16_t ttMove;
     int seeThreshold;
-    std::array<Entry, 256> entries{};
+    std::array<Entry, 256> entries;
     int count = 0;
     int ttIndex = -1;
     bool ttReturned = false;
@@ -2047,7 +2068,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             int availMoves = 0;
             for (int i = 0; i < horizonMoves.count; ++i)
             {
-                Move *m = horizonMoves.moves[i];
+                Move *m = &horizonMoves[i];
                 MissingInfoAboutPrevStateFromMove undo(board4, *m);
                 GameLogic::DoMove(board4, *m, prevMove, depthGone, depthGone, &undo);
                 if (!BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove))
@@ -3277,7 +3298,7 @@ void PVSSearch::IGG(bool isPVNode, int alpha, int beta, int depth, Move &prevMov
                 firstMoveIr = true;
                 for (int i = 0; i < moveList.count; ++i)
                 {
-                    Move *move = moveList.moves[i];
+                    Move *move = &moveList[i];
                     if (firstMoveIr)
                     {
                         boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
@@ -3420,8 +3441,8 @@ void PVSSearch::IGG(bool isPVNode, int alpha, int beta, int depth, Move &prevMov
                         }
                     }
                 }
-                std::sort(moveList.moves, moveList.moves + moveList.count, [](Move *a, Move *b)
-                          { return b->value > a->value; });
+                std::sort(moveList.begin(), moveList.end(), [](const Move& a, const Move& b)
+                          { return b.value > a.value; });
             }
         }
     }

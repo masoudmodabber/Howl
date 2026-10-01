@@ -257,7 +257,7 @@ StressResult FixedDepthProductionRoot(Board& board, int depth, int multiPV)
 
     for (int index = 0; index < generated.moves.count; index++)
     {
-        Move& move = *generated.moves.moves[index];
+        Move& move = generated.moves[index];
         const int orderingValue = move.value;
         MissingInfoAboutPrevStateFromMove missingInfo(board);
         GameLogic::DoMove(board, move, move4, -1, -1);
