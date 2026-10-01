@@ -135,15 +135,6 @@ public:
     {
     }
 
-    ~GeneratedMoves()
-    {
-        for (int counter = 0; counter < moveList.count; counter++)
-        {
-            delete moveList.moves[counter];
-            moveList.moves[counter] = nullptr;
-        }
-    }
-
     GeneratedMoves(const GeneratedMoves&) = delete;
     GeneratedMoves& operator=(const GeneratedMoves&) = delete;
 

@@ -133,14 +133,6 @@ public:
     {
     }
 
-    ~GeneratedMoves()
-    {
-        for (int index = 0; index < moves.count; index++)
-        {
-            delete moves.moves[index];
-        }
-    }
-
     GeneratedMoves(const GeneratedMoves&) = delete;
     GeneratedMoves& operator=(const GeneratedMoves&) = delete;
 

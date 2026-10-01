@@ -527,12 +527,6 @@ namespace
               turn(turnValue), previousMove(previousMoveValue), packedTTMove(ttMoveValue),
               packedCounterMove(CounterMoveFor(boardValue, depthGoneValue)) {}
 
-        ~MovePicker()
-        {
-            for (int i = 0; i < entryCount; ++i)
-                delete entries[i].move;
-        }
-
         MovePicker(const MovePicker&) = delete;
         MovePicker& operator=(const MovePicker&) = delete;
 
@@ -646,10 +640,7 @@ namespace
         int Add(Move* move)
         {
             if (entryCount >= static_cast<int>(entries.size()))
-            {
-                delete move;
                 return -1;
-            }
             Entry& entry = entries[entryCount];
             entry.move = move;
             entry.move->depth = depth;
@@ -738,16 +729,13 @@ namespace
             tacticalGenerated = true;
             AttackerState emptyWhite{};
             AttackerState emptyBlack{};
-            MoveList generated = MoveLogic::MoveGenerator(
-                board, depth, depthGone, true, false, emptyWhite, emptyBlack, false);
-            for (int i = 0; i < generated.count; ++i)
+            MoveLogic::MoveGeneratorInto(
+                board, depth, depthGone, true, false, emptyWhite, emptyBlack, tacticalMoves, false);
+            for (int i = 0; i < tacticalMoves.count; ++i)
             {
-                Move* candidate = generated.moves[i];
+                Move* candidate = tacticalMoves.moves[i];
                 if (candidate->endPiece % 8 == 6)
-                {
-                    delete candidate;
                     continue;
-                }
                 const int index = Add(candidate);
                 if (index >= 0)
                 {
@@ -815,11 +803,11 @@ namespace
             quietsGenerated = true;
             AttackerState emptyWhite{};
             AttackerState emptyBlack{};
-            MoveList generated = MoveLogic::MoveGenerator(
-                board, depth, depthGone, false, false, emptyWhite, emptyBlack, true);
-            for (int i = 0; i < generated.count; ++i)
+            MoveLogic::MoveGeneratorInto(
+                board, depth, depthGone, false, false, emptyWhite, emptyBlack, quietMoves, true);
+            for (int i = 0; i < quietMoves.count; ++i)
             {
-                Move* candidate = generated.moves[i];
+                Move* candidate = quietMoves.moves[i];
                 if (IsQuietMove(*candidate))
                 {
                     const int index = Add(candidate);
@@ -830,8 +818,6 @@ namespace
                             ttEntry = index;
                     }
                 }
-                else
-                    delete candidate;
             }
         }
 
@@ -881,6 +867,8 @@ namespace
         const Move& previousMove;
         uint16_t packedTTMove;
         uint16_t packedCounterMove;
+        MoveList tacticalMoves{};
+        MoveList quietMoves{};
         std::array<Entry, 256> entries{};
         std::array<int, 256> goodTactical{};
         std::array<int, 256> badTactical{};
@@ -1621,10 +1609,7 @@ namespace
 {
 struct TargetResult { int value=0; std::string pv; };
 
-void deleteMoveList(MoveList list)
-{
-    PVSSearch::deleteMoveList(list);
-}
+void deleteMoveList(const MoveList&) {}
 
 void UpdateCounterMove(const Board& board, const Move& move)
 {
@@ -1661,8 +1646,6 @@ public:
                 ttIndex = count - 1;
         }
     }
-
-    ~ProbCutPicker() { deleteMoveList(moves); }
 
     Move* Next()
     {
@@ -3151,13 +3134,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
     }
 }
 
-void PVSSearch::deleteMoveList(MoveList moveList)
-{
-    for (int i = 0; i < moveList.count; ++i)
-    {
-        delete moveList.moves[i];
-    }
-}
+void PVSSearch::deleteMoveList(MoveList) {}
 
 void PVSSearch::NullMovePruning(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool mAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, MovePrintValue mPValue)
 {

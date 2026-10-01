@@ -85,15 +85,6 @@ public:
     {
     }
 
-    ~GeneratedMoves()
-    {
-        for (int counter = 0; counter < moveList.count; counter++)
-        {
-            delete moveList.moves[counter];
-            moveList.moves[counter] = nullptr;
-        }
-    }
-
     GeneratedMoves(const GeneratedMoves&) = delete;
     GeneratedMoves& operator=(const GeneratedMoves&) = delete;
 
@@ -4399,7 +4390,6 @@ static bool OldFallbackHasLegalMove(Board &board, const Move& prevMove, int dept
             board, board.pieces[turn * 8 + 6].front(), board.sideToMove);
         GameLogic::UndoMove(board, *move, undo);
     }
-    for (int i = 0; i < legalMoveList.count; ++i) delete legalMoveList.moves[i];
     return hasLegalMove;
 }
 
@@ -4723,8 +4713,6 @@ int RunQSearchMoveGenCorrectnessTest()
         if (normalList.count != defaultList.count)
         {
             std::cerr << "Normal MoveGenerator default param mismatch for " << pos.name << '\n';
-            for (int i = 0; i < normalList.count; ++i) delete normalList.moves[i];
-            for (int i = 0; i < defaultList.count; ++i) delete defaultList.moves[i];
             return 1;
         }
         for (int i = 0; i < normalList.count; ++i)
@@ -4734,13 +4722,9 @@ int RunQSearchMoveGenCorrectnessTest()
                 normalList.moves[i]->promotionPiece != defaultList.moves[i]->promotionPiece)
             {
                 std::cerr << "Normal move list mismatch at index " << i << '\n';
-                for (int j = 0; j < normalList.count; ++j) delete normalList.moves[j];
-                for (int j = 0; j < defaultList.count; ++j) delete defaultList.moves[j];
                 return 1;
             }
         }
-        for (int i = 0; i < normalList.count; ++i) delete normalList.moves[i];
-        for (int i = 0; i < defaultList.count; ++i) delete defaultList.moves[i];
     }
 
     // 2. Test quiet position: verifies captures, promotions, and quiet checks are preserved while non-checking quiets are skipped
@@ -4811,9 +4795,6 @@ int RunQSearchMoveGenCorrectnessTest()
             std::cerr << "QSearch move list failed to filter ordinary quiet moves: qList.count=" << qList.count << ", fullList.count=" << fullList.count << '\n';
             return 1;
         }
-
-        for (int i = 0; i < fullList.count; ++i) delete fullList.moves[i];
-        for (int i = 0; i < qList.count; ++i) delete qList.moves[i];
     }
 
     // 2b. Test Attacked vs Unattacked Direct Slider Quiet Check filtering (Rule B) & Knight check preservation
@@ -4828,7 +4809,6 @@ int RunQSearchMoveGenCorrectnessTest()
                     foundUnattackedBishopCheck = true;
                 }
             }
-            for (int i = 0; i < qList.count; ++i) delete qList.moves[i];
             if (foundUnattackedBishopCheck) {
                 std::cerr << "Unattacked direct slider quiet check was not filtered in QSearch\n";
                 return 1;
@@ -4846,7 +4826,6 @@ int RunQSearchMoveGenCorrectnessTest()
                     foundUnattackedQueenCheck = true;
                 }
             }
-            for (int i = 0; i < qList.count; ++i) delete qList.moves[i];
             if (foundUnattackedQueenCheck) {
                 std::cerr << "Unattacked Queen direct quiet check (d5c5+) was not filtered in QSearch\n";
                 return 1;
@@ -4863,7 +4842,6 @@ int RunQSearchMoveGenCorrectnessTest()
                     foundAttackedBishopCheck = true;
                 }
             }
-            for (int i = 0; i < qList.count; ++i) delete qList.moves[i];
             if (!foundAttackedBishopCheck) {
                 std::cerr << "Attacked direct slider quiet check was filtered in QSearch\n";
                 return 1;
@@ -4880,7 +4858,6 @@ int RunQSearchMoveGenCorrectnessTest()
                     foundKnightCheck = true;
                 }
             }
-            for (int i = 0; i < qList.count; ++i) delete qList.moves[i];
             if (!foundKnightCheck) {
                 std::cerr << "Knight quiet check was incorrectly filtered in QSearch\n";
                 return 1;
@@ -4904,7 +4881,6 @@ int RunQSearchMoveGenCorrectnessTest()
                     foundDefendedPawnCheck = true;
                 }
             }
-            for (int i = 0; i < qList.count; ++i) delete qList.moves[i];
             if (!foundDefendedPawnCheck) {
                 std::cerr << "Defended quiet pawn check (d4d5+) was incorrectly filtered in QSearch\n";
                 return 1;
@@ -4921,7 +4897,6 @@ int RunQSearchMoveGenCorrectnessTest()
                     foundRank7PawnCheck = true;
                 }
             }
-            for (int i = 0; i < qList.count; ++i) delete qList.moves[i];
             if (!foundRank7PawnCheck) {
                 std::cerr << "Rank 7 quiet pawn check (d6d7+) was incorrectly filtered in QSearch\n";
                 return 1;
@@ -4938,7 +4913,6 @@ int RunQSearchMoveGenCorrectnessTest()
                     foundDiscoveredPawnCheck = true;
                 }
             }
-            for (int i = 0; i < qList.count; ++i) delete qList.moves[i];
             if (!foundDiscoveredPawnCheck) {
                 std::cerr << "Discovered pawn check was incorrectly filtered in QSearch\n";
                 return 1;
@@ -4955,7 +4929,6 @@ int RunQSearchMoveGenCorrectnessTest()
                     foundUndefendedPawnCheck = true;
                 }
             }
-            for (int i = 0; i < qList.count; ++i) delete qList.moves[i];
             if (foundUndefendedPawnCheck) {
                 std::cerr << "Undefended rank 5 quiet pawn check (d4d5+) was not filtered in QSearch\n";
                 return 1;
@@ -4978,7 +4951,6 @@ int RunQSearchMoveGenCorrectnessTest()
                 break;
             }
         }
-        for (int i = 0; i < qList.count; ++i) delete qList.moves[i];
         if (!foundDiscoveredCheck)
         {
             std::cerr << "Discovered check was not preserved in restricted QSearch mode\n";
@@ -5002,12 +4974,8 @@ int RunQSearchMoveGenCorrectnessTest()
         if (fullList.count != checkGenList.count)
         {
             std::cerr << "In-check QSearch did not use full move generation\n";
-            for (int i = 0; i < fullList.count; ++i) delete fullList.moves[i];
-            for (int i = 0; i < checkGenList.count; ++i) delete checkGenList.moves[i];
             return 1;
         }
-        for (int i = 0; i < fullList.count; ++i) delete fullList.moves[i];
-        for (int i = 0; i < checkGenList.count; ++i) delete checkGenList.moves[i];
     }
 
     // 5. Test Two-Stage QSearch preservation & Stage 2 Recovery
@@ -5023,9 +4991,6 @@ int RunQSearchMoveGenCorrectnessTest()
         if (stage1.count + stage2.count > fullList.count)
         {
             std::cerr << "Two-stage QSearch partitioned count overflow: " << (stage1.count + stage2.count) << " vs " << fullList.count << "\n";
-            for (int i = 0; i < stage1.count; ++i) delete stage1.moves[i];
-            for (int i = 0; i < stage2.count; ++i) delete stage2.moves[i];
-            for (int i = 0; i < fullList.count; ++i) delete fullList.moves[i];
             return 1;
         }
 
@@ -5038,15 +5003,9 @@ int RunQSearchMoveGenCorrectnessTest()
             if (!isProm && !isCap)
             {
                 std::cerr << "Stage 1 contains a non-capture non-promotion move\n";
-                for (int j = 0; j < stage1.count; ++j) delete stage1.moves[j];
-                for (int j = 0; j < stage2.count; ++j) delete stage2.moves[j];
-                for (int j = 0; j < fullList.count; ++j) delete fullList.moves[j];
                 return 1;
             }
         }
-        for (int i = 0; i < stage1.count; ++i) delete stage1.moves[i];
-        for (int i = 0; i < stage2.count; ++i) delete stage2.moves[i];
-        for (int i = 0; i < fullList.count; ++i) delete fullList.moves[i];
     }
 
     // 6. Test Stage 1 to Stage 2 selected move lifetime & PV serialization

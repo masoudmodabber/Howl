@@ -20,7 +20,6 @@ constexpr int QChecks=0, QNoChecks=-1, QRecaptures=-5, Infinity=200000;
 constexpr int PieceValue[7]={0,100,350,350,550,975,2500};
 int Type(int p){ return p>8?p-8:p; }
 bool Same(const Move& m,uint16_t p){return p&&m.beginPlace==TTMoveHelper::UnpackFrom(p)&&m.endPlace==TTMoveHelper::UnpackTo(p)&&(TTMoveHelper::UnpackPromotion(p)==0?m.promotionPiece<=0:m.promotionPiece==TTMoveHelper::UnpackPromotion(p));}
-void Delete(MoveList& l){for(int i=0;i<l.count;++i)delete l.moves[i];l.count=0;}
 struct Result{int value=0;std::string pv;};
 
 class QMovePicker {
@@ -29,7 +28,6 @@ public:
                 const Move& previousValue,uint16_t ttMoveValue)
         : board(boardValue),qDepth(qDepthValue),ply(plyValue),inCheck(inCheckValue),
           previous(previousValue),ttMove(ttMoveValue) {}
-    ~QMovePicker(){Delete(tacticalMoves);Delete(checkMoves);Delete(evasionMoves);}
     Move* Next(){
         while(true){
             switch(stage){
@@ -77,16 +75,19 @@ private:
     void Sort(Entry* entries,int count){for(int i=1;i<count;++i){Entry key=entries[i];int j=i;
         while(j>0&&key.score>entries[j-1].score){entries[j]=entries[j-1];--j;}entries[j]=key;}}
     void PrepareEvasions(){if(evasionsReady)return;evasionsReady=true;
-        evasionMoves=MoveLogic::MoveGenerator(board,qDepth,ply,false);
-        for(int i=0;i<evasionMoves.count;++i)evasions[evasionCount++]={evasionMoves.moves[i],EvasionScore(*evasionMoves.moves[i])};
+        {AttackerState white=MoveLogic::SetWhiteAttacker(board),black=MoveLogic::SetBlackAttacker(board);
+         MoveLogic::MoveGeneratorInto(board,qDepth,ply,false,true,white,black,tacticalMoves);}
+        for(int i=0;i<tacticalMoves.count;++i)evasions[evasionCount++]={tacticalMoves.moves[i],EvasionScore(*tacticalMoves.moves[i])};
         Sort(evasions.data(),evasionCount);}
     void PrepareTacticals(){if(tacticalsReady)return;tacticalsReady=true;
-        tacticalMoves=MoveLogic::MoveGenerator(board,qDepth,ply,true,false);
+        {AttackerState white=MoveLogic::SetWhiteAttacker(board),black=MoveLogic::SetBlackAttacker(board);
+         MoveLogic::MoveGeneratorInto(board,qDepth,ply,true,true,white,black,tacticalMoves,false);}
         for(int i=0;i<tacticalMoves.count;++i)if(EligibleTactical(*tacticalMoves.moves[i]))
             tacticals[tacticalCount++]={tacticalMoves.moves[i],TacticalScore(*tacticalMoves.moves[i])};
         Sort(tacticals.data(),tacticalCount);}
     void PrepareChecks(){if(checksReady)return;checksReady=true;
-        checkMoves=MoveLogic::MoveGenerator(board,qDepth,ply,true,true);
+        {AttackerState white=MoveLogic::SetWhiteAttacker(board),black=MoveLogic::SetBlackAttacker(board);
+         MoveLogic::MoveGeneratorInto(board,qDepth,ply,true,true,white,black,checkMoves,true);}
         for(int i=0;i<checkMoves.count;++i){Move* m=checkMoves.moves[i];
             const bool tactical=m->endPiece>0||m->promotionPiece>0||(m->PublicFlag&Option::PowerTwo[6]);
             if(!tactical){m->givesCheck=MoveLogic::MoveGivesCheck(board,*m);m->givesCheckComputed=true;
@@ -102,7 +103,7 @@ private:
         return nullptr;
     }
     Board& board;int qDepth;int ply;bool inCheck;const Move& previous;uint16_t ttMove;
-    uint16_t returnedTT=0;MoveList tacticalMoves{},checkMoves{},evasionMoves{};
+    uint16_t returnedTT=0;MoveList tacticalMoves{},checkMoves{};
     std::array<Entry,256> tacticals{},checks{},evasions{};
     int tacticalCount=0,checkCount=0,evasionCount=0;
     int tacticalCursor=0,checkCursor=0,evasionCursor=0;
@@ -146,7 +147,7 @@ QSearchTestStatistics stats;
 
 int QSearcher::pieceValue100[15]={0,100,350,350,550,975,2500,0,0,100,350,350,550,975,2500};
 MovePrintValue* QSearcher::QSearch(bool pv,int alpha,int beta,Move&prev,int ply,int,bool,int depth,Move&,Move&,Move&,Board&b,bool,int,bool){Result r=SearchQ(b,prev,alpha,beta,ply,depth,pv);auto*out=new MovePrintValue();out->value=r.value;out->printString=r.pv;out->bound=r.value>=beta?SearchBound::Lower:(r.value<=alpha?SearchBound::Upper:SearchBound::Exact);out->proof=ExactProof;out->selective=false;return out;}
-void QSearcher::deleteMoveList(MoveList l){for(int i=0;i<l.count;++i)delete l.moves[i];}
+void QSearcher::deleteMoveList(MoveList){}
 #ifdef HOWL_CORRECTNESS_TESTING
 void QSearcher::ResetTestStatistics(){stats={};}
 QSearchTestStatistics QSearcher::TestStatistics(){return stats;}
