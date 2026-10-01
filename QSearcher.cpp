@@ -93,13 +93,17 @@ private:
             entries[j] = key;
         }
     }
+    void EnsureAttackers() {
+        if (attackersReady) return;
+        attackersReady = true;
+        whiteAttacker = MoveLogic::SetWhiteAttacker(board);
+        blackAttacker = MoveLogic::SetBlackAttacker(board);
+    }
     void PrepareEvasions() {
         if (evasionsReady) return;
         evasionsReady = true;
-        {
-            AttackerState white = MoveLogic::SetWhiteAttacker(board), black = MoveLogic::SetBlackAttacker(board);
-            MoveLogic::MoveGeneratorInto(board, qDepth, ply, false, true, white, black, tacticalMoves);
-        }
+        EnsureAttackers();
+        MoveLogic::MoveGeneratorInto(board, qDepth, ply, false, true, whiteAttacker, blackAttacker, tacticalMoves);
         for (int i = 0; i < tacticalMoves.count; ++i)
             evasions[evasionCount++] = {static_cast<uint8_t>(i), EvasionScore(tacticalMoves[i])};
         Sort(evasions.data(), evasionCount);
@@ -107,10 +111,8 @@ private:
     void PrepareTacticals() {
         if (tacticalsReady) return;
         tacticalsReady = true;
-        {
-            AttackerState white = MoveLogic::SetWhiteAttacker(board), black = MoveLogic::SetBlackAttacker(board);
-            MoveLogic::MoveGeneratorInto(board, qDepth, ply, true, true, white, black, tacticalMoves, false);
-        }
+        EnsureAttackers();
+        MoveLogic::MoveGeneratorInto(board, qDepth, ply, true, true, whiteAttacker, blackAttacker, tacticalMoves, false);
         for (int i = 0; i < tacticalMoves.count; ++i) {
             if (EligibleTactical(tacticalMoves[i]))
                 tacticals[tacticalCount++] = {static_cast<uint8_t>(i), TacticalScore(tacticalMoves[i])};
@@ -120,10 +122,8 @@ private:
     void PrepareChecks() {
         if (checksReady) return;
         checksReady = true;
-        {
-            AttackerState white = MoveLogic::SetWhiteAttacker(board), black = MoveLogic::SetBlackAttacker(board);
-            MoveLogic::MoveGeneratorInto(board, qDepth, ply, true, true, white, black, checkMoves, true);
-        }
+        EnsureAttackers();
+        MoveLogic::MoveGeneratorInto(board, qDepth, ply, true, true, whiteAttacker, blackAttacker, checkMoves, true);
         for (int i = 0; i < checkMoves.count; ++i) {
             Move& m = checkMoves[i];
             const bool tactical = m.endPiece > 0 || m.promotionPiece > 0 || (m.PublicFlag & Option::PowerTwo[6]);
@@ -183,6 +183,9 @@ private:
     int tacticalCount = 0, checkCount = 0, evasionCount = 0;
     int tacticalCursor = 0, checkCursor = 0, evasionCursor = 0;
     bool tacticalsReady = false, checksReady = false, evasionsReady = false;
+    bool attackersReady = false;
+    AttackerState whiteAttacker{};
+    AttackerState blackAttacker{};
     Stage stage = Stage::TT;
 };
 
