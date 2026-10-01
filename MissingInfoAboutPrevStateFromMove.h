@@ -16,8 +16,21 @@ public:
     int movedPieceIndex;
     int capturedPieceIndex;
 
-    MissingInfoAboutPrevStateFromMove(Board& board4);
-    MissingInfoAboutPrevStateFromMove(Board& board4, const Move& move);
+    explicit MissingInfoAboutPrevStateFromMove(const Board& board4) noexcept
+        : previousUnpassentPlace(board4.unpassentPlace)
+        , previousWhiteBigCastle(board4.whiteBigCastle)
+        , previousWhiteSmallCastle(board4.whiteSmallCastle)
+        , previousBlackBigCastle(board4.blackBigCastle)
+        , previousBlackSmallCastle(board4.blackSmallCastle)
+        , movedPieceIndex(-1)
+        , capturedPieceIndex(-1)
+    {
+    }
+
+    MissingInfoAboutPrevStateFromMove(const Board& board4, const Move&) noexcept
+        : MissingInfoAboutPrevStateFromMove(board4)
+    {
+    }
 };
 
 #endif
