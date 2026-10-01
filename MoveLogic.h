@@ -7,61 +7,69 @@
 #include <cstddef>
 #include <cstdint>
 #include <cassert>
+#include <cstring>
 #include <new>
 #include <type_traits>
 
 struct MoveList {
     static constexpr int Capacity = 256;
-    // Construct only generated values; an eager Move[256] default-constructs
-    // thousands of unused slots per search node.
     using Slot = std::aligned_storage_t<sizeof(Move), alignof(Move)>;
     Slot storage[Capacity];
-    Move* moves[Capacity];
-    int count = 0;
-    int used = 0;
+    int count;
 
-    MoveList() = default;
-    MoveList(const MoveList& other) { *this = other; }
-    MoveList(MoveList&& other) noexcept { *this = other; }
-    ~MoveList() { Clear(); }
-    Move* At(int index) { return std::launder(reinterpret_cast<Move*>(&storage[index])); }
-    const Move* At(int index) const { return std::launder(reinterpret_cast<const Move*>(&storage[index])); }
-    void Clear()
+    MoveList() noexcept : count(0) {}
+    MoveList(const MoveList& other) noexcept : count(other.count)
     {
-        for (int i = 0; i < used; ++i)
-            At(i)->~Move();
-        used = 0;
-        count = 0;
+        if (count > 0)
+            std::memcpy(storage, other.storage, static_cast<std::size_t>(count) * sizeof(Slot));
     }
-    MoveList& operator=(const MoveList& other)
+    MoveList(MoveList&& other) noexcept : count(other.count)
     {
-        if (this == &other)
-            return *this;
-        Clear();
-        for (int i = 0; i < other.used; ++i)
-            ::new (&storage[i]) Move(*other.At(i));
-        used = other.used;
-        count = other.count;
-        for (int i = 0; i < count; ++i)
+        if (count > 0)
+            std::memcpy(storage, other.storage, static_cast<std::size_t>(count) * sizeof(Slot));
+    }
+    ~MoveList() = default;
+
+    MoveList& operator=(const MoveList& other) noexcept
+    {
+        if (this != &other)
         {
-            if (!other.moves[i])
-            {
-                moves[i] = nullptr;
-                continue;
-            }
-            const auto offset = reinterpret_cast<std::uintptr_t>(other.moves[i]) -
-                reinterpret_cast<std::uintptr_t>(other.storage);
-            assert(offset % sizeof(Slot) == 0 && offset / sizeof(Slot) < static_cast<std::size_t>(used));
-            moves[i] = At(static_cast<int>(offset / sizeof(Slot)));
+            count = other.count;
+            if (count > 0)
+                std::memcpy(storage, other.storage, static_cast<std::size_t>(count) * sizeof(Slot));
         }
         return *this;
     }
     MoveList& operator=(MoveList&& other) noexcept { return *this = other; }
 
-    Move* AppendCopy(const Move* source)
+    Move* At(int index) noexcept
     {
-        assert(used < Capacity);
-        Move* result = ::new (&storage[used++]) Move{};
+        assert(index >= 0 && index < Capacity);
+        return reinterpret_cast<Move*>(&storage[index]);
+    }
+    const Move* At(int index) const noexcept
+    {
+        assert(index >= 0 && index < Capacity);
+        return reinterpret_cast<const Move*>(&storage[index]);
+    }
+
+    Move& operator[](int index) noexcept { return *At(index); }
+    const Move& operator[](int index) const noexcept { return *At(index); }
+
+    Move* Get(int index) noexcept { return At(index); }
+    const Move* Get(int index) const noexcept { return At(index); }
+
+    Move* begin() noexcept { return At(0); }
+    const Move* begin() const noexcept { return At(0); }
+    Move* end() noexcept { return At(count); }
+    const Move* end() const noexcept { return At(count); }
+
+    void Clear() noexcept { count = 0; }
+
+    Move* AppendCopy(const Move* source) noexcept
+    {
+        assert(count < Capacity);
+        Move* result = ::new (&storage[count++]) Move{};
         result->beginPlace = source->beginPlace;
         result->CastleFlag = source->CastleFlag;
         result->endPlace = source->endPlace;
@@ -71,18 +79,18 @@ struct MoveList {
         result->moveCount = source->moveCount;
         return result;
     }
-    Move* AppendValue(const Move& source)
+
+    Move* AppendValue(const Move& source) noexcept
     {
-        assert(used < Capacity);
-        Move* result = ::new (&storage[used++]) Move(source);
-        moves[count++] = result;
+        assert(count < Capacity);
+        Move* result = ::new (&storage[count++]) Move(source);
         return result;
     }
-    void Discard(Move* candidate)
+
+    void Discard(Move* candidate) noexcept
     {
-        assert(used > 0 && candidate == At(used - 1));
-        candidate->~Move();
-        --used;
+        assert(count > 0 && candidate == At(count - 1));
+        --count;
     }
 };
 

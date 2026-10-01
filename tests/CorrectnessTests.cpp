@@ -236,7 +236,7 @@ void ApplyMoves(Board& board, const std::vector<std::string>& moveTexts)
 
         for (int counter = 0; counter < generatedMoves.moveList.count; counter++)
         {
-            Move& candidate = *generatedMoves.moveList.moves[counter];
+            Move& candidate = generatedMoves.moveList[counter];
             if (MoveToString(candidate) == moveText)
             {
                 selectedMove = candidate;
@@ -386,7 +386,7 @@ bool HasLegalEnPassantMove(Board& board, const std::string& expectedMove)
 
     for (int counter = 0; counter < generatedMoves.moveList.count; counter++)
     {
-        Move& move = *generatedMoves.moveList.moves[counter];
+        Move& move = generatedMoves.moveList[counter];
         if (MoveToString(move) != expectedMove ||
             (move.PublicFlag & Option::PowerTwo[6]) == 0)
         {
@@ -536,7 +536,7 @@ FixedDepthSearchResult FixedDepthRoot(Board& board, int depth)
 
     for (int counter = 0; counter < generatedMoves.moveList.count; counter++)
     {
-        Move& move = *generatedMoves.moveList.moves[counter];
+        Move& move = generatedMoves.moveList[counter];
         std::string moveText = MoveToString(move);
         MissingInfoAboutPrevStateFromMove missingInfo(board, move);
         GameLogic::DoMove(board, move, previousMove, depth, 0, &missingInfo);
@@ -601,7 +601,7 @@ bool ValidateReturnedMove(Board& board, const FixedDepthSearchResult& result)
 
     for (int counter = 0; counter < generatedMoves.moveList.count; counter++)
     {
-        Move& move = *generatedMoves.moveList.moves[counter];
+        Move& move = generatedMoves.moveList[counter];
         if (MoveToString(move) != result.moveText)
         {
             continue;
@@ -971,7 +971,7 @@ int RunQSearchPromotion(bool capture)
     bool knightGenerated = false;
     for (int counter = 0; counter < generatedMoves.moveList.count; counter++)
     {
-        const std::string move = MoveToString(*generatedMoves.moveList.moves[counter]);
+        const std::string move = MoveToString(generatedMoves.moveList[counter]);
         queenGenerated = queenGenerated || move == queenMove;
         knightGenerated = knightGenerated || move == knightMove;
     }
@@ -1014,7 +1014,7 @@ int RunQSearchCheckingMove(bool capture)
     bool currentDeltaRejectsMove = false;
     for (int counter = 0; counter < moves.moveList.count; counter++)
     {
-        Move& move = *moves.moveList.moves[counter];
+        Move& move = moves.moveList[counter];
         if (MoveToString(move) != expectedMove)
         {
             continue;
@@ -2583,7 +2583,7 @@ std::uint64_t Perft(Board& board, int depth, Move& previousMove)
 
     for (int counter = 0; counter < generatedMoves.moveList.count; counter++)
     {
-        Move& move = *generatedMoves.moveList.moves[counter];
+        Move& move = generatedMoves.moveList[counter];
         MissingInfoAboutPrevStateFromMove missingInfo(board, move);
         GameLogic::DoMove(board, move, previousMove, depth, 0, &missingInfo);
         bool legal = IsLegalAfterMove(board, movingSide);
@@ -2610,7 +2610,7 @@ void PrintRootDivide(const PerftPosition& position, int depth)
     std::cout << "Root divide for " << position.name << " at depth " << depth << ":\n";
     for (int counter = 0; counter < generatedMoves.moveList.count; counter++)
     {
-        Move& move = *generatedMoves.moveList.moves[counter];
+        Move& move = generatedMoves.moveList[counter];
         std::string moveText = MoveToString(move);
         MissingInfoAboutPrevStateFromMove missingInfo(*board, move);
         GameLogic::DoMove(*board, move, previousMove, depth, 0, &missingInfo);
@@ -2688,7 +2688,7 @@ int RunRestoration(const PerftPosition& position)
 
     for (int counter = 0; counter < generatedMoves.moveList.count; counter++)
     {
-        Move& move = *generatedMoves.moveList.moves[counter];
+        Move& move = generatedMoves.moveList[counter];
         std::string moveText = MoveToString(move);
         std::unique_ptr<Board> original(board->MakeCopy());
         MissingInfoAboutPrevStateFromMove missingInfo(*board, move);
@@ -3058,9 +3058,9 @@ int RunKillerCorrectnessTest()
     bool foundQuiet = false;
     for (int i = 0; i < moveList.count; ++i)
     {
-        if (moveList.moves[i]->endPiece == 0 && moveList.moves[i]->promotionPiece <= 0)
+        if (moveList[i].endPiece == 0 && moveList[i].promotionPiece <= 0)
         {
-            testQuiet = *moveList.moves[i];
+            testQuiet = moveList[i];
             foundQuiet = true;
             break;
         }
@@ -3197,7 +3197,7 @@ int RunCastlingLegalityRegressionTest()
             *board, 4, 0, false, false, emptyWhite, emptyBlack, true);
         bool found = false;
         for (int i = 0; i < moves.count; ++i)
-            found |= MoveToString(*moves.moves[i]) == expected;
+            found |= MoveToString(moves[i]) == expected;
         PVSSearch::deleteMoveList(moves);
         return found;
     };
@@ -3220,7 +3220,7 @@ int RunCastlingLegalityRegressionTest()
     MoveList first = MoveLogic::MoveGenerator(*board, 4, 0);
     Move* c6 = nullptr;
     for (int i = 0; i < first.count; ++i)
-        if (MoveToString(*first.moves[i]) == "c7c6") c6 = first.moves[i];
+        if (MoveToString(first[i]) == "c7c6") c6 = &first[i];
     if (!c6) { PVSSearch::deleteMoveList(first); return 1; }
     MissingInfoAboutPrevStateFromMove undoC6(*board, *c6);
     GameLogic::DoMove(*board, *c6, previous, 4, 0, &undoC6);
@@ -3228,7 +3228,7 @@ int RunCastlingLegalityRegressionTest()
     MoveList second = MoveLogic::MoveGenerator(*board, 3, 1);
     Move* bc6 = nullptr;
     for (int i = 0; i < second.count; ++i)
-        if (MoveToString(*second.moves[i]) == "g2c6") bc6 = second.moves[i];
+        if (MoveToString(second[i]) == "g2c6") bc6 = &second[i];
     if (!bc6) { PVSSearch::deleteMoveList(second); PVSSearch::deleteMoveList(first); return 1; }
     MissingInfoAboutPrevStateFromMove undoBc6(*board, *bc6);
     GameLogic::DoMove(*board, *bc6, *c6, 3, 1, &undoBc6);
@@ -3241,7 +3241,7 @@ int RunCastlingLegalityRegressionTest()
     bool mateConfirmed = false;
     for (int i = 0; i < replies.count; ++i)
     {
-        Move& reply = *replies.moves[i];
+        Move& reply = replies[i];
         MissingInfoAboutPrevStateFromMove undo(*board, reply);
         GameLogic::DoMove(*board, reply, *bc6, 2, 2, &undo);
         if (!BoardLogic::UnderAttack(*board, board->pieces[14].front(), board->sideToMove))
@@ -3250,7 +3250,7 @@ int RunCastlingLegalityRegressionTest()
             MoveList whiteMoves = MoveLogic::MoveGenerator(*board, 1, 3);
             for (int j = 0; j < whiteMoves.count; ++j)
             {
-                Move& mate = *whiteMoves.moves[j];
+                Move& mate = whiteMoves[j];
                 if (MoveToString(mate) != "c6d7") continue;
                 MissingInfoAboutPrevStateFromMove mateUndo(*board, mate);
                 GameLogic::DoMove(*board, mate, reply, 1, 3, &mateUndo);
@@ -3260,12 +3260,12 @@ int RunCastlingLegalityRegressionTest()
                 int legalFinalMoves = 0;
                 for (int k = 0; k < finalMoves.count; ++k)
                 {
-                    MissingInfoAboutPrevStateFromMove finalUndo(*board, *finalMoves.moves[k]);
-                    GameLogic::DoMove(*board, *finalMoves.moves[k], mate, 0, 4, &finalUndo);
+                    MissingInfoAboutPrevStateFromMove finalUndo(*board, finalMoves[k]);
+                    GameLogic::DoMove(*board, finalMoves[k], mate, 0, 4, &finalUndo);
                     if (!BoardLogic::UnderAttack(
                             *board, board->pieces[14].front(), board->sideToMove))
                         ++legalFinalMoves;
-                    GameLogic::UndoMove(*board, *finalMoves.moves[k], finalUndo);
+                    GameLogic::UndoMove(*board, finalMoves[k], finalUndo);
                 }
                 PVSSearch::deleteMoveList(finalMoves);
                 mateConfirmed = inCheck && legalFinalMoves == 0;
@@ -4383,7 +4383,7 @@ static bool OldFallbackHasLegalMove(Board &board, const Move& prevMove, int dept
     MoveList legalMoveList = MoveLogic::MoveGenerator(board, 1, depthGone, false);
     int turn = board.sideToMove ? 1 : 0;
     for (int i = 0; i < legalMoveList.count && !hasLegalMove; ++i) {
-        Move* move = legalMoveList.moves[i];
+        Move* move = &legalMoveList[i];
         MissingInfoAboutPrevStateFromMove undo(board, *move);
         GameLogic::DoMove(board, *move, const_cast<Move&>(prevMove), depthGone, depthGone, &undo);
         hasLegalMove = !BoardLogic::UnderAttack(
@@ -4457,7 +4457,7 @@ int RunComprehensiveBoardRestorationTest()
         MoveList ml = MoveLogic::MoveGenerator(*b, 1, 0, false);
         for (int i = 0; i < ml.count; ++i)
         {
-            Move& m = *ml.moves[i];
+            Move& m = ml[i];
             std::string uci = MoveToString(m);
             std::string err;
             if (!VerifyExactBoardRoundTrip(*b, m, "Start quiet move " + uci, err))
@@ -4476,7 +4476,7 @@ int RunComprehensiveBoardRestorationTest()
         MoveList ml = MoveLogic::MoveGenerator(*b, 1, 0, false);
         for (int i = 0; i < ml.count; ++i)
         {
-            Move& m = *ml.moves[i];
+            Move& m = ml[i];
             std::string uci = MoveToString(m);
             std::string err;
             if (!VerifyExactBoardRoundTrip(*b, m, "King move " + uci, err))
@@ -4495,7 +4495,7 @@ int RunComprehensiveBoardRestorationTest()
         MoveList ml = MoveLogic::MoveGenerator(*b, 1, 0, false);
         for (int i = 0; i < ml.count; ++i)
         {
-            Move& m = *ml.moves[i];
+            Move& m = ml[i];
             if (m.endPiece > 0)
             {
                 std::string uci = MoveToString(m);
@@ -4518,7 +4518,7 @@ int RunComprehensiveBoardRestorationTest()
         MoveList mlW = MoveLogic::MoveGenerator(*bW, 1, 0, false);
         for (int i = 0; i < mlW.count; ++i)
         {
-            Move& m = *mlW.moves[i];
+            Move& m = mlW[i];
             if ((m.PublicFlag & Option::PowerTwo[6]) != 0)
             {
                 std::string err;
@@ -4537,7 +4537,7 @@ int RunComprehensiveBoardRestorationTest()
         MoveList mlB = MoveLogic::MoveGenerator(*bB, 1, 0, false);
         for (int i = 0; i < mlB.count; ++i)
         {
-            Move& m = *mlB.moves[i];
+            Move& m = mlB[i];
             if ((m.PublicFlag & Option::PowerTwo[6]) != 0)
             {
                 std::string err;
@@ -4559,7 +4559,7 @@ int RunComprehensiveBoardRestorationTest()
         MoveList mlW = MoveLogic::MoveGenerator(*bW, 1, 0, false);
         for (int i = 0; i < mlW.count; ++i)
         {
-            Move& m = *mlW.moves[i];
+            Move& m = mlW[i];
             if (m.promotionPiece > 0)
             {
                 std::string uci = MoveToString(m);
@@ -4579,7 +4579,7 @@ int RunComprehensiveBoardRestorationTest()
         MoveList mlB = MoveLogic::MoveGenerator(*bB, 1, 0, false);
         for (int i = 0; i < mlB.count; ++i)
         {
-            Move& m = *mlB.moves[i];
+            Move& m = mlB[i];
             if (m.promotionPiece > 0)
             {
                 std::string uci = MoveToString(m);
@@ -4602,7 +4602,7 @@ int RunComprehensiveBoardRestorationTest()
         MoveList mlW = MoveLogic::MoveGenerator(*bW, 1, 0, false);
         for (int i = 0; i < mlW.count; ++i)
         {
-            Move& m = *mlW.moves[i];
+            Move& m = mlW[i];
             if ((m.CastleFlag & 12) != 0)
             {
                 std::string uci = MoveToString(m);
@@ -4622,7 +4622,7 @@ int RunComprehensiveBoardRestorationTest()
         MoveList mlB = MoveLogic::MoveGenerator(*bB, 1, 0, false);
         for (int i = 0; i < mlB.count; ++i)
         {
-            Move& m = *mlB.moves[i];
+            Move& m = mlB[i];
             if ((m.CastleFlag & 3) != 0)
             {
                 std::string uci = MoveToString(m);
@@ -4670,7 +4670,7 @@ int RunComprehensiveBoardRestorationTest()
         int movingSide = b->sideToMove ? 1 : 0;
         for (int i = 0; i < ml.count; ++i)
         {
-            Move& m = *ml.moves[i];
+            Move& m = ml[i];
             MissingInfoAboutPrevStateFromMove undo(*b, m);
             Move prevMove{};
             GameLogic::DoMove(*b, m, prevMove, 1, 0, &undo);
@@ -4717,9 +4717,9 @@ int RunQSearchMoveGenCorrectnessTest()
         }
         for (int i = 0; i < normalList.count; ++i)
         {
-            if (normalList.moves[i]->beginPlace != defaultList.moves[i]->beginPlace ||
-                normalList.moves[i]->endPlace != defaultList.moves[i]->endPlace ||
-                normalList.moves[i]->promotionPiece != defaultList.moves[i]->promotionPiece)
+            if (normalList[i].beginPlace != defaultList[i].beginPlace ||
+                normalList[i].endPlace != defaultList[i].endPlace ||
+                normalList[i].promotionPiece != defaultList[i].promotionPiece)
             {
                 std::cerr << "Normal move list mismatch at index " << i << '\n';
                 return 1;
@@ -4743,7 +4743,7 @@ int RunQSearchMoveGenCorrectnessTest()
 
         for (int i = 0; i < fullList.count; ++i)
         {
-            Move* m = fullList.moves[i];
+            Move* m = &fullList[i];
             bool isCap = (m->endPiece > 0);
             bool isPromo = (m->promotionPiece > 0);
             MissingInfoAboutPrevStateFromMove missing(*b, *m);
@@ -4760,7 +4760,7 @@ int RunQSearchMoveGenCorrectnessTest()
 
         for (int i = 0; i < qList.count; ++i)
         {
-            Move* m = qList.moves[i];
+            Move* m = &qList[i];
             bool isCap = (m->endPiece > 0);
             bool isPromo = (m->promotionPiece > 0);
             MissingInfoAboutPrevStateFromMove missing(*b, *m);
@@ -4805,7 +4805,7 @@ int RunQSearchMoveGenCorrectnessTest()
             MoveList qList = MoveLogic::MoveGenerator(*b, 1, 0, true);
             bool foundUnattackedBishopCheck = false;
             for (int i = 0; i < qList.count; ++i) {
-                if (qList.moves[i]->beginPlace == 10 && qList.moves[i]->endPlace == 46) {
+                if (qList[i].beginPlace == 10 && qList[i].endPlace == 46) {
                     foundUnattackedBishopCheck = true;
                 }
             }
@@ -4822,7 +4822,7 @@ int RunQSearchMoveGenCorrectnessTest()
             MoveList qList = MoveLogic::MoveGenerator(*b, 1, 0, true);
             bool foundUnattackedQueenCheck = false;
             for (int i = 0; i < qList.count; ++i) {
-                if (qList.moves[i]->beginPlace == 35 && qList.moves[i]->endPlace == 34) {
+                if (qList[i].beginPlace == 35 && qList[i].endPlace == 34) {
                     foundUnattackedQueenCheck = true;
                 }
             }
@@ -4838,7 +4838,7 @@ int RunQSearchMoveGenCorrectnessTest()
             MoveList qList = MoveLogic::MoveGenerator(*b, 1, 0, true);
             bool foundAttackedBishopCheck = false;
             for (int i = 0; i < qList.count; ++i) {
-                if (qList.moves[i]->beginPlace == 10 && qList.moves[i]->endPlace == 46) {
+                if (qList[i].beginPlace == 10 && qList[i].endPlace == 46) {
                     foundAttackedBishopCheck = true;
                 }
             }
@@ -4854,7 +4854,7 @@ int RunQSearchMoveGenCorrectnessTest()
             MoveList qList = MoveLogic::MoveGenerator(*b, 1, 0, true);
             bool foundKnightCheck = false;
             for (int i = 0; i < qList.count; ++i) {
-                if (qList.moves[i]->beginPlace == 37 && (qList.moves[i]->endPlace == 43 || qList.moves[i]->endPlace == 51)) {
+                if (qList[i].beginPlace == 37 && (qList[i].endPlace == 43 || qList[i].endPlace == 51)) {
                     foundKnightCheck = true;
                 }
             }
@@ -4877,7 +4877,7 @@ int RunQSearchMoveGenCorrectnessTest()
             MoveList qList = MoveLogic::MoveGenerator(*b, 1, 0, true);
             bool foundDefendedPawnCheck = false;
             for (int i = 0; i < qList.count; ++i) {
-                if (qList.moves[i]->beginPlace == 27 && qList.moves[i]->endPlace == 35) {
+                if (qList[i].beginPlace == 27 && qList[i].endPlace == 35) {
                     foundDefendedPawnCheck = true;
                 }
             }
@@ -4893,7 +4893,7 @@ int RunQSearchMoveGenCorrectnessTest()
             MoveList qList = MoveLogic::MoveGenerator(*b, 1, 0, true);
             bool foundRank7PawnCheck = false;
             for (int i = 0; i < qList.count; ++i) {
-                if (qList.moves[i]->beginPlace == 43 && qList.moves[i]->endPlace == 51) {
+                if (qList[i].beginPlace == 43 && qList[i].endPlace == 51) {
                     foundRank7PawnCheck = true;
                 }
             }
@@ -4909,7 +4909,7 @@ int RunQSearchMoveGenCorrectnessTest()
             MoveList qList = MoveLogic::MoveGenerator(*b, 1, 0, true);
             bool foundDiscoveredPawnCheck = false;
             for (int i = 0; i < qList.count; ++i) {
-                if (qList.moves[i]->beginPlace == 28 && (qList.moves[i]->endPlace == 36 || qList.moves[i]->endPlace == 44)) {
+                if (qList[i].beginPlace == 28 && (qList[i].endPlace == 36 || qList[i].endPlace == 44)) {
                     foundDiscoveredPawnCheck = true;
                 }
             }
@@ -4925,7 +4925,7 @@ int RunQSearchMoveGenCorrectnessTest()
             MoveList qList = MoveLogic::MoveGenerator(*b, 1, 0, true);
             bool foundUndefendedPawnCheck = false;
             for (int i = 0; i < qList.count; ++i) {
-                if (qList.moves[i]->beginPlace == 27 && qList.moves[i]->endPlace == 35) {
+                if (qList[i].beginPlace == 27 && qList[i].endPlace == 35) {
                     foundUndefendedPawnCheck = true;
                 }
             }
@@ -4944,7 +4944,7 @@ int RunQSearchMoveGenCorrectnessTest()
         bool foundDiscoveredCheck = false;
         for (int i = 0; i < qList.count; ++i)
         {
-            Move* m = qList.moves[i];
+            Move* m = &qList[i];
             if (m->beginPlace == 12) // e2 knight
             {
                 foundDiscoveredCheck = true;
@@ -4997,7 +4997,7 @@ int RunQSearchMoveGenCorrectnessTest()
         // Check that all Stage 1 moves have promotion or capture
         for (int i = 0; i < stage1.count; ++i)
         {
-            Move* m = stage1.moves[i];
+            Move* m = &stage1[i];
             bool isProm = (m->promotionPiece > 0);
             bool isCap = (m->endPiece > 0);
             if (!isProm && !isCap)

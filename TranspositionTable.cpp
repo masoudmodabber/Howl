@@ -210,9 +210,9 @@ void TranspositionTable::CheckShadowEntryOnProbe(uint64_t key, int depth, int al
             int ttPromo = TTMoveHelper::UnpackPromotion(shadow.bestMove);
             for (int i = 0; i < moveList.count; ++i)
             {
-                Move* m = moveList.moves[i];
-                if (m->beginPlace == ttFrom && m->endPlace == ttTo &&
-                    (ttPromo == 0 ? (m->promotionPiece <= 0) : (m->promotionPiece == ttPromo)))
+                const Move& m = moveList[i];
+                if (m.beginPlace == ttFrom && m.endPlace == ttTo &&
+                    (ttPromo == 0 ? (m.promotionPiece <= 0) : (m.promotionPiece == ttPromo)))
                 {
                     g_shadowEntries[idx].producedMoveOnly = true;
                     break;

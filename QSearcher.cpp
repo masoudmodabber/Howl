@@ -28,87 +28,162 @@ public:
                 const Move& previousValue,uint16_t ttMoveValue)
         : board(boardValue),qDepth(qDepthValue),ply(plyValue),inCheck(inCheckValue),
           previous(previousValue),ttMove(ttMoveValue) {}
-    Move* Next(){
-        while(true){
-            switch(stage){
+    Move* Next() {
+        while (true) {
+            switch (stage) {
             case Stage::TT:
-                stage=inCheck?Stage::Evasions:Stage::Tacticals;
-                if(Move* m=FindTT())return m;
+                stage = inCheck ? Stage::Evasions : Stage::Tacticals;
+                if (Move* m = FindTT()) return m;
                 break;
             case Stage::Evasions:
                 PrepareEvasions();
-                while(evasionCursor<evasionCount){Move* m=evasions[evasionCursor++].move;
-                    if(!Same(*m,returnedTT))return m;}
-                stage=Stage::Done;break;
+                while (evasionCursor < evasionCount) {
+                    Move* m = &tacticalMoves[evasions[evasionCursor++].moveIndex];
+                    if (!Same(*m, returnedTT)) return m;
+                }
+                stage = Stage::Done;
+                break;
             case Stage::Tacticals:
                 PrepareTacticals();
-                while(tacticalCursor<tacticalCount){Move* m=tacticals[tacticalCursor++].move;
-                    if(!Same(*m,returnedTT))return m;}
-                stage=qDepth>=QChecks?Stage::Checks:Stage::Done;break;
+                while (tacticalCursor < tacticalCount) {
+                    Move* m = &tacticalMoves[tacticals[tacticalCursor++].moveIndex];
+                    if (!Same(*m, returnedTT)) return m;
+                }
+                stage = (qDepth >= QChecks) ? Stage::Checks : Stage::Done;
+                break;
             case Stage::Checks:
                 PrepareChecks();
-                while(checkCursor<checkCount){Move* m=checks[checkCursor++].move;
-                    if(!Same(*m,returnedTT))return m;}
-                stage=Stage::Done;break;
-            case Stage::Done:return nullptr;
+                while (checkCursor < checkCount) {
+                    Move* m = &checkMoves[checks[checkCursor++].moveIndex];
+                    if (!Same(*m, returnedTT)) return m;
+                }
+                stage = Stage::Done;
+                break;
+            case Stage::Done:
+                return nullptr;
             }
         }
     }
 private:
-    struct Entry{Move* move=nullptr;int score=0;};
-    enum class Stage{TT,Evasions,Tacticals,Checks,Done};
+    struct Entry { uint8_t moveIndex; int score; };
+    enum class Stage { TT, Evasions, Tacticals, Checks, Done };
     bool EligibleTactical(const Move& m) const {
-        const bool capture=m.endPiece>0||(m.PublicFlag&Option::PowerTwo[6]);
-        const bool promotion=m.promotionPiece>0;
-        return (capture||promotion)&&
-            (qDepth>QRecaptures||m.endPlace==previous.endPlace);
+        const bool capture = m.endPiece > 0 || (m.PublicFlag & Option::PowerTwo[6]);
+        const bool promotion = m.promotionPiece > 0;
+        return (capture || promotion) &&
+            (qDepth > QRecaptures || m.endPlace == previous.endPlace);
     }
     int TacticalScore(const Move& m) const {
-        return PVSSearch::QCaptureOrderingScore(board,m);
+        return PVSSearch::QCaptureOrderingScore(board, m);
     }
     int EvasionScore(const Move& m) const {
-        const bool capture=m.endPiece>0||(m.PublicFlag&Option::PowerTwo[6]);
-        if(capture)return PieceValue[Type(m.endPiece)]-Type(board.mainBoard[m.beginPlace]);
+        const bool capture = m.endPiece > 0 || (m.PublicFlag & Option::PowerTwo[6]);
+        if (capture) return PieceValue[Type(m.endPiece)] - Type(board.mainBoard[m.beginPlace]);
         return PVSSearch::QQuietEvasionOrderingScore(
-            board.sideToMove?1:0,ply,board,m)-(1<<28);
+            board.sideToMove ? 1 : 0, ply, board, m) - (1 << 28);
     }
-    void Sort(Entry* entries,int count){for(int i=1;i<count;++i){Entry key=entries[i];int j=i;
-        while(j>0&&key.score>entries[j-1].score){entries[j]=entries[j-1];--j;}entries[j]=key;}}
-    void PrepareEvasions(){if(evasionsReady)return;evasionsReady=true;
-        {AttackerState white=MoveLogic::SetWhiteAttacker(board),black=MoveLogic::SetBlackAttacker(board);
-         MoveLogic::MoveGeneratorInto(board,qDepth,ply,false,true,white,black,tacticalMoves);}
-        for(int i=0;i<tacticalMoves.count;++i)evasions[evasionCount++]={tacticalMoves.moves[i],EvasionScore(*tacticalMoves.moves[i])};
-        Sort(evasions.data(),evasionCount);}
-    void PrepareTacticals(){if(tacticalsReady)return;tacticalsReady=true;
-        {AttackerState white=MoveLogic::SetWhiteAttacker(board),black=MoveLogic::SetBlackAttacker(board);
-         MoveLogic::MoveGeneratorInto(board,qDepth,ply,true,true,white,black,tacticalMoves,false);}
-        for(int i=0;i<tacticalMoves.count;++i)if(EligibleTactical(*tacticalMoves.moves[i]))
-            tacticals[tacticalCount++]={tacticalMoves.moves[i],TacticalScore(*tacticalMoves.moves[i])};
-        Sort(tacticals.data(),tacticalCount);}
-    void PrepareChecks(){if(checksReady)return;checksReady=true;
-        {AttackerState white=MoveLogic::SetWhiteAttacker(board),black=MoveLogic::SetBlackAttacker(board);
-         MoveLogic::MoveGeneratorInto(board,qDepth,ply,true,true,white,black,checkMoves,true);}
-        for(int i=0;i<checkMoves.count;++i){Move* m=checkMoves.moves[i];
-            const bool tactical=m->endPiece>0||m->promotionPiece>0||(m->PublicFlag&Option::PowerTwo[6]);
-            if(!tactical){m->givesCheck=MoveLogic::MoveGivesCheck(board,*m);m->givesCheckComputed=true;
-                if(m->givesCheck)checks[checkCount++]={m,0};}}
+    void Sort(Entry* entries, int count) {
+        for (int i = 1; i < count; ++i) {
+            Entry key = entries[i];
+            int j = i;
+            while (j > 0 && key.score > entries[j - 1].score) {
+                entries[j] = entries[j - 1];
+                --j;
+            }
+            entries[j] = key;
+        }
     }
-    Move* FindTT(){if(!ttMove)return nullptr;
-        if(inCheck){PrepareEvasions();for(int i=0;i<evasionCount;++i)if(Same(*evasions[i].move,ttMove))
-            {returnedTT=ttMove;return evasions[i].move;}return nullptr;}
-        PrepareTacticals();for(int i=0;i<tacticalCount;++i)if(Same(*tacticals[i].move,ttMove))
-            {returnedTT=ttMove;return tacticals[i].move;}
-        if(qDepth>=QChecks){PrepareChecks();for(int i=0;i<checkCount;++i)if(Same(*checks[i].move,ttMove))
-            {returnedTT=ttMove;return checks[i].move;}}
+    void PrepareEvasions() {
+        if (evasionsReady) return;
+        evasionsReady = true;
+        {
+            AttackerState white = MoveLogic::SetWhiteAttacker(board), black = MoveLogic::SetBlackAttacker(board);
+            MoveLogic::MoveGeneratorInto(board, qDepth, ply, false, true, white, black, tacticalMoves);
+        }
+        for (int i = 0; i < tacticalMoves.count; ++i)
+            evasions[evasionCount++] = {static_cast<uint8_t>(i), EvasionScore(tacticalMoves[i])};
+        Sort(evasions.data(), evasionCount);
+    }
+    void PrepareTacticals() {
+        if (tacticalsReady) return;
+        tacticalsReady = true;
+        {
+            AttackerState white = MoveLogic::SetWhiteAttacker(board), black = MoveLogic::SetBlackAttacker(board);
+            MoveLogic::MoveGeneratorInto(board, qDepth, ply, true, true, white, black, tacticalMoves, false);
+        }
+        for (int i = 0; i < tacticalMoves.count; ++i) {
+            if (EligibleTactical(tacticalMoves[i]))
+                tacticals[tacticalCount++] = {static_cast<uint8_t>(i), TacticalScore(tacticalMoves[i])};
+        }
+        Sort(tacticals.data(), tacticalCount);
+    }
+    void PrepareChecks() {
+        if (checksReady) return;
+        checksReady = true;
+        {
+            AttackerState white = MoveLogic::SetWhiteAttacker(board), black = MoveLogic::SetBlackAttacker(board);
+            MoveLogic::MoveGeneratorInto(board, qDepth, ply, true, true, white, black, checkMoves, true);
+        }
+        for (int i = 0; i < checkMoves.count; ++i) {
+            Move& m = checkMoves[i];
+            const bool tactical = m.endPiece > 0 || m.promotionPiece > 0 || (m.PublicFlag & Option::PowerTwo[6]);
+            if (!tactical) {
+                m.givesCheck = MoveLogic::MoveGivesCheck(board, m);
+                m.givesCheckComputed = true;
+                if (m.givesCheck)
+                    checks[checkCount++] = {static_cast<uint8_t>(i), 0};
+            }
+        }
+    }
+    Move* FindTT() {
+        if (!ttMove) return nullptr;
+        if (inCheck) {
+            PrepareEvasions();
+            for (int i = 0; i < evasionCount; ++i) {
+                Move& m = tacticalMoves[evasions[i].moveIndex];
+                if (Same(m, ttMove)) {
+                    returnedTT = ttMove;
+                    return &m;
+                }
+            }
+            return nullptr;
+        }
+        PrepareTacticals();
+        for (int i = 0; i < tacticalCount; ++i) {
+            Move& m = tacticalMoves[tacticals[i].moveIndex];
+            if (Same(m, ttMove)) {
+                returnedTT = ttMove;
+                return &m;
+            }
+        }
+        if (qDepth >= QChecks) {
+            PrepareChecks();
+            for (int i = 0; i < checkCount; ++i) {
+                Move& m = checkMoves[checks[i].moveIndex];
+                if (Same(m, ttMove)) {
+                    returnedTT = ttMove;
+                    return &m;
+                }
+            }
+        }
         return nullptr;
     }
-    Board& board;int qDepth;int ply;bool inCheck;const Move& previous;uint16_t ttMove;
-    uint16_t returnedTT=0;MoveList tacticalMoves{},checkMoves{};
-    std::array<Entry,256> tacticals{},checks{},evasions{};
-    int tacticalCount=0,checkCount=0,evasionCount=0;
-    int tacticalCursor=0,checkCursor=0,evasionCursor=0;
-    bool tacticalsReady=false,checksReady=false,evasionsReady=false;
-    Stage stage=Stage::TT;
+    Board& board;
+    int qDepth;
+    int ply;
+    bool inCheck;
+    const Move& previous;
+    uint16_t ttMove;
+    uint16_t returnedTT = 0;
+    MoveList tacticalMoves;
+    MoveList checkMoves;
+    std::array<Entry, 256> tacticals;
+    std::array<Entry, 256> checks;
+    std::array<Entry, 256> evasions;
+    int tacticalCount = 0, checkCount = 0, evasionCount = 0;
+    int tacticalCursor = 0, checkCursor = 0, evasionCursor = 0;
+    bool tacticalsReady = false, checksReady = false, evasionsReady = false;
+    Stage stage = Stage::TT;
 };
 
 Result SearchQ(Board& b,Move& prev,int alpha,int beta,int ply,int qDepth,bool pv)

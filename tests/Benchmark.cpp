@@ -199,7 +199,7 @@ RootSearchResult FixedDepthProductionRoot(Board& board, int depth)
 
     for (int counter = 0; counter < generatedMoves.moveList.count; counter++)
     {
-        Move& move = *generatedMoves.moveList.moves[counter];
+        Move& move = generatedMoves.moveList[counter];
         const int orderingValue = move.value;
         MissingInfoAboutPrevStateFromMove missingInfo(board);
         GameLogic::DoMove(board, move, move4, -1, -1);
@@ -892,7 +892,7 @@ int RunE4ReplyDiagnosis()
     std::cout << "STATIC EVALS AND INDEPENDENT SEARCHES AFTER 1. e2e4 (Depth 9 for Black):\n";
     std::cout << "=================================================================\n";
     for (int i = 0; i < ml.count; ++i) {
-        Move m = *ml.moves[i];
+        Move m = ml[i];
         std::string uci = ChessStringManipulation::PVToString(m, 0, false, b);
         if (uci == "g8f6" || uci == "b8c6" || uci == "e7e5" || uci == "c7c5" || uci == "d7d5" || uci == "b8a6" || uci == "e7e6") {
             MissingInfoAboutPrevStateFromMove undo(b, m);
