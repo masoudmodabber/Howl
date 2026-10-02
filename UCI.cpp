@@ -336,6 +336,7 @@ void UCI::Run(std::istream& in, std::ostream& out)
                     }
                 }
             }
+            thisBoard->nnueSnapshotCount = 0;
             DiagnosticLogger::Log("POSITION_END", "Final FEN: " + DiagnosticLogger::BoardToFen(thisBoard), DiagnosticLogger::currentSearchId.load());
         }
         if (order == "ponderhit")
