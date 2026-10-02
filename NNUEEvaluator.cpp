@@ -236,14 +236,15 @@ void NNUEEvaluator::ResetProfile() { profile = {}; }
 NNUEEvaluator::Profile NNUEEvaluator::GetProfile() { return profile; }
 void NNUEEvaluator::SaveSnapshot(Board& board)
 {
-    if (board.nnueSnapshotCount >= Board::MaxNNUESnapshots)
+    NNUEHistory& history = *board.nnueHistory;
+    if (history.snapshotCount >= NNUEHistory::MaxSnapshots)
     {
         std::cerr << "NNUE SNAPSHOT OVERFLOW: "
-                  << board.nnueSnapshotCount << std::endl;
+                  << history.snapshotCount << std::endl;
         std::abort();
     }
 
-    board.nnueSnapshots[board.nnueSnapshotCount++] = board.nnueState;
+    history.snapshots[history.snapshotCount++] = board.nnueState;
     ++profile.snapshotSaveCalls;
 }
 
@@ -251,13 +252,15 @@ NNUEState NNUEEvaluator::RestoreSnapshot(Board& board)
 {
     ++profile.snapshotRestoreCalls;
 
-    if (board.nnueSnapshotCount <= 0)
+    NNUEHistory& history = *board.nnueHistory;
+
+    if (history.snapshotCount <= 0)
     {
         std::cerr << "NNUE SNAPSHOT UNDERFLOW" << std::endl;
         std::abort();
     }
 
-    return board.nnueSnapshots[board.nnueSnapshotCount - 1];
+    return history.snapshots[history.snapshotCount - 1];
 }
 
 void NNUEEvaluator::SaveWeights(const std::string& path)

@@ -4,41 +4,55 @@
 #endif
 #include "Board.h"
 #include <algorithm>
+#include <iterator>
 #include <stdexcept> 
 #include <string>
 #include <sstream> 
 #include <stdexcept> 
 
+Board::Board()
+    : nnueHistory(std::make_unique<NNUEHistory>())
+{
+}
+
+Board::Board(const Board& other)
+    : Board()
+{
+    *this = other;
+}
+
+Board& Board::operator=(const Board& other)
+{
+    if (this == &other)
+        return *this;
+
+    whitePieces = other.whitePieces;
+    whitePawns = other.whitePawns;
+    blackPieces = other.blackPieces;
+    blackPawns = other.blackPawns;
+    ZobristHashCode = other.ZobristHashCode;
+    moveNumber = other.moveNumber;
+    fiftyMoveRule = other.fiftyMoveRule;
+    sideToMove = other.sideToMove;
+    whiteSmallCastle = other.whiteSmallCastle;
+    whiteBigCastle = other.whiteBigCastle;
+    blackSmallCastle = other.blackSmallCastle;
+    blackBigCastle = other.blackBigCastle;
+    unpassentPlace = other.unpassentPlace;
+    std::copy(std::begin(other.mainBoard), std::end(other.mainBoard),
+              std::begin(mainBoard));
+    std::copy(std::begin(other.pieces), std::end(other.pieces),
+              std::begin(pieces));
+    nnueState = other.nnueState;
+    if (!nnueHistory)
+        nnueHistory = std::make_unique<NNUEHistory>();
+    *nnueHistory = *other.nnueHistory;
+    return *this;
+}
+
 Board* Board::MakeCopy()
 {
-    Board* copiedBoard = new Board();
-    for (int i = 0; i < 64; ++i) {
-        copiedBoard->mainBoard[i] = mainBoard[i];
-    }
-    copiedBoard->moveNumber = moveNumber;
-    copiedBoard->fiftyMoveRule = fiftyMoveRule;
-    for (int counter = 0; counter < 15; counter++)
-    {
-        copiedBoard->pieces[counter] = pieces[counter];
-    }
-    copiedBoard->whitePieces = whitePieces;
-    copiedBoard->blackPieces = blackPieces;
-    copiedBoard->whitePawns = whitePawns;
-    copiedBoard->blackPawns = blackPawns;
-    copiedBoard->sideToMove = sideToMove;
-    copiedBoard->whiteSmallCastle = whiteSmallCastle;
-    copiedBoard->whiteBigCastle = whiteBigCastle;
-    copiedBoard->blackSmallCastle = blackSmallCastle;
-    copiedBoard->blackBigCastle = blackBigCastle;
-    copiedBoard->unpassentPlace = unpassentPlace;
-    copiedBoard->ZobristHashCode = ZobristHashCode;
-    copiedBoard->nnueState = nnueState;
-    copiedBoard->nnueSnapshotCount = nnueSnapshotCount;
-    for (int i = 0; i < nnueSnapshotCount; ++i)
-    {
-        copiedBoard->nnueSnapshots[i] = nnueSnapshots[i];
-    }
-    return copiedBoard;
+    return new Board(*this);
 }
 
 bool Board::AreBoardsEqual(Board& board1, Board& board2, bool requireExactPieceOrder)

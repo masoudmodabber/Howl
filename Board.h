@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <array>
+#include <memory>
 #include "MyList.h"
 
 struct NNUEState
@@ -14,9 +15,23 @@ struct NNUEState
     bool initialized = false;
 };
 
+struct NNUEHistory
+{
+    static constexpr int MaxSnapshots = 128;
+    int snapshotCount = 0;
+    std::array<NNUEState, MaxSnapshots> snapshots;
+};
+
 class Board
 {
 public:
+    Board();
+    Board(const Board& other);
+    Board& operator=(const Board& other);
+    Board(Board&& other) noexcept = default;
+    Board& operator=(Board&& other) noexcept = default;
+    ~Board() = default;
+
     long long whitePieces;
     long long whitePawns;
     long long blackPieces;
@@ -33,9 +48,7 @@ public:
     int mainBoard[64];
     MyList pieces[15];
     NNUEState nnueState;
-    static constexpr int MaxNNUESnapshots = 128;
-    int nnueSnapshotCount = 0;
-    std::array<NNUEState, MaxNNUESnapshots> nnueSnapshots;
+    std::unique_ptr<NNUEHistory> nnueHistory;
 
     Board *MakeCopy();
     static bool AreBoardsEqual(Board &board1, Board &board2, bool requireExactPieceOrder = false);
