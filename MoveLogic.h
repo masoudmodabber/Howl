@@ -161,6 +161,12 @@ private:
                                               const AttackerState& whiteAttacker,
                                               const AttackerState& blackAttacker,
                                               MoveList& moveList, bool includeQuietChecks);
+    static AttackerState LegacySetWhiteAttacker(Board& thisBoard);
+    static AttackerState LegacySetBlackAttacker(Board& thisBoard);
+    static AttackerState PositionCoreSetWhiteAttacker(Board& thisBoard);
+    static AttackerState PositionCoreSetBlackAttacker(Board& thisBoard);
+    static bool LegacySEE_GE(Board& thisBoard, Move& move, int threshold);
+    static bool PositionCoreSEE_GE(Board& thisBoard, Move& move, int threshold);
     static double pieceValue[15];
     static int pieceMoveStack[15];
     static ExchangeChessCache ExchangeCache;

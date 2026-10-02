@@ -4125,7 +4125,7 @@ bool SeeSquareAttacked(const SeePosition& position, int square, bool byWhite)
 }
 
 
-int SeeExchange(SeePosition& position, int target, bool white)
+int SeeExchangeKernel(SeePosition& position, int target, bool white)
 {
     int best = 0;
     const int capturedPiece = position.pieces[target];
@@ -4193,7 +4193,7 @@ int SeeExchange(SeePosition& position, int target, bool white)
                     const int promotionGain = promotes
                         ? SeeValue[resultType] - SeeValue[1] : 0;
                     best = std::max(best, victimValue + promotionGain -
-                                          SeeExchange(position, target, !white));
+                                          SeeExchangeKernel(position, target, !white));
                 }
                 position.remove(resultPiece, target);
                 position.add(capturedPiece, target);
@@ -4206,7 +4206,8 @@ int SeeExchange(SeePosition& position, int target, bool white)
 }
 }
 
-bool MoveLogic::SEE_GE(Board& board, Move& move, int threshold)
+#if defined(HOWL_SEE_VERIFY) && HOWL_SEE_VERIFY
+bool MoveLogic::LegacySEE_GE(Board& board, Move& move, int threshold)
 {
     const bool white = !board.sideToMove;
     const bool enPassant = (move.PublicFlag & Option::PowerTwo[6]) != 0;
@@ -4254,7 +4255,81 @@ bool MoveLogic::SEE_GE(Board& board, Move& move, int threshold)
     const int kingSquare = position.kingSquare[white ? 0 : 1];
     if (kingSquare >= 0 && SeeSquareAttacked(position, kingSquare, !white))
         return false;
-    return initialGain - SeeExchange(position, move.endPlace, !white) >= threshold;
+    const int exchange = SeeExchangeKernel(position, move.endPlace, !white);
+    return initialGain - exchange >= threshold;
+}
+#endif
+
+namespace
+{
+void InitializeSeePositionFromCore(SeePosition& position, const PositionCore& core)
+{
+    position = SeePosition{};
+    position.occupancy = core.colourOccupancy[0] | core.colourOccupancy[1];
+    for (int square = 0; square < 64; ++square)
+        position.pieces[square] = core.pieceAt[square];
+    for (int colour = 0; colour < 2; ++colour)
+        for (int type = 1; type <= 6; ++type)
+            position.pieceBoards[colour * 8 + type] =
+                core.pieceOccupancy[type - 1] & core.colourOccupancy[colour];
+    position.kingSquare[0] = core.kingSquare[0] < 64 ? core.kingSquare[0] : -1;
+    position.kingSquare[1] = core.kingSquare[1] < 64 ? core.kingSquare[1] : -1;
+}
+}
+
+bool MoveLogic::PositionCoreSEE_GE(Board& board, Move& move, int threshold)
+{
+    const PositionCore& core = board.positionCore;
+    const bool white = core.sideToMove == 0;
+    const bool enPassant = (move.PublicFlag & Option::PowerTwo[6]) != 0;
+    const int movingPiece = core.pieceAt[move.beginPlace];
+    const int capturedSquare = enPassant
+        ? move.endPlace + (white ? -8 : 8) : move.endPlace;
+    const int capturedPiece = core.pieceAt[capturedSquare];
+    const int capturedValue = SafeSeeValue(capturedPiece);
+    const int promotedNorm = move.promotionPiece > 0
+        ? NormalizeExchangePiece(move.promotionPiece)
+        : NormalizeExchangePiece(movingPiece);
+    const int promotionGain = move.promotionPiece > 0
+        ? SeeValue[promotedNorm] - SeeValue[1] : 0;
+    const int initialGain = capturedValue + promotionGain;
+    if (initialGain < threshold)
+        return false;
+
+    SeePosition position;
+    InitializeSeePositionFromCore(position, core);
+    position.remove(movingPiece, move.beginPlace);
+    if (enPassant)
+        position.remove(capturedPiece, capturedSquare);
+    else
+        position.remove(capturedPiece, move.endPlace);
+    const int resultPiece = white ? promotedNorm : promotedNorm + 8;
+    position.add(resultPiece, move.endPlace);
+    if (NormalizeExchangePiece(movingPiece) == 6)
+        position.kingSquare[white ? 0 : 1] = move.endPlace;
+    const int kingSquare = position.kingSquare[white ? 0 : 1];
+    if (kingSquare >= 0 && SeeSquareAttacked(position, kingSquare, !white))
+        return false;
+    const int exchange = SeeExchangeKernel(position, move.endPlace, !white);
+    return initialGain - exchange >= threshold;
+}
+
+bool MoveLogic::SEE_GE(Board& board, Move& move, int threshold)
+{
+#if defined(HOWL_SEE_VERIFY) && HOWL_SEE_VERIFY
+    const bool legacy = LegacySEE_GE(board, move, threshold);
+    const bool core = PositionCoreSEE_GE(board, move, threshold);
+    if (legacy != core)
+    {
+        std::cerr << "SEE_GE mismatch move=" << int(move.beginPlace) << '-'
+                  << int(move.endPlace) << " threshold=" << threshold
+                  << " legacy=" << legacy << " core=" << core << '\n';
+        std::abort();
+    }
+    return core;
+#else
+    return PositionCoreSEE_GE(board, move, threshold);
+#endif
 }
 
 MoveList MoveLogic::QSearchStage1Generator(Board &thisBoard, int depth, int depthGone, DeferredMove* deferredMoves, int& deferredCount, const Move& prevMove, bool includeQuietChecks, bool deepResolution)
@@ -4706,7 +4781,8 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
 // NOTE: You must also replace all Moves->push_back and ComplicatedMoves->push_back in the body with the array logic as described above.
 // The rest of the function logic remains the same, just replace vector operations with array operations.
 
-AttackerState MoveLogic::SetWhiteAttacker(Board &thisBoard)
+#if defined(HOWL_ATTACKER_VERIFY) && HOWL_ATTACKER_VERIFY
+AttackerState MoveLogic::LegacySetWhiteAttacker(Board &thisBoard)
 {
     AttackerState whiteAttacker;
     long long whitePieces = thisBoard.whitePieces;
@@ -5140,7 +5216,7 @@ AttackerState MoveLogic::SetWhiteAttacker(Board &thisBoard)
     return whiteAttacker;
 }
 
-AttackerState MoveLogic::SetBlackAttacker(Board &thisBoard)
+AttackerState MoveLogic::LegacySetBlackAttacker(Board &thisBoard)
 {
     AttackerState blackAttacker;
     long long whitePieces = thisBoard.whitePieces;
@@ -5549,6 +5625,138 @@ AttackerState MoveLogic::SetBlackAttacker(Board &thisBoard)
         }
     }
     return blackAttacker;
+}
+#endif
+
+namespace
+{
+AttackerState BuildPositionCoreAttacker(const Board& board, bool white)
+{
+    AttackerState result;
+    const PositionCore& core = board.positionCore;
+    const Bitboard occupancy = core.colourOccupancy[0] | core.colourOccupancy[1];
+    const int offset = white ? 0 : 8;
+    const int pieceCode[7] = {0, offset + 1, offset + 2, offset + 3,
+                              offset + 4, offset + 5, offset + 6};
+
+    auto add = [&](int from, int to, int type)
+    {
+        AddPackedAttacker(result.pieceCounts[to], type);
+        const int piece = pieceCode[type];
+        const int targetPiece = core.pieceAt[to];
+        result.orderingScores[from] += Option::AttackValueMovement[piece][targetPiece];
+        result.orderingScores[to] += Option::AttackValueMovement[piece][targetPiece];
+    };
+
+    for (int type = 6; type >= 1; --type)
+    {
+        Bitboard pieces = core.pieceOccupancy[type - 1] & core.colourOccupancy[white ? 0 : 1];
+        while (pieces != 0)
+        {
+            const int from = __builtin_ctzll(pieces);
+            pieces &= pieces - 1;
+            const int piece = pieceCode[type];
+
+            if (type == 6 || type == 2)
+            {
+                Move* const* moves = (type == 6)
+                    ? (white ? PieceMoves::WhiteKingMoves[from]
+                             : PieceMoves::BlackKingMoves[from])
+                    : PieceMoves::KnightMoves[from];
+                const int limit = type == 6 ? 16 : 16;
+                for (int index = 0; index < limit; index += 2)
+                    if (moves[index] != nullptr)
+                        add(from, moves[index]->endPlace, type);
+                continue;
+            }
+
+            if (type == 1)
+            {
+                Move* const* moves = white ? PieceMoves::WhitePawnMoves[from]
+                                            : PieceMoves::BlackPawnMoves[from];
+                for (int index : {8, 9, 13, 14})
+                    if (moves[index] != nullptr)
+                        add(from, moves[index]->endPlace, type);
+                continue;
+            }
+
+            const std::vector<Move*>* rays = nullptr;
+            const int rayCount = type == 5 ? 8 : 4;
+            if (type == 3)
+                rays = PieceMoves::BishopMoves[from];
+            else if (type == 4)
+                rays = PieceMoves::RookMoves[from];
+            else
+                rays = PieceMoves::QueenMoves[from];
+
+            for (int direction = 0; direction < rayCount; ++direction)
+            {
+                for (Move* rayMove : rays[direction * 2])
+                {
+                    const int to = rayMove->endPlace;
+                    add(from, to, type);
+                    if ((occupancy & Option::PowerTwo[to]) != 0)
+                        break;
+                }
+            }
+        }
+    }
+    return result;
+}
+}
+
+AttackerState MoveLogic::PositionCoreSetWhiteAttacker(Board& board)
+{
+    return BuildPositionCoreAttacker(board, true);
+}
+
+AttackerState MoveLogic::PositionCoreSetBlackAttacker(Board& board)
+{
+    return BuildPositionCoreAttacker(board, false);
+}
+
+AttackerState MoveLogic::SetWhiteAttacker(Board& board)
+{
+#if defined(HOWL_ATTACKER_VERIFY) && HOWL_ATTACKER_VERIFY
+    const AttackerState legacy = LegacySetWhiteAttacker(board);
+    const AttackerState core = PositionCoreSetWhiteAttacker(board);
+    for (int square = 0; square < 64; ++square)
+        if (legacy.pieceCounts[square] != core.pieceCounts[square] ||
+            legacy.orderingScores[square] != core.orderingScores[square])
+        {
+            std::cerr << "SetWhiteAttacker mismatch square=" << square
+                      << " legacyCount=" << legacy.pieceCounts[square]
+                      << " coreCount=" << core.pieceCounts[square]
+                      << " legacyScore=" << legacy.orderingScores[square]
+                      << " coreScore=" << core.orderingScores[square] << '\n';
+            std::abort();
+        }
+    return core;
+#else
+    return PositionCoreSetWhiteAttacker(board);
+#endif
+}
+
+AttackerState MoveLogic::SetBlackAttacker(Board& board)
+{
+#if defined(HOWL_ATTACKER_VERIFY) && HOWL_ATTACKER_VERIFY
+    const AttackerState legacy = LegacySetBlackAttacker(board);
+    const AttackerState core = PositionCoreSetBlackAttacker(board);
+    for (int square = 0; square < 64; ++square)
+        if (legacy.pieceCounts[square] != core.pieceCounts[square] ||
+            legacy.orderingScores[square] != core.orderingScores[square])
+        {
+            std::cerr << "SetBlackAttacker mismatch square=" << square
+                      << " legacyCount=" << legacy.pieceCounts[square]
+                      << " coreCount=" << core.pieceCounts[square]
+                      << " legacyScore=" << legacy.orderingScores[square]
+                      << " coreScore=" << core.orderingScores[square] << '\n';
+            std::abort();
+        }
+    return core;
+#else
+    return PositionCoreSetBlackAttacker(board);
+#endif
 }
 
 Move *MoveLogic::MoveCopy(Move *move)
