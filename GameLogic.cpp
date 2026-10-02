@@ -81,8 +81,8 @@ void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int dep
     }
     ChangeSide(thisBoard);
     SetCastleFlags(thisBoard, thisMove);
-    const NNUEState& activeSnapshot = (thisBoard.nnueSnapshotCount > 0)
-        ? thisBoard.nnueSnapshots[thisBoard.nnueSnapshotCount - 1]
+    const NNUEState& activeSnapshot = (thisBoard.nnueHistory->snapshotCount > 0)
+        ? thisBoard.nnueHistory->snapshots[thisBoard.nnueHistory->snapshotCount - 1]
         : thisBoard.nnueState;
     if (!useStructured)
         NNUEEvaluator::UpdateAfterMove(thisBoard, thisMove, activeSnapshot);
@@ -860,9 +860,9 @@ void GameLogic::UndoMove(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevS
     }
     RepetitionHistory::Pop();
     thisBoard.nnueState = previous;
-    if (thisBoard.nnueSnapshotCount > 0)
+    if (thisBoard.nnueHistory->snapshotCount > 0)
     {
-        --thisBoard.nnueSnapshotCount;
+        --thisBoard.nnueHistory->snapshotCount;
     }
 }
 
