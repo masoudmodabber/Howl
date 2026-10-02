@@ -8,6 +8,9 @@
 #include <fstream>
 #include <vector>
 #include <chrono>
+#include <iostream>
+#include <cstdlib>
+
 
 namespace
 {
@@ -231,18 +234,30 @@ float NNUEEvaluator::Evaluate(const Board& board)
 
 void NNUEEvaluator::ResetProfile() { profile = {}; }
 NNUEEvaluator::Profile NNUEEvaluator::GetProfile() { return profile; }
-void NNUEEvaluator::SaveSnapshot(Board& board) {
-    if (board.nnueSnapshotCount < Board::MaxNNUESnapshots) {
-        board.nnueSnapshots[board.nnueSnapshotCount++] = board.nnueState;
+void NNUEEvaluator::SaveSnapshot(Board& board)
+{
+    if (board.nnueSnapshotCount >= Board::MaxNNUESnapshots)
+    {
+        std::cerr << "NNUE SNAPSHOT OVERFLOW: "
+                  << board.nnueSnapshotCount << std::endl;
+        std::abort();
     }
+
+    board.nnueSnapshots[board.nnueSnapshotCount++] = board.nnueState;
     ++profile.snapshotSaveCalls;
 }
-NNUEState NNUEEvaluator::RestoreSnapshot(Board& board) {
+
+NNUEState NNUEEvaluator::RestoreSnapshot(Board& board)
+{
     ++profile.snapshotRestoreCalls;
-    if (board.nnueSnapshotCount > 0) {
-        return board.nnueSnapshots[board.nnueSnapshotCount - 1];
+
+    if (board.nnueSnapshotCount <= 0)
+    {
+        std::cerr << "NNUE SNAPSHOT UNDERFLOW" << std::endl;
+        std::abort();
     }
-    return board.nnueState;
+
+    return board.nnueSnapshots[board.nnueSnapshotCount - 1];
 }
 
 void NNUEEvaluator::SaveWeights(const std::string& path)

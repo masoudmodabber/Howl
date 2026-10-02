@@ -1672,6 +1672,8 @@ public:
         for (int i = 0; i < moves.count; ++i)
         {
             Move* move = &moves[i];
+            if (move->endPiece % 8 == 6)
+                continue;
             if (move->endPiece == 0 && move->promotionPiece <= 0)
                 continue;
             if (!MoveLogic::SEE_GE(board, *move, seeThreshold))
