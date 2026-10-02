@@ -434,7 +434,8 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone, bo
     return moveList;
 }
 
-void MoveLogic::MoveGeneratorInto(Board &thisBoard, int depth, int depthGone, bool onlyCapturesAndChecks, bool scoreAndSort, const AttackerState& whiteAttacker, const AttackerState& blackAttacker, MoveList& moveList, bool includeQuietChecks)
+#if defined(HOWL_MOVE_GENERATOR_INTO_VERIFY) && HOWL_MOVE_GENERATOR_INTO_VERIFY
+void MoveLogic::LegacyMoveGeneratorInto(Board &thisBoard, int depth, int depthGone, bool onlyCapturesAndChecks, bool scoreAndSort, const AttackerState& whiteAttacker, const AttackerState& blackAttacker, MoveList& moveList, bool includeQuietChecks)
 {
     moveList.Clear();
     if (Search::moveCount == 14962)
@@ -2169,6 +2170,1849 @@ void MoveLogic::MoveGeneratorInto(Board &thisBoard, int depth, int depthGone, bo
     {
         ScoreAndSortMoves(thisBoard, moveList, depth, depthGone, whiteAttacker, blackAttacker);
     }
+}
+
+
+#endif
+
+void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int depthGone, bool onlyCapturesAndChecks, bool scoreAndSort, const AttackerState& whiteAttacker, const AttackerState& blackAttacker, MoveList& moveList, bool includeQuietChecks)
+{
+    moveList.Clear();
+    if (Search::moveCount == 14962)
+    {
+        int x = 1;
+    }
+
+    const PositionCore& core = thisBoard.positionCore;
+    MyList positionCorePieceLists[15];
+    int positionCoreMainBoard[64] = {};
+    for (int piece = 0; piece < 15; ++piece)
+    {
+        for (int index = 0; index < core.pieceOrderCount[piece]; ++index)
+        {
+            const int square = core.pieceOrder[piece][index];
+            positionCorePieceLists[piece].push_back(square);
+        }
+    }
+    for (int square = 0; square < 64; ++square)
+        positionCoreMainBoard[square] = core.pieceAt[square];
+
+    long long whitePieces = static_cast<long long>(core.colourOccupancy[0]);
+    long long blackPieces = static_cast<long long>(core.colourOccupancy[1]);
+    int *mainBoard = positionCoreMainBoard;
+    long long wholeBoard = whitePieces | blackPieces;
+
+    auto castleSquaresSafe = [&](bool white, int start, int transit, int destination)
+    {
+        const AttackerState opponentAttacks = white
+            ? SetBlackAttacker(thisBoard)
+            : SetWhiteAttacker(thisBoard);
+        return opponentAttacks.pieceCounts[start] == 0 &&
+               opponentAttacks.pieceCounts[transit] == 0 &&
+               opponentAttacks.pieceCounts[destination] == 0;
+    };
+
+    int enemyKingPos = -1;
+    long long enemyKingBit = 0;
+    long long friendlySliderRayMask = 0;
+    if (onlyCapturesAndChecks && includeQuietChecks)
+    {
+        int enemyKingIndex = (!core.sideToMove ? 14 : 6);
+        if (positionCorePieceLists[enemyKingIndex].count > 0)
+        {
+            enemyKingPos = positionCorePieceLists[enemyKingIndex].front();
+            enemyKingBit = Option::PowerTwo[enemyKingPos];
+            int offset = (!core.sideToMove ? 0 : 8);
+            for (int p = 3; p <= 5; ++p)
+            {
+                for (int pos : positionCorePieceLists[p + offset])
+                {
+                    friendlySliderRayMask |= AttackPlaces::LineMask[pos][enemyKingPos];
+                }
+            }
+        }
+    }
+
+    if (!core.sideToMove)
+    {
+        for (int pieceCounter = 1; pieceCounter < 7; pieceCounter++)
+        {
+            int piece = pieceMoveStack[pieceCounter];
+            switch (piece)
+            {
+            case 1:
+                for (int piecePosition : positionCorePieceLists[piece])
+                {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    if (PieceMoves::WhitePawnMoves[piecePosition][0] != nullptr)
+                    {
+                        int endPlace = piecePosition + 16;
+                        if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || ((AttackPlaces::WhitePawnAttackPlaces[endPlace] & enemyKingBit) != 0 && (whiteAttacker.pieceCounts[endPlace] != 0 || endPlace >= 40)))))
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][0]);
+                            if ((PieceMoves::pawnTwoMove[piecePosition] & wholeBoard) == 0)
+                            {
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                newMove->value = ExchangeWithoutBeginPiece(whiteAttacker.pieceCounts[newMove->endPlace], blackAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                    }
+                    if (PieceMoves::WhitePawnMoves[piecePosition][1] != nullptr && (Option::PowerTwo[piecePosition + 8] & wholeBoard) == 0)
+                    {
+                        int endPlace = piecePosition + 8;
+                        if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || ((AttackPlaces::WhitePawnAttackPlaces[endPlace] & enemyKingBit) != 0 && (whiteAttacker.pieceCounts[endPlace] != 0 || endPlace >= 40)))))
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][1]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            newMove->value = ExchangeWithoutBeginPiece(whiteAttacker.pieceCounts[newMove->endPlace], blackAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
+                        }
+                    }
+                    if (PieceMoves::WhitePawnMoves[piecePosition][2] != nullptr && (Option::PowerTwo[piecePosition + 8] & wholeBoard) == 0)
+                    {
+                        for (int i = 2; i <= 5; i++)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][i]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            newMove->value = ExchangeWithoutBeginPiece(whiteAttacker.pieceCounts[newMove->endPlace], blackAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 5 - (i - 2));
+                        }
+                    }
+                    if (PieceMoves::WhitePawnMoves[piecePosition][6] != nullptr && piecePosition + 7 == core.enPassantSquare)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][6]);
+                        newMove->endPiece = 9;
+                    }
+                    if (PieceMoves::WhitePawnMoves[piecePosition][7] != nullptr && piecePosition + 9 == core.enPassantSquare)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][7]);
+                        newMove->endPiece = 9;
+                    }
+                    if (PieceMoves::WhitePawnMoves[piecePosition][8] != nullptr && (Option::PowerTwo[piecePosition + 7] & blackPieces) != 0)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][8]);
+                        newMove->endPiece = mainBoard[newMove->endPlace];
+                    }
+                    if (PieceMoves::WhitePawnMoves[piecePosition][9] != nullptr && (Option::PowerTwo[piecePosition + 7] & blackPieces) != 0)
+                    {
+                        for (int i = 9; i <= 12; i++)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][i]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    if (PieceMoves::WhitePawnMoves[piecePosition][13] != nullptr && (Option::PowerTwo[piecePosition + 9] & blackPieces) != 0)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][13]);
+                        newMove->endPiece = mainBoard[newMove->endPlace];
+                    }
+                    if (PieceMoves::WhitePawnMoves[piecePosition][14] != nullptr && (Option::PowerTwo[piecePosition + 9] & blackPieces) != 0)
+                    {
+                        for (int i = 14; i <= 17; i++)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][i]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                }
+                break;
+            case 2:
+                for (int piecePosition : positionCorePieceLists[piece])
+                {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    int endPlace = piecePosition + 17;
+                    if (PieceMoves::KnightMoves[piecePosition][0] != nullptr)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][0]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][1]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition + 10;
+                    if (PieceMoves::KnightMoves[piecePosition][2] != nullptr)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][2]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][3]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition + 15;
+                    if (PieceMoves::KnightMoves[piecePosition][4] != nullptr)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][4]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][5]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition + 6;
+                    if (PieceMoves::KnightMoves[piecePosition][6] != nullptr)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][6]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][7]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition - 10;
+                    if (PieceMoves::KnightMoves[piecePosition][8] != nullptr)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][8]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][9]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition - 17;
+                    if (PieceMoves::KnightMoves[piecePosition][10] != nullptr)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][10]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][11]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition - 15;
+                    if (PieceMoves::KnightMoves[piecePosition][12] != nullptr)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][12]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][13]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition - 6;
+                    if (PieceMoves::KnightMoves[piecePosition][14] != nullptr)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][14]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][15]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                }
+                break;
+            case 3:
+                for (int piecePosition : positionCorePieceLists[piece])
+                {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][0].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][0][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][1][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][2].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][2][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][3][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][4].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][4][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][5][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][6].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][6][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][7][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                }
+                break;
+            case 4:
+                for (int piecePosition : positionCorePieceLists[piece])
+                {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][0].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][0][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][1][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][2].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][2][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][3][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][4].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][4][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][5][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][6].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][6][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][7][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                }
+                break;
+            case 5:
+                for (int piecePosition : positionCorePieceLists[piece])
+                {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][0].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][0][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][1][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][2].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][2][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][3][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][4].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][4][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][5][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][6].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][6][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][7][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][8].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][8][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][9][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][10].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][10][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][11][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][12].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][12][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][13][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][14].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][14][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][15][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                }
+                break;
+            case 6:
+                for (int piecePosition : positionCorePieceLists[piece])
+                {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    int endPlace;
+                    endPlace = piecePosition + 7;
+                    if (PieceMoves::WhiteKingMoves[piecePosition][0] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][0]);
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][1]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition + 8;
+                    if (PieceMoves::WhiteKingMoves[piecePosition][2] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][2]);
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][3]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition + 9;
+                    if (PieceMoves::WhiteKingMoves[piecePosition][4] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][4]);
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][5]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition + 1;
+                    if (PieceMoves::WhiteKingMoves[piecePosition][6] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][6]);
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][7]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition - 7;
+                    if (PieceMoves::WhiteKingMoves[piecePosition][8] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][8]);
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][9]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition - 8;
+                    if (PieceMoves::WhiteKingMoves[piecePosition][10] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][10]);
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][11]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition - 9;
+                    if (PieceMoves::WhiteKingMoves[piecePosition][12] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][12]);
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][13]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition - 1;
+                    if (PieceMoves::WhiteKingMoves[piecePosition][14] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][14]);
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][15]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    if ((core.castlingRights & 1) && (!onlyCapturesAndChecks || (includeQuietChecks && (AttackPlaces::LineMask[5][enemyKingPos] != 0 || AttackPlaces::LineMask[6][enemyKingPos] != 0))) && castleSquaresSafe(true, 4, 5, 6) && mainBoard[5] == 0 && mainBoard[6] == 0)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][16]);
+                        newMove->value = 50;
+                    }
+                    if ((core.castlingRights & 2) && (!onlyCapturesAndChecks || (includeQuietChecks && (AttackPlaces::LineMask[3][enemyKingPos] != 0 || AttackPlaces::LineMask[2][enemyKingPos] != 0))) && castleSquaresSafe(true, 4, 3, 2) && mainBoard[3] == 0 && mainBoard[2] == 0 && mainBoard[1] == 0)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][17]);
+                        newMove->value = 50;
+                    }
+                }
+                break;
+            }
+        }
+    }
+    else
+    {
+        for (int pieceCounter = 9; pieceCounter < 15; pieceCounter++)
+        {
+            int piece = pieceMoveStack[pieceCounter];
+            switch (piece)
+            {
+            case 9:
+                for (int piecePosition : positionCorePieceLists[piece])
+                {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    int exchangeInPlace = -ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[piecePosition], whiteAttacker.pieceCounts[piecePosition], piecePosition, piece - 8, 0, 0);
+                    if (PieceMoves::BlackPawnMoves[piecePosition][0] != nullptr)
+                    {
+                        int endPlace = piecePosition - 16;
+                        if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || ((AttackPlaces::BlackPawnAttackPlaces[endPlace] & enemyKingBit) != 0 && (blackAttacker.pieceCounts[endPlace] != 0 || endPlace <= 23)))))
+                        {
+                            if ((PieceMoves::pawnTwoMove[piecePosition] & wholeBoard) == 0)
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][0]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                                newMove->value = ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[newMove->endPlace], whiteAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
+                            }
+                        }
+                    }
+                    if (PieceMoves::BlackPawnMoves[piecePosition][1] != nullptr && (Option::PowerTwo[piecePosition - 8] & wholeBoard) == 0)
+                    {
+                        int endPlace = piecePosition - 8;
+                        if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || ((AttackPlaces::BlackPawnAttackPlaces[endPlace] & enemyKingBit) != 0 && (blackAttacker.pieceCounts[endPlace] != 0 || endPlace <= 23)))))
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][1]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            newMove->value = ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[newMove->endPlace], whiteAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
+                        }
+                    }
+                    if (PieceMoves::BlackPawnMoves[piecePosition][2] != nullptr && (Option::PowerTwo[piecePosition - 8] & wholeBoard) == 0)
+                    {
+                        for (int i = 2; i <= 5; i++)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][i]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            newMove->value = ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[newMove->endPlace], whiteAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 5 - (i - 2));
+                        }
+                    }
+                    if (PieceMoves::BlackPawnMoves[piecePosition][6] != nullptr && piecePosition - 7 == core.enPassantSquare)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][6]);
+                        newMove->endPiece = 1;
+                    }
+                    if (PieceMoves::BlackPawnMoves[piecePosition][7] != nullptr && piecePosition - 9 == core.enPassantSquare)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][7]);
+                        newMove->endPiece = 1;
+                    }
+                    if (PieceMoves::BlackPawnMoves[piecePosition][8] != nullptr && (Option::PowerTwo[piecePosition - 7] & whitePieces) != 0)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][8]);
+                        newMove->endPiece = mainBoard[newMove->endPlace];
+                    }
+                    if (PieceMoves::BlackPawnMoves[piecePosition][9] != nullptr && (Option::PowerTwo[piecePosition - 7] & whitePieces) != 0)
+                    {
+                        for (int i = 9; i <= 12; i++)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][i]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    if (PieceMoves::BlackPawnMoves[piecePosition][13] != nullptr && (Option::PowerTwo[piecePosition - 9] & whitePieces) != 0)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][13]);
+                        newMove->endPiece = mainBoard[newMove->endPlace];
+                    }
+                    if (PieceMoves::BlackPawnMoves[piecePosition][14] != nullptr && (Option::PowerTwo[piecePosition - 9] & whitePieces) != 0)
+                    {
+                        for (int i = 14; i <= 17; i++)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][i]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                }
+                break;
+            case 10:
+                for (int piecePosition : positionCorePieceLists[piece])
+                {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    int endPlace = piecePosition + 17;
+                    if (PieceMoves::KnightMoves[piecePosition][0] != nullptr)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][0]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][1]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition + 10;
+                    if (PieceMoves::KnightMoves[piecePosition][2] != nullptr)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][2]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][3]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition + 15;
+                    if (PieceMoves::KnightMoves[piecePosition][4] != nullptr)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][4]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][5]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition + 6;
+                    if (PieceMoves::KnightMoves[piecePosition][6] != nullptr)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][6]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][7]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition - 10;
+                    if (PieceMoves::KnightMoves[piecePosition][8] != nullptr)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][8]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][9]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition - 17;
+                    if (PieceMoves::KnightMoves[piecePosition][10] != nullptr)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][10]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][11]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition - 15;
+                    if (PieceMoves::KnightMoves[piecePosition][12] != nullptr)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][12]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][13]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition - 6;
+                    if (PieceMoves::KnightMoves[piecePosition][14] != nullptr)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][14]);
+                                newMove->endPiece = mainBoard[newMove->endPlace];
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][15]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                }
+                break;
+            case 11:
+                for (int piecePosition : positionCorePieceLists[piece])
+                {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][0].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][0][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][1][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][2].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][2][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][3][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][4].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][4][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][5][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][6].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][6][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][7][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                }
+                break;
+            case 12:
+                for (int piecePosition : positionCorePieceLists[piece])
+                {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][0].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][0][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][1][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][2].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][2][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][3][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][4].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][4][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][5][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][6].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][6][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][7][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                }
+                break;
+            case 13:
+                for (int piecePosition : positionCorePieceLists[piece])
+                {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][0].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][0][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][1][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][2].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][2][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][3][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][4].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][4][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][5][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][6].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][6][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][7][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][8].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][8][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][9][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][10].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][10][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][11][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][12].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][12][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][13][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][14].size(); counter++)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][14][counter]);
+                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
+                            {
+                            }
+                            else
+                            {
+                                moveList.Discard(newMove);
+                                newMove = nullptr;
+                            }
+                        }
+                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        {
+                            moveList.Discard(newMove);
+                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][15][counter]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                            break;
+                        }
+                        else
+                        {
+                            moveList.Discard(newMove);
+                            newMove = nullptr;
+                            break;
+                        }
+                    }
+                }
+                break;
+            case 14:
+                for (int piecePosition : positionCorePieceLists[piece])
+                {
+                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    int endPlace;
+                    endPlace = piecePosition + 7;
+                    if (PieceMoves::BlackKingMoves[piecePosition][0] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][0]);
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][1]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition + 8;
+                    if (PieceMoves::BlackKingMoves[piecePosition][2] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][2]);
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][3]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition + 9;
+                    if (PieceMoves::BlackKingMoves[piecePosition][4] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][4]);
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][5]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition + 1;
+                    if (PieceMoves::BlackKingMoves[piecePosition][6] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][6]);
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][7]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition - 7;
+                    if (PieceMoves::BlackKingMoves[piecePosition][8] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][8]);
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][9]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition - 8;
+                    if (PieceMoves::BlackKingMoves[piecePosition][10] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][10]);
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][11]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition - 9;
+                    if (PieceMoves::BlackKingMoves[piecePosition][12] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][12]);
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][13]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    endPlace = piecePosition - 1;
+                    if (PieceMoves::BlackKingMoves[piecePosition][14] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
+                    {
+                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        {
+                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
+                            {
+                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][14]);
+                            }
+                        }
+                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        {
+                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][15]);
+                            newMove->endPiece = mainBoard[newMove->endPlace];
+                        }
+                    }
+                    if ((core.castlingRights & 4) && (!onlyCapturesAndChecks || (includeQuietChecks && (AttackPlaces::LineMask[61][enemyKingPos] != 0 || AttackPlaces::LineMask[62][enemyKingPos] != 0))) && castleSquaresSafe(false, 60, 61, 62) && mainBoard[61] == 0 && mainBoard[62] == 0)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][16]);
+                        newMove->value = 25;
+                    }
+                    if ((core.castlingRights & 8) && (!onlyCapturesAndChecks || (includeQuietChecks && (AttackPlaces::LineMask[59][enemyKingPos] != 0 || AttackPlaces::LineMask[58][enemyKingPos] != 0))) && castleSquaresSafe(false, 60, 59, 58) && mainBoard[59] == 0 && mainBoard[58] == 0 && mainBoard[57] == 0)
+                    {
+                        Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][17]);
+                        newMove->value = 25;
+                    }
+                }
+                break;
+            }
+        }
+    }
+    // --- END REPLACEMENT OF VECTOR USAGE ---
+
+    if (!onlyCapturesAndChecks && scoreAndSort)
+    {
+        for (int i = 0; i < moveList.count; ++i)
+            moveList[i].givesCheck = MoveWouldGiveCheck(thisBoard, moveList[i]);
+    }
+
+    if (scoreAndSort)
+    {
+        ScoreAndSortMoves(thisBoard, moveList, depth, depthGone, whiteAttacker, blackAttacker);
+    }
+}
+
+
+#if defined(HOWL_MOVE_GENERATOR_INTO_VERIFY) && HOWL_MOVE_GENERATOR_INTO_VERIFY
+bool SameGeneratedMove(const Move& left, const Move& right)
+{
+    return left.beginPlace == right.beginPlace &&
+           left.endPlace == right.endPlace &&
+           left.endPiece == right.endPiece &&
+           left.promotionPiece == right.promotionPiece &&
+           left.CastleFlag == right.CastleFlag &&
+           left.PublicFlag == right.PublicFlag &&
+           left.unpassentPlace == right.unpassentPlace &&
+           left.givesCheck == right.givesCheck &&
+           left.givesCheckComputed == right.givesCheckComputed &&
+           left.isRefuteWithoutNullMove == right.isRefuteWithoutNullMove &&
+           left.pad == right.pad &&
+           left.value == right.value;
+}
+
+[[noreturn]] void ReportMoveGeneratorMismatch(
+    const Board& board, int depth, int depthGone,
+    bool onlyCapturesAndChecks, bool scoreAndSort, bool includeQuietChecks,
+    const MoveList& legacyList, const MoveList& positionCoreList, int index)
+{
+    const Move* legacyMove = index < legacyList.count ? &legacyList[index] : nullptr;
+    const Move* positionCoreMove =
+        index < positionCoreList.count ? &positionCoreList[index] : nullptr;
+    std::cerr << "MoveGeneratorInto mismatch: hash=" << board.ZobristHashCode
+              << " side=" << int(board.positionCore.sideToMove)
+              << " depth=" << depth
+              << " depthGone=" << depthGone
+              << " onlyCapturesAndChecks=" << onlyCapturesAndChecks
+              << " scoreAndSort=" << scoreAndSort
+              << " includeQuietChecks=" << includeQuietChecks
+              << " index=" << index
+              << " legacyCount=" << legacyList.count
+              << " positionCoreCount=" << positionCoreList.count << '\n';
+    if (legacyMove != nullptr)
+        std::cerr << " legacy=" << int(legacyMove->beginPlace) << '-' << int(legacyMove->endPlace)
+                  << " endPiece=" << int(legacyMove->endPiece)
+                  << " promotion=" << int(legacyMove->promotionPiece)
+                  << " publicFlags=" << int(static_cast<unsigned char>(legacyMove->PublicFlag))
+                  << " castleFlags=" << int(static_cast<unsigned char>(legacyMove->CastleFlag))
+                  << " value=" << legacyMove->value << '\n';
+    if (positionCoreMove != nullptr)
+        std::cerr << " positionCore=" << int(positionCoreMove->beginPlace) << '-' << int(positionCoreMove->endPlace)
+                  << " endPiece=" << int(positionCoreMove->endPiece)
+                  << " promotion=" << int(positionCoreMove->promotionPiece)
+                  << " publicFlags=" << int(static_cast<unsigned char>(positionCoreMove->PublicFlag))
+                  << " castleFlags=" << int(static_cast<unsigned char>(positionCoreMove->CastleFlag))
+                  << " value=" << positionCoreMove->value << '\n';
+    std::abort();
+}
+#endif
+
+void MoveLogic::MoveGeneratorInto(Board &thisBoard, int depth, int depthGone,
+                                  bool onlyCapturesAndChecks, bool scoreAndSort,
+                                  const AttackerState& whiteAttacker,
+                                  const AttackerState& blackAttacker,
+                                  MoveList& moveList, bool includeQuietChecks)
+{
+#if defined(HOWL_MOVE_GENERATOR_INTO_VERIFY) && HOWL_MOVE_GENERATOR_INTO_VERIFY
+    MoveList legacyList;
+    MoveList positionCoreList;
+    LegacyMoveGeneratorInto(thisBoard, depth, depthGone, onlyCapturesAndChecks,
+                            scoreAndSort, whiteAttacker, blackAttacker,
+                            legacyList, includeQuietChecks);
+    PositionCoreMoveGeneratorInto(thisBoard, depth, depthGone, onlyCapturesAndChecks,
+                                  scoreAndSort, whiteAttacker, blackAttacker,
+                                  positionCoreList, includeQuietChecks);
+    if (legacyList.count != positionCoreList.count)
+        ReportMoveGeneratorMismatch(thisBoard, depth, depthGone,
+                                    onlyCapturesAndChecks, scoreAndSort,
+                                    includeQuietChecks, legacyList,
+                                    positionCoreList, 0);
+    for (int i = 0; i < legacyList.count; ++i)
+        if (!SameGeneratedMove(legacyList[i], positionCoreList[i]))
+            ReportMoveGeneratorMismatch(thisBoard, depth, depthGone,
+                                        onlyCapturesAndChecks, scoreAndSort,
+                                        includeQuietChecks, legacyList,
+                                        positionCoreList, i);
+    moveList = positionCoreList;
+#else
+    PositionCoreMoveGeneratorInto(thisBoard, depth, depthGone, onlyCapturesAndChecks,
+                                  scoreAndSort, whiteAttacker, blackAttacker,
+                                  moveList, includeQuietChecks);
+#endif
 }
 
 void MoveLogic::ScoreAndSortMoves(Board& thisBoard, MoveList& moveList, int depth, int depthGone, const AttackerState& whiteAttacker, const AttackerState& blackAttacker)
