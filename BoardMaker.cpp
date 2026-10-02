@@ -8,6 +8,7 @@
 #include "LastFourMoves.h"
 #include "Option.h"
 #include "BoardInitializer.h"
+#include "PositionCore.h"
 
 Board *BoardMaker::MakeInitialBoard(std::string position)
 {
@@ -226,6 +227,7 @@ Board *BoardMaker::MakeInitialBoard(std::string position)
         }
         thisBoard->moveNumber = temp;
     }
+    PositionCoreLogic::Initialize(*thisBoard);
     if (counter < position.length())
     {
         LastFourMoves *lastMoves = UCI::MakeMoves(position.substr(counter + 1, position.length() - counter - 1), *thisBoard);

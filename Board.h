@@ -5,6 +5,7 @@
 #include <array>
 #include <memory>
 #include "MyList.h"
+#include "PositionCore.h"
 
 struct NNUEState
 {
@@ -47,6 +48,7 @@ public:
     int unpassentPlace;
     int mainBoard[64];
     MyList pieces[15];
+    PositionCore positionCore;
     NNUEState nnueState;
     std::unique_ptr<NNUEHistory> nnueHistory;
 

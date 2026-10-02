@@ -11,7 +11,23 @@
 #include <stdexcept> 
 
 Board::Board()
-    : nnueHistory(std::make_unique<NNUEHistory>())
+    : whitePieces(0),
+      whitePawns(0),
+      blackPieces(0),
+      blackPawns(0),
+      ZobristHashCode(0),
+      moveNumber(0),
+      fiftyMoveRule(0),
+      sideToMove(false),
+      whiteSmallCastle(false),
+      whiteBigCastle(false),
+      blackSmallCastle(false),
+      blackBigCastle(false),
+      unpassentPlace(0),
+      mainBoard{},
+      positionCore{},
+      nnueState{},
+      nnueHistory(std::make_unique<NNUEHistory>())
 {
 }
 
@@ -43,6 +59,7 @@ Board& Board::operator=(const Board& other)
               std::begin(mainBoard));
     std::copy(std::begin(other.pieces), std::end(other.pieces),
               std::begin(pieces));
+    positionCore = other.positionCore;
     nnueState = other.nnueState;
     if (!nnueHistory)
         nnueHistory = std::make_unique<NNUEHistory>();
