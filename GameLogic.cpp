@@ -13,6 +13,7 @@
 #include "NNUEEvaluator.h"
 #include "StructuredNNUEEvaluator.h"
 #include "ExperimentalEvaluator.h"
+#include "PositionCore.h"
 #include <algorithm>
 
 void GameLogic::HaveReachedToMoveSequence(Move &move, Move &prevMove, int depth, int depthGone)
@@ -26,6 +27,7 @@ void GameLogic::HaveReachedToMoveSequence(Move &move, Move &prevMove, int depth,
 
 void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int depth, int depthGone, MissingInfoAboutPrevStateFromMove* missingInfo)
 {
+    const bool movingWhite = !thisBoard.sideToMove;
     bool useStructured=ExperimentalEvaluator::GetMode()==ExperimentalEvaluator::Mode::StructuredNNUE;
     if(useStructured) ExperimentalEvaluator::PrepareStructured(thisBoard);
     NNUEEvaluator::SaveSnapshot(thisBoard);
@@ -88,6 +90,10 @@ void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int dep
         NNUEEvaluator::UpdateAfterMove(thisBoard, thisMove, activeSnapshot);
     if (useStructured) ExperimentalEvaluator::UpdateStructuredAfterMove(thisBoard,thisMove,activeSnapshot);
     RepetitionHistory::Push(thisBoard.ZobristHashCode);
+    PositionCoreLogic::UpdateAfterMove(thisBoard, thisMove, movingWhite);
+#if defined(HOWL_POSITION_CORE_VERIFY) && HOWL_POSITION_CORE_VERIFY
+    PositionCoreLogic::Verify(thisBoard, &thisMove, "DoMove");
+#endif
 }
 
 void GameLogic::DoMove(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevStateFromMove* missingInfo)
@@ -811,6 +817,7 @@ void GameLogic::Unpassent(Board &thisBoard, Move &thisMove, MissingInfoAboutPrev
 
 void GameLogic::UndoMove(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevStateFromMove &missingInfo)
 {
+    const bool movingWhite = thisBoard.sideToMove;
     NNUEState previous = NNUEEvaluator::RestoreSnapshot(thisBoard);
     UnSideChange(thisBoard, thisMove);
     if (thisMove.promotionPiece >= 0)
@@ -864,6 +871,10 @@ void GameLogic::UndoMove(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevS
     {
         --thisBoard.nnueHistory->snapshotCount;
     }
+    PositionCoreLogic::UpdateAfterUndo(thisBoard, thisMove, movingWhite);
+#if defined(HOWL_POSITION_CORE_VERIFY) && HOWL_POSITION_CORE_VERIFY
+    PositionCoreLogic::Verify(thisBoard, &thisMove, "UndoMove");
+#endif
 }
 
 void GameLogic::UnSetUnpassentPlace(Board& thisBoard, Move& thisMove, int previousUnpassentPlace)
