@@ -18,6 +18,8 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <iostream>
 
 namespace
 {
@@ -172,7 +174,8 @@ bool PieceAttacksKing(int pieceType, bool whitePiece, int pieceSquare,
     }
 }
 
-bool MoveWouldGiveCheck(Board& board, const Move& move)
+#if defined(HOWL_MOVE_WOULD_GIVE_CHECK_VERIFY) && HOWL_MOVE_WOULD_GIVE_CHECK_VERIFY
+bool LegacyMoveWouldGiveCheck(Board& board, const Move& move)
 {
     const bool movingWhite = !board.sideToMove;
     const int enemyKingIndex = movingWhite ? 14 : 6;
@@ -242,6 +245,121 @@ bool MoveWouldGiveCheck(Board& board, const Move& move)
         }
     }
     return false;
+}
+#endif
+
+bool PositionCoreMoveWouldGiveCheck(const Board& board, const Move& move)
+{
+    const PositionCore& core = board.positionCore;
+    const bool movingWhite = core.sideToMove == 0;
+    const int movingColour = movingWhite ? 0 : 1;
+    const int enemyColour = movingWhite ? 1 : 0;
+    const int enemyKingSquare = core.kingSquare[enemyColour];
+    if (enemyKingSquare >= 64)
+        return false;
+
+    Bitboard occupancy = core.colourOccupancy[0] | core.colourOccupancy[1];
+    const Bitboard beginBit = static_cast<Bitboard>(Option::PowerTwo[move.beginPlace]);
+    const Bitboard endBit = static_cast<Bitboard>(Option::PowerTwo[move.endPlace]);
+    occupancy &= ~beginBit;
+    occupancy |= endBit;
+
+    if ((move.PublicFlag & Option::PowerTwo[6]) != 0)
+    {
+        const int capturedPawnSquare = move.endPlace + (movingWhite ? -8 : 8);
+        occupancy &= ~static_cast<Bitboard>(Option::PowerTwo[capturedPawnSquare]);
+    }
+
+    int rookFrom = -1;
+    int rookTo = -1;
+    if ((move.CastleFlag & Option::PowerTwo[3]) != 0 ||
+        (move.CastleFlag & Option::PowerTwo[1]) != 0)
+    {
+        rookFrom = move.beginPlace + 3;
+        rookTo = move.beginPlace + 1;
+    }
+    else if ((move.CastleFlag & Option::PowerTwo[2]) != 0 ||
+             (move.CastleFlag & Option::PowerTwo[0]) != 0)
+    {
+        rookFrom = move.beginPlace - 4;
+        rookTo = move.beginPlace - 1;
+    }
+    if (rookFrom >= 0)
+    {
+        occupancy &= ~static_cast<Bitboard>(Option::PowerTwo[rookFrom]);
+        occupancy |= static_cast<Bitboard>(Option::PowerTwo[rookTo]);
+    }
+
+    Bitboard piecesAfterMove[6];
+    for (int pieceType = 0; pieceType < 6; ++pieceType)
+    {
+        piecesAfterMove[pieceType] =
+            core.pieceOccupancy[pieceType] & core.colourOccupancy[movingColour];
+    }
+
+    const int movingPiece = core.pieceAt[move.beginPlace];
+    const int movingPieceType = NormalizeExchangePiece(movingPiece);
+    if (movingPieceType >= 1 && movingPieceType <= 6)
+    {
+        piecesAfterMove[movingPieceType - 1] &= ~beginBit;
+        const int destinationPieceType = move.promotionPiece > 0
+            ? NormalizeExchangePiece(move.promotionPiece) : movingPieceType;
+        piecesAfterMove[destinationPieceType - 1] |= endBit;
+    }
+
+    if (rookFrom >= 0)
+    {
+        piecesAfterMove[3] &=
+            ~static_cast<Bitboard>(Option::PowerTwo[rookFrom]);
+        piecesAfterMove[3] |=
+            static_cast<Bitboard>(Option::PowerTwo[rookTo]);
+    }
+
+    for (int pieceType = 1; pieceType <= 6; ++pieceType)
+    {
+        Bitboard pieces = piecesAfterMove[pieceType - 1];
+        while (pieces != 0)
+        {
+            const int square = __builtin_ctzll(pieces);
+            pieces &= pieces - 1;
+            if (PieceAttacksKing(pieceType, movingWhite, square,
+                                 enemyKingSquare,
+                                 static_cast<long long>(occupancy)))
+                return true;
+        }
+    }
+    return false;
+}
+
+#if defined(HOWL_MOVE_WOULD_GIVE_CHECK_VERIFY) && HOWL_MOVE_WOULD_GIVE_CHECK_VERIFY
+[[noreturn]] void ReportMoveWouldGiveCheckMismatch(
+    const Board& board, const Move& move, bool legacyResult,
+    bool positionCoreResult)
+{
+    std::cerr << "MoveWouldGiveCheck mismatch: move="
+              << static_cast<char>('a' + move.beginPlace % 8)
+              << static_cast<char>('1' + move.beginPlace / 8)
+              << static_cast<char>('a' + move.endPlace % 8)
+              << static_cast<char>('1' + move.endPlace / 8)
+              << " from=" << int(move.beginPlace)
+              << " to=" << int(move.endPlace)
+              << " movingPiece=" << int(board.positionCore.pieceAt[move.beginPlace])
+              << " legacy=" << legacyResult
+              << " positionCore=" << positionCoreResult << '\n';
+    std::abort();
+}
+#endif
+
+bool MoveWouldGiveCheck(Board& board, const Move& move)
+{
+    const bool positionCoreResult = PositionCoreMoveWouldGiveCheck(board, move);
+#if defined(HOWL_MOVE_WOULD_GIVE_CHECK_VERIFY) && HOWL_MOVE_WOULD_GIVE_CHECK_VERIFY
+    const bool legacyResult = LegacyMoveWouldGiveCheck(board, move);
+    if (legacyResult != positionCoreResult)
+        ReportMoveWouldGiveCheckMismatch(
+            board, move, legacyResult, positionCoreResult);
+#endif
+    return positionCoreResult;
 }
 
 std::uint64_t MakeExchangeKey(std::uint32_t attacker, std::uint32_t defender,
