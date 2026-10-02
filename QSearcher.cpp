@@ -68,6 +68,7 @@ private:
     struct Entry { uint8_t moveIndex; int score; };
     enum class Stage { TT, Evasions, Tacticals, Checks, Done };
     bool EligibleTactical(const Move& m) const {
+        if (m.endPiece % 8 == 6) return false;
         const bool capture = m.endPiece > 0 || (m.PublicFlag & Option::PowerTwo[6]);
         const bool promotion = m.promotionPiece > 0;
         return (capture || promotion) &&
@@ -104,8 +105,10 @@ private:
         evasionsReady = true;
         EnsureAttackers();
         MoveLogic::MoveGeneratorInto(board, qDepth, ply, false, true, whiteAttacker, blackAttacker, tacticalMoves);
-        for (int i = 0; i < tacticalMoves.count; ++i)
+        for (int i = 0; i < tacticalMoves.count; ++i) {
+            if (tacticalMoves[i].endPiece % 8 == 6) continue;
             evasions[evasionCount++] = {static_cast<uint8_t>(i), EvasionScore(tacticalMoves[i])};
+        }
         Sort(evasions.data(), evasionCount);
     }
     void PrepareTacticals() {
@@ -126,6 +129,7 @@ private:
         MoveLogic::MoveGeneratorInto(board, qDepth, ply, true, true, whiteAttacker, blackAttacker, checkMoves, true);
         for (int i = 0; i < checkMoves.count; ++i) {
             Move& m = checkMoves[i];
+            if (m.endPiece % 8 == 6) continue;
             const bool tactical = m.endPiece > 0 || m.promotionPiece > 0 || (m.PublicFlag & Option::PowerTwo[6]);
             if (!tactical) {
                 m.givesCheck = MoveLogic::MoveGivesCheck(board, m);
