@@ -22,6 +22,7 @@
 #include <iostream>
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <cstdint>
 #include <vector>
 
@@ -127,6 +128,51 @@ namespace
     };
 
     std::array<SearchStackFrame, SearchStackSize + SearchStackBack> searchStack{};
+
+    struct TriedMoveStorage
+    {
+        std::array<Move*, MoveList::Capacity> quiet{};
+        std::array<Move*, MoveList::Capacity> captures{};
+        int quietCount = 0;
+        int captureCount = 0;
+    };
+
+    std::array<TriedMoveStorage, SearchStackSize + SearchStackBack> triedMoveStack{};
+    int targetSearchFrameDepth = 0;
+
+    class TargetSearchFrameGuard
+    {
+    public:
+        TargetSearchFrameGuard()
+        {
+            if (targetSearchFrameDepth >= static_cast<int>(triedMoveStack.size()))
+            {
+                std::cerr << "TargetSearch frame storage overflow\n";
+                std::abort();
+            }
+            storage = &triedMoveStack[targetSearchFrameDepth++];
+            storage->quietCount = 0;
+            storage->captureCount = 0;
+        }
+
+        ~TargetSearchFrameGuard() { --targetSearchFrameDepth; }
+
+        TriedMoveStorage& Get() { return *storage; }
+
+    private:
+        TriedMoveStorage* storage = nullptr;
+    };
+
+    void AppendTriedMove(std::array<Move*, MoveList::Capacity>& moves,
+                         int& count, Move* move, const char* kind)
+    {
+        if (count >= static_cast<int>(moves.size()))
+        {
+            std::cerr << kind << " tried-move storage overflow\n";
+            std::abort();
+        }
+        moves[count++] = move;
+    }
 
     SearchStackFrame& StackFrame(int ply)
     {
@@ -333,8 +379,8 @@ namespace
     void RewardCutoffMove(const Board& board, int side, int ply, int depth,
                           int bestValue, int beta,
                           const Move& move,
-                          const std::vector<Move*>& searchedQuiets,
-                          const std::vector<Move*>& searchedCaptures)
+                          Move* const* searchedQuiets, int searchedQuietCount,
+                          Move* const* searchedCaptures, int searchedCaptureCount)
     {
         const int bonus1 = StatBonus(depth + 1);
         const int bonus2 = bestValue > beta + Option::PawnValue
@@ -356,13 +402,16 @@ namespace
                 UpdateContinuationHistoriesByBonus(
                     ply - 1, StackFrame(ply).currentMovedPiece,
                     *previous, -bonus1);
-            for (Move* prior : searchedQuiets)
+            for (int i = 0; i < searchedQuietCount; ++i)
+            {
+                Move* prior = searchedQuiets[i];
                 if (prior != &move)
                 {
                     UpdateHistoryByBonus(side, *prior, -bonus2);
                     UpdateContinuationHistoriesByBonus(
                         ply, board.mainBoard[prior->beginPlace], *prior, -bonus2);
                 }
+            }
             if (board.mainBoard[move.beginPlace] % 8 != 1)
             {
                 Move reverse = move;
@@ -376,7 +425,9 @@ namespace
             const int capturedPiece = std::clamp(move.endPiece % 8, 0, 6);
             int& winning = captureHistory[movingPiece][move.endPlace][capturedPiece];
             winning += bonus1 - winning * std::abs(bonus1) / CaptureHistoryLimit;
-            for (Move* prior : searchedCaptures)
+            for (int i = 0; i < searchedCaptureCount; ++i)
+            {
+                Move* prior = searchedCaptures[i];
                 if (prior != &move)
                 {
                     const int priorPiece = std::clamp(board.mainBoard[prior->beginPlace], 0, 14);
@@ -384,7 +435,19 @@ namespace
                     int& failed = captureHistory[priorPiece][prior->endPlace][priorCaptured];
                     failed += -bonus1 - failed * std::abs(bonus1) / CaptureHistoryLimit;
                 }
+            }
         }
+    }
+
+    void RewardCutoffMove(const Board& board, int side, int ply, int depth,
+                          int bestValue, int beta,
+                          const Move& move,
+                          const std::vector<Move*>& searchedQuiets,
+                          const std::vector<Move*>& searchedCaptures)
+    {
+        RewardCutoffMove(board, side, ply, depth, bestValue, beta, move,
+                         searchedQuiets.data(), static_cast<int>(searchedQuiets.size()),
+                         searchedCaptures.data(), static_cast<int>(searchedCaptures.size()));
     }
 
     void RewardCutoffMove(const Board& board, int side, int ply, int depth,
@@ -1759,6 +1822,8 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
     const bool inCheck=BoardLogic::UnderAttack(b,b.pieces[side*8+6].front(),!b.sideToMove);
     if (ply >= SearchStackSize - 1)
         return {inCheck ? 0 : ExperimentalEvaluator::Evaluate(b), {}};
+    TargetSearchFrameGuard targetFrameGuard;
+    TriedMoveStorage& triedMoves = targetFrameGuard.Get();
     SearchStackFrame& ss=StackFrame(ply);
     ss.ply=ply; ss.currentMove=prev;
     ss.hasCurrentMove=prev.beginPlace>=0&&prev.endPlace>=0&&prev.promotionPiece!=-1;
@@ -1895,7 +1960,7 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
     MovePicker picker(b,depth,ply,side,prev,hit?tt.bestMove:0);
     int oldAlpha=alpha,best=-200000,legal=0; uint16_t bestPacked=0;
     Move* bestMove=nullptr; std::string bestPv;
-    std::vector<Move*>quietTried,captureTried; bool pruneQuiets=false;
+    bool pruneQuiets=false;
     while(Move* move=picker.Next(pruneQuiets)){
         if(TTMoveHelper::PackMove(*move)==ss.excludedMove)continue;
         ++ss.moveCount; const bool quiet=IsQuietMove(*move); const bool tactical=!quiet;
@@ -1983,12 +2048,19 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
                         bonus+=bonus/SearchParameters::History::LmrKillerBonusDivisor;
                     UpdateContinuationHistoriesByBonus(ply,movingPiece,*move,bonus);}}
             if(pv&&value>alpha&&value<beta){child=TargetSearch(true,-beta,-alpha,childDepth,*move,m2,m3,prev,b,true,ply+1,false);value=-child.value;}}
-        GameLogic::UndoMove(b,*move,u); if(quiet)quietTried.push_back(move);else captureTried.push_back(move);
+        GameLogic::UndoMove(b,*move,u);
+        if(quiet)
+            AppendTriedMove(triedMoves.quiet, triedMoves.quietCount, move, "quiet");
+        else
+            AppendTriedMove(triedMoves.captures, triedMoves.captureCount, move, "capture");
         if(value>best){best=value;bestMove=move;bestPacked=TTMoveHelper::PackMove(*move);bestPv=ChessStringManipulation::PVToString(*move,0,false,b)+(child.pv.empty()?"":" "+child.pv);
             if(value>alpha){alpha=value;if(value>=beta)break;}}
     }
     if(legal==0)best=ss.excludedMove?alpha:(inCheck?MateScore::MatedAtPly(ply):0);
-    else if(bestMove)RewardCutoffMove(b,side,ply,depth,best,beta,*bestMove,quietTried,captureTried);
+    else if(bestMove)RewardCutoffMove(
+        b,side,ply,depth,best,beta,*bestMove,
+        triedMoves.quiet.data(),triedMoves.quietCount,
+        triedMoves.captures.data(),triedMoves.captureCount);
     else if((depth>=3||pv)&&ss.hasCurrentMove&&IsQuietMove(prev))
         UpdateContinuationHistoriesByBonus(
             ply-1,ss.currentMovedPiece,prev,StatBonus(depth));
