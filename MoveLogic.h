@@ -151,6 +151,16 @@ public:
 #endif
 
 private:
+    static void LegacyMoveGeneratorInto(Board &thisBoard, int depth, int depthGone,
+                                        bool onlyCapturesAndChecks, bool scoreAndSort,
+                                        const AttackerState& whiteAttacker,
+                                        const AttackerState& blackAttacker,
+                                        MoveList& moveList, bool includeQuietChecks);
+    static void PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int depthGone,
+                                              bool onlyCapturesAndChecks, bool scoreAndSort,
+                                              const AttackerState& whiteAttacker,
+                                              const AttackerState& blackAttacker,
+                                              MoveList& moveList, bool includeQuietChecks);
     static double pieceValue[15];
     static int pieceMoveStack[15];
     static ExchangeChessCache ExchangeCache;

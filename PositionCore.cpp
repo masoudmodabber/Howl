@@ -74,6 +74,16 @@ void SynchronizeScalars(PositionCore& core, const Board& board)
     core.enPassantSquare = static_cast<std::int8_t>(board.unpassentPlace);
 }
 
+void SynchronizePieceOrder(PositionCore& core, const Board& board)
+{
+    for (int piece = 0; piece < 15; ++piece)
+    {
+        core.pieceOrderCount[piece] = static_cast<std::uint8_t>(board.pieces[piece].count);
+        for (int index = 0; index < board.pieces[piece].count; ++index)
+            core.pieceOrder[piece][index] = static_cast<std::uint8_t>(board.pieces[piece][index]);
+    }
+}
+
 void SynchronizeMoveSquares(Board& board, const Move& move, bool movingWhite,
                             bool undo)
 {
@@ -145,6 +155,7 @@ void PositionCoreLogic::Initialize(Board& board)
     board.positionCore = PositionCore{};
     for (int square = 0; square < 64; ++square)
         SynchronizeSquare(board.positionCore, board, square);
+    SynchronizePieceOrder(board.positionCore, board);
     SynchronizeScalars(board.positionCore, board);
 }
 
@@ -152,12 +163,14 @@ void PositionCoreLogic::UpdateAfterMove(Board& board, const Move& move,
                                         bool movingWhite)
 {
     SynchronizeMoveSquares(board, move, movingWhite, false);
+    SynchronizePieceOrder(board.positionCore, board);
 }
 
 void PositionCoreLogic::UpdateAfterUndo(Board& board, const Move& move,
                                         bool movingWhite)
 {
     SynchronizeMoveSquares(board, move, movingWhite, true);
+    SynchronizePieceOrder(board.positionCore, board);
 }
 
 void PositionCoreLogic::Verify(const Board& board, const Move* move,
@@ -175,6 +188,16 @@ void PositionCoreLogic::Verify(const Board& board, const Move* move,
         {
             expectedColours[PieceColour(piece)] |= Option::PowerTwo[square];
             expectedPieces[type] |= Option::PowerTwo[square];
+        }
+    }
+    for (int piece = 0; piece < 15; ++piece)
+    {
+        if (board.positionCore.pieceOrderCount[piece] != board.pieces[piece].count)
+            Mismatch(board, move, operation, "pieceOrderCount", piece);
+        for (int index = 0; index < board.pieces[piece].count; ++index)
+        {
+            if (board.positionCore.pieceOrder[piece][index] != board.pieces[piece][index])
+                Mismatch(board, move, operation, "pieceOrder", piece);
         }
     }
     if (board.positionCore.colourOccupancy[White] != expectedColours[White])

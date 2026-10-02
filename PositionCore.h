@@ -10,6 +10,10 @@ struct PositionCore
     Bitboard colourOccupancy[2] = {};
     Bitboard pieceOccupancy[6] = {};
     std::uint8_t pieceAt[64] = {};
+    // Preserves the legacy per-piece iteration order for consumers that must
+    // retain exact generated move ordering during the migration.
+    std::uint8_t pieceOrder[15][16] = {};
+    std::uint8_t pieceOrderCount[15] = {};
     std::uint64_t zobristHash = 0;
     std::uint32_t fullmoveNumber = 0;
     std::uint16_t halfmoveClock = 0;
