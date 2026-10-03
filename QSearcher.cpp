@@ -12,6 +12,7 @@
 #include "Search.h"
 #include "SearchParameters.h"
 #include "TranspositionTable.h"
+#include "MoveOrdering.h"
 #include <algorithm>
 #include <array>
 
@@ -65,7 +66,7 @@ public:
         }
     }
 private:
-    struct Entry { uint8_t moveIndex; int score; };
+    struct Entry { uint8_t moveIndex; int score; MoveOrderingTieKey tieKey{}; };
     enum class Stage { TT, Evasions, Tacticals, Checks, Done };
     bool EligibleTactical(const Move& m) const {
         if (m.endPiece % 8 == 6) return false;
@@ -87,7 +88,9 @@ private:
         for (int i = 1; i < count; ++i) {
             Entry key = entries[i];
             int j = i;
-            while (j > 0 && key.score > entries[j - 1].score) {
+            while (j > 0 && (key.score > entries[j - 1].score ||
+                             (key.score == entries[j - 1].score &&
+                              MoveOrderingTieKeyGreater(key.tieKey, entries[j - 1].tieKey)))) {
                 entries[j] = entries[j - 1];
                 --j;
             }
@@ -107,7 +110,11 @@ private:
         MoveLogic::MoveGeneratorInto(board, qDepth, ply, false, true, whiteAttacker, blackAttacker, tacticalMoves);
         for (int i = 0; i < tacticalMoves.count; ++i) {
             if (tacticalMoves[i].endPiece % 8 == 6) continue;
-            evasions[evasionCount++] = {static_cast<uint8_t>(i), EvasionScore(tacticalMoves[i])};
+            const Move& move = tacticalMoves[i];
+            evasions[evasionCount++] = {
+                static_cast<uint8_t>(i), EvasionScore(move),
+                MakeMoveOrderingTieKey(move,
+                    board.positionCore.pieceAt[move.beginPlace], true, true)};
         }
         Sort(evasions.data(), evasionCount);
     }
@@ -117,8 +124,13 @@ private:
         EnsureAttackers();
         MoveLogic::MoveGeneratorInto(board, qDepth, ply, true, true, whiteAttacker, blackAttacker, tacticalMoves, false);
         for (int i = 0; i < tacticalMoves.count; ++i) {
-            if (EligibleTactical(tacticalMoves[i]))
-                tacticals[tacticalCount++] = {static_cast<uint8_t>(i), TacticalScore(tacticalMoves[i])};
+            if (EligibleTactical(tacticalMoves[i])) {
+                const Move& move = tacticalMoves[i];
+                tacticals[tacticalCount++] = {
+                    static_cast<uint8_t>(i), TacticalScore(move),
+                    MakeMoveOrderingTieKey(move,
+                        board.positionCore.pieceAt[move.beginPlace], false, false)};
+            }
         }
         Sort(tacticals.data(), tacticalCount);
     }
@@ -135,7 +147,11 @@ private:
                 m.givesCheck = MoveLogic::MoveGivesCheck(board, m);
                 m.givesCheckComputed = true;
                 if (m.givesCheck)
-                    checks[checkCount++] = {static_cast<uint8_t>(i), 0};
+                    checks[checkCount++] = {
+                        static_cast<uint8_t>(i),
+                        PVSSearch::QQuietEvasionOrderingScore(board.sideToMove ? 1 : 0, ply, board, m),
+                        MakeMoveOrderingTieKey(m,
+                            board.positionCore.pieceAt[m.beginPlace], false, true)};
             }
         }
     }
