@@ -675,6 +675,7 @@ LastFourMoves *UCI::MakeMoves(std::string moves, Board &thisBoard)
             eachMoveCounter = 0;
             Move *doneMove = ChessStringManipulation::ConvertTextToMove(tempMove, thisBoard);
             GameLogic::DoMove(thisBoard, *doneMove, *doneMove, -4, -4);
+            thisBoard.nnueHistory->snapshotCount = 0;
             delete lastMoves->Move1;
             lastMoves->Move1 = lastMoves->Move2;
             lastMoves->Move2 = lastMoves->Move3;
@@ -689,6 +690,7 @@ LastFourMoves *UCI::MakeMoves(std::string moves, Board &thisBoard)
     }
     Move *doneMove2 = ChessStringManipulation::ConvertTextToMove(tempMove, thisBoard);
     GameLogic::DoMove(thisBoard, *doneMove2, *doneMove2, -4, -4);
+    thisBoard.nnueHistory->snapshotCount = 0;
     delete lastMoves->Move1;
     lastMoves->Move1 = lastMoves->Move2;
     lastMoves->Move2 = lastMoves->Move3;
