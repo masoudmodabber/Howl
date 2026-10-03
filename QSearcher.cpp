@@ -79,7 +79,7 @@ private:
     }
     int EvasionScore(const Move& m) const {
         const bool capture = m.endPiece > 0 || (m.PublicFlag & Option::PowerTwo[6]);
-        if (capture) return PieceValue[Type(m.endPiece)] - Type(board.mainBoard[m.beginPlace]);
+        if (capture) return PieceValue[Type(m.endPiece)] - Type(board.positionCore.pieceAt[m.beginPlace]);
         return PVSSearch::QQuietEvasionOrderingScore(
             board.sideToMove ? 1 : 0, ply, board, m) - (1 << 28);
     }
@@ -199,7 +199,7 @@ Result SearchQ(Board& b,Move& prev,int alpha,int beta,int ply,int qDepth,bool pv
     if(ply>0&&RepetitionHistory::IsRepetition(b.ZobristHashCode))return {0,{}};
     ++Search::searchNodeCount;if(Search::strictNodeLimit||(Search::searchNodeCount&2047)==0)Search::CheckLimits();
     int side=b.sideToMove?1:0;
-    bool check=BoardLogic::UnderAttack(b,b.pieces[side*8+6].front(),!b.sideToMove);
+    bool check=BoardLogic::UnderAttack(b,PositionCorePieceListsView{b.positionCore}[side*8+6].front(),!b.sideToMove);
     if(ply>=PVSSearch::MaxKillerPly-1)
         return {check?0:ExperimentalEvaluator::Evaluate(b),{}};
     int ttDepth=check||qDepth>=QChecks?QChecks:QNoChecks;
@@ -211,13 +211,13 @@ Result SearchQ(Board& b,Move& prev,int alpha,int beta,int ply,int qDepth,bool pv
     QMovePicker picker(b,qDepth,ply,check,prev,hit?tt.bestMove:0);
     int futilityBase=best+SearchParameters::QSearch::FutilityMargin,legal=0,moveCount=0;uint16_t bestMove=0;std::string bestPv;
     while(Move*m=picker.Next()){++moveCount;bool capture=m->endPiece>0||(m->PublicFlag&Option::PowerTwo[6]);bool promo=m->promotionPiece>0;if(!m->givesCheckComputed){m->givesCheck=MoveLogic::MoveGivesCheck(b,*m);m->givesCheckComputed=true;}bool givesCheck=m->givesCheck;if(!check&&!capture&&!promo&&!(includeChecks&&givesCheck))continue;
-        const bool advancedPawn=Type(b.mainBoard[m->beginPlace])==1&&
+        const bool advancedPawn=Type(b.positionCore.pieceAt[m->beginPlace])==1&&
             ((side==0&&m->endPlace/8>=5)||(side==1&&m->endPlace/8<=2));
         if(!check&&!givesCheck&&futilityBase>-MateScore::Threshold&&!advancedPawn){int victim=capture?PieceValue[Type(m->endPiece)]:0;int gain=promo?PieceValue[Type(m->promotionPiece)]-PieceValue[1]:0;if(futilityBase+victim+gain<=alpha){best=std::max(best,futilityBase+victim+gain);continue;}if(futilityBase<=alpha&&!MoveLogic::SEE_GE(b,*m,1)){best=std::max(best,futilityBase);continue;}}
         const bool evasionPrunable=check&&(qDepth!=0||moveCount>2)&&
             best>MateScore::MatedAtPly(PVSSearch::MaxKillerPly-1)&&!capture;
         if((!check||evasionPrunable)&&!MoveLogic::SEE_GE(b,*m,0))continue;
-        MissingInfoAboutPrevStateFromMove u(b,*m);GameLogic::DoMove(b,*m,prev,qDepth,ply,&u);bool ok=!BoardLogic::UnderAttack(b,b.pieces[side*8+6].front(),b.sideToMove);if(!ok){GameLogic::UndoMove(b,*m,u);--moveCount;continue;}++legal;Result child=SearchQ(b,*m,-beta,-alpha,ply+1,qDepth-1,pv);int value=-child.value;GameLogic::UndoMove(b,*m,u);if(Search::stopRequested.load(std::memory_order_relaxed))break;if(value>best){best=value;bestMove=TTMoveHelper::PackMove(*m);bestPv=ChessStringManipulation::PVToString(*m,0,false,b)+(child.pv.empty()?"":" "+child.pv);if(value>alpha){alpha=value;if(value>=beta)break;}}}
+        MissingInfoAboutPrevStateFromMove u(b,*m);GameLogic::DoMove(b,*m,prev,qDepth,ply,&u);bool ok=!BoardLogic::UnderAttack(b,PositionCorePieceListsView{b.positionCore}[side*8+6].front(),b.sideToMove);if(!ok){GameLogic::UndoMove(b,*m,u);--moveCount;continue;}++legal;Result child=SearchQ(b,*m,-beta,-alpha,ply+1,qDepth-1,pv);int value=-child.value;GameLogic::UndoMove(b,*m,u);if(Search::stopRequested.load(std::memory_order_relaxed))break;if(value>best){best=value;bestMove=TTMoveHelper::PackMove(*m);bestPv=ChessStringManipulation::PVToString(*m,0,false,b)+(child.pv.empty()?"":" "+child.pv);if(value>alpha){alpha=value;if(value>=beta)break;}}}
     if(check&&legal==0)best=MateScore::MatedAtPly(ply);
     uint8_t flag=best>=beta?TT_LOWER_BOUND:(best<=oldAlpha?TT_UPPER_BOUND:TT_EXACT);
     TranspositionTable::Store(b.ZobristHashCode,MateScore::ToTranspositionTable(best,ply),ttDepth,flag,bestMove,staticEval,pv);return {best,bestPv};

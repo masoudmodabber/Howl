@@ -2,6 +2,7 @@
 
 #include "Board.h"
 #include "Move.h"
+#include "MissingInfoAboutPrevStateFromMove.h"
 #include "Option.h"
 
 #include <cstdlib>
@@ -74,13 +75,128 @@ void SynchronizeScalars(PositionCore& core, const Board& board)
     core.enPassantSquare = static_cast<std::int8_t>(board.unpassentPlace);
 }
 
-void SynchronizePieceOrder(PositionCore& core, const Board& board)
+void InitializePieceOrder(PositionCore& core, const Board& board)
 {
     for (int piece = 0; piece < 15; ++piece)
     {
         core.pieceOrderCount[piece] = static_cast<std::uint8_t>(board.pieces[piece].count);
         for (int index = 0; index < board.pieces[piece].count; ++index)
             core.pieceOrder[piece][index] = static_cast<std::uint8_t>(board.pieces[piece][index]);
+    }
+}
+
+int FindPieceOrder(const PositionCore& core, int piece, int square)
+{
+    for (int index = 0; index < core.pieceOrderCount[piece]; ++index)
+        if (core.pieceOrder[piece][index] == square)
+            return index;
+    return -1;
+}
+
+void ErasePieceOrder(PositionCore& core, int piece, int index)
+{
+    if (piece <= 0 || piece >= 15 || index < 0 || index >= core.pieceOrderCount[piece])
+        return;
+    for (int i = index; i + 1 < core.pieceOrderCount[piece]; ++i)
+        core.pieceOrder[piece][i] = core.pieceOrder[piece][i + 1];
+    --core.pieceOrderCount[piece];
+}
+
+void InsertPieceOrder(PositionCore& core, int piece, int index, int square)
+{
+    if (piece <= 0 || piece >= 15 || core.pieceOrderCount[piece] >= 16)
+        return;
+    const int count = core.pieceOrderCount[piece];
+    if (index < 0 || index > count)
+        index = count;
+    for (int i = count; i > index; --i)
+        core.pieceOrder[piece][i] = core.pieceOrder[piece][i - 1];
+    core.pieceOrder[piece][index] = static_cast<std::uint8_t>(square);
+    core.pieceOrderCount[piece] = static_cast<std::uint8_t>(count + 1);
+}
+
+void ReplacePieceOrder(PositionCore& core, int piece, int from, int to)
+{
+    const int index = FindPieceOrder(core, piece, from);
+    if (index >= 0)
+        core.pieceOrder[piece][index] = static_cast<std::uint8_t>(to);
+}
+
+void UpdatePieceOrder(PositionCore& core, const Move& move, bool movingWhite,
+                      const MissingInfoAboutPrevStateFromMove* info, bool undo)
+{
+    if (move.promotionPiece < 0)
+        return;
+
+    const int begin = move.beginPlace;
+    const int end = move.endPlace;
+    const int movingPiece = undo ? core.pieceAt[end] : core.pieceAt[begin];
+    const int capturedSquare = (move.PublicFlag & Option::PowerTwo[6]) != 0
+        ? end + (movingWhite ? -8 : 8) : end;
+    const int capturedPiece = undo
+        ? ((move.PublicFlag & Option::PowerTwo[6]) != 0
+            ? (movingWhite ? 9 : 1) : move.endPiece)
+        : core.pieceAt[end];
+    const int movedIndex = info != nullptr ? info->movedPieceIndex : -1;
+    const int capturedIndex = info != nullptr ? info->capturedPieceIndex : -1;
+
+    if (undo)
+    {
+        if (move.promotionPiece > 0)
+        {
+            ErasePieceOrder(core, movingPiece, FindPieceOrder(core, movingPiece, end));
+            InsertPieceOrder(core, movingWhite ? 1 : 9, movedIndex, begin);
+        }
+        else
+        {
+            ReplacePieceOrder(core, movingPiece, end, begin);
+        }
+        if (capturedPiece > 0)
+            InsertPieceOrder(core, capturedPiece, capturedIndex, capturedSquare);
+    }
+    else
+    {
+        const int currentMovedIndex = FindPieceOrder(core, movingPiece, begin);
+        const int currentCapturedIndex = capturedPiece > 0
+            ? FindPieceOrder(core, capturedPiece, capturedSquare) : -1;
+        if (move.promotionPiece > 0)
+        {
+            ErasePieceOrder(core, movingPiece,
+                            currentMovedIndex);
+            if (capturedPiece > 0)
+                ErasePieceOrder(core, capturedPiece, currentCapturedIndex);
+            InsertPieceOrder(core, move.promotionPiece, -1, end);
+        }
+        else
+        {
+            ReplacePieceOrder(core, movingPiece, begin, end);
+            if (capturedPiece > 0)
+                ErasePieceOrder(core, capturedPiece, currentCapturedIndex);
+        }
+        if ((move.PublicFlag & Option::PowerTwo[6]) != 0)
+        {
+            const int pawn = movingWhite ? 9 : 1;
+            ErasePieceOrder(core, pawn, FindPieceOrder(core, pawn, capturedSquare));
+        }
+    }
+
+    int rookFrom = -1;
+    int rookTo = -1;
+    if ((move.CastleFlag & (Option::PowerTwo[3] | Option::PowerTwo[1])) != 0)
+    {
+        rookFrom = begin + 3;
+        rookTo = begin + 1;
+    }
+    else if ((move.CastleFlag & (Option::PowerTwo[2] | Option::PowerTwo[0])) != 0)
+    {
+        rookFrom = begin - 4;
+        rookTo = begin - 1;
+    }
+    if (rookFrom >= 0)
+    {
+        const int rook = movingWhite ? 4 : 12;
+        ReplacePieceOrder(core, rook, undo ? rookTo : rookFrom,
+                          undo ? rookFrom : rookTo);
     }
 }
 
@@ -155,22 +271,38 @@ void PositionCoreLogic::Initialize(Board& board)
     board.positionCore = PositionCore{};
     for (int square = 0; square < 64; ++square)
         SynchronizeSquare(board.positionCore, board, square);
-    SynchronizePieceOrder(board.positionCore, board);
+    InitializePieceOrder(board.positionCore, board);
     SynchronizeScalars(board.positionCore, board);
 }
 
-void PositionCoreLogic::UpdateAfterMove(Board& board, const Move& move,
-                                        bool movingWhite)
+void PositionCoreLogic::PrepareMove(const Board& board, const Move& move,
+                                    MissingInfoAboutPrevStateFromMove& missingInfo)
 {
+    const PositionCore& core = board.positionCore;
+    const int movingPiece = core.pieceAt[move.beginPlace];
+    missingInfo.movedPieceIndex = FindPieceOrder(core, movingPiece, move.beginPlace);
+    const int capturedSquare = (move.PublicFlag & Option::PowerTwo[6]) != 0
+        ? move.endPlace + (board.sideToMove ? 8 : -8) : move.endPlace;
+    const int capturedPiece = (move.PublicFlag & Option::PowerTwo[6]) != 0
+        ? (board.sideToMove ? 1 : 9) : core.pieceAt[move.endPlace];
+    missingInfo.capturedPieceIndex = capturedPiece > 0
+        ? FindPieceOrder(core, capturedPiece, capturedSquare) : -1;
+}
+
+void PositionCoreLogic::UpdateAfterMove(Board& board, const Move& move,
+                                        bool movingWhite,
+                                        const MissingInfoAboutPrevStateFromMove* missingInfo)
+{
+    UpdatePieceOrder(board.positionCore, move, movingWhite, missingInfo, false);
     SynchronizeMoveSquares(board, move, movingWhite, false);
-    SynchronizePieceOrder(board.positionCore, board);
 }
 
 void PositionCoreLogic::UpdateAfterUndo(Board& board, const Move& move,
-                                        bool movingWhite)
+                                        bool movingWhite,
+                                        const MissingInfoAboutPrevStateFromMove& missingInfo)
 {
+    UpdatePieceOrder(board.positionCore, move, movingWhite, &missingInfo, true);
     SynchronizeMoveSquares(board, move, movingWhite, true);
-    SynchronizePieceOrder(board.positionCore, board);
 }
 
 void PositionCoreLogic::Verify(const Board& board, const Move* move,
@@ -178,6 +310,8 @@ void PositionCoreLogic::Verify(const Board& board, const Move* move,
 {
     Bitboard expectedColours[2] = {};
     Bitboard expectedPieces[6] = {};
+    std::uint8_t expectedKings[2] = {255, 255};
+    std::uint8_t expectedPieceCounts[15] = {};
     for (int square = 0; square < 64; ++square)
     {
         const int piece = board.mainBoard[square];
@@ -186,38 +320,41 @@ void PositionCoreLogic::Verify(const Board& board, const Move* move,
         const int type = PieceTypeIndex(piece);
         if (type >= 0)
         {
+            ++expectedPieceCounts[piece];
             expectedColours[PieceColour(piece)] |= Option::PowerTwo[square];
             expectedPieces[type] |= Option::PowerTwo[square];
-        }
-    }
-    for (int piece = 0; piece < 15; ++piece)
-    {
-        if (board.positionCore.pieceOrderCount[piece] != board.pieces[piece].count)
-            Mismatch(board, move, operation, "pieceOrderCount", piece);
-        for (int index = 0; index < board.pieces[piece].count; ++index)
-        {
-            if (board.positionCore.pieceOrder[piece][index] != board.pieces[piece][index])
-                Mismatch(board, move, operation, "pieceOrder", piece);
+            if (type == 5)
+                expectedKings[PieceColour(piece)] = static_cast<std::uint8_t>(square);
         }
     }
     if (board.positionCore.colourOccupancy[White] != expectedColours[White])
         Mismatch(board, move, operation, "white occupancy vs board squares");
-    if (board.positionCore.colourOccupancy[White] != static_cast<Bitboard>(board.whitePieces))
-        Mismatch(board, move, operation, "white occupancy vs legacy occupancy");
     if (board.positionCore.colourOccupancy[Black] != expectedColours[Black])
         Mismatch(board, move, operation, "black occupancy vs board squares");
-    if (board.positionCore.colourOccupancy[Black] != static_cast<Bitboard>(board.blackPieces))
-        Mismatch(board, move, operation, "black occupancy vs legacy occupancy");
     for (int type = 0; type < 6; ++type)
         if (board.positionCore.pieceOccupancy[type] != expectedPieces[type])
             Mismatch(board, move, operation, "piece occupancy", type);
-    const std::uint8_t expectedWhiteKing = board.pieces[6].count > 0
-        ? static_cast<std::uint8_t>(board.pieces[6].front()) : 255;
-    const std::uint8_t expectedBlackKing = board.pieces[14].count > 0
-        ? static_cast<std::uint8_t>(board.pieces[14].front()) : 255;
-    if (board.positionCore.kingSquare[White] != expectedWhiteKing)
+    for (int piece = 0; piece < 15; ++piece)
+        if (board.positionCore.pieceOrderCount[piece] != expectedPieceCounts[piece])
+        {
+            std::cerr << "piece-order-count detail piece=" << piece
+                      << " core=" << int(board.positionCore.pieceOrderCount[piece])
+                      << " expected=" << int(expectedPieceCounts[piece]) << '\n';
+            Mismatch(board, move, operation, "piece order count", piece);
+        }
+#if defined(HOWL_POSITION_CORE_VERIFY) && HOWL_POSITION_CORE_VERIFY && defined(HOWL_KEEP_LEGACY_STATE) && HOWL_KEEP_LEGACY_STATE
+    for (int piece = 0; piece < 15; ++piece)
+    {
+        if (board.positionCore.pieceOrderCount[piece] != board.pieces[piece].count)
+            Mismatch(board, move, operation, "legacy piece order count", piece);
+        for (int index = 0; index < board.pieces[piece].count; ++index)
+            if (board.positionCore.pieceOrder[piece][index] != board.pieces[piece][index])
+                Mismatch(board, move, operation, "legacy piece order", piece);
+    }
+#endif
+    if (board.positionCore.kingSquare[White] != expectedKings[White])
         Mismatch(board, move, operation, "white king square");
-    if (board.positionCore.kingSquare[Black] != expectedBlackKing)
+    if (board.positionCore.kingSquare[Black] != expectedKings[Black])
         Mismatch(board, move, operation, "black king square");
     if (board.positionCore.sideToMove != static_cast<std::uint8_t>(board.sideToMove))
         Mismatch(board, move, operation, "side to move");

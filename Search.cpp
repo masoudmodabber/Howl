@@ -214,7 +214,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         Move *m = &moveList[i];
         MissingInfoAboutPrevStateFromMove undo(board4, *m);
         GameLogic::DoMove(board4, *m, move4, -2, -2, &undo);
-        bool legal = !BoardLogic::UnderAttack(board4, board4.pieces[rootTurn * 8 + 6].front(), board4.sideToMove);
+        bool legal = !BoardLogic::UnderAttack(board4, PositionCorePieceListsView{board4.positionCore}[rootTurn * 8 + 6].front(), board4.sideToMove);
         GameLogic::UndoMove(board4, *m, undo);
         if (legal)
         {
@@ -233,7 +233,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     tablebaseHits.store(0, std::memory_order_relaxed);
 
     bool previousMoveWasCheck = false;
-    if (BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove))
+    if (BoardLogic::UnderAttack(board4, PositionCorePieceListsView{board4.positionCore}[turn * 8 + 6].front(), !board4.sideToMove))
     {
         previousMoveWasCheck = true;
     }
@@ -1145,7 +1145,7 @@ bool Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
         auto boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
         MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
         GameLogic::DoMove(board4, *move, move4, -2, -2, missingInfoAboutPrevStateFromMove);
-        if (!BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), board4.sideToMove))
+        if (!BoardLogic::UnderAttack(board4, PositionCorePieceListsView{board4.positionCore}[turn * 8 + 6].front(), board4.sideToMove))
         {
             if (!firstAssign)
             {

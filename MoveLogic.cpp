@@ -4029,7 +4029,7 @@ void MoveLogic::ScoreAndSortMoves(Board& thisBoard, MoveList& moveList, int dept
 void MoveLogic::ScoreMove(Board& thisBoard, Move& move, const AttackerState& whiteAttacker, const AttackerState& blackAttacker)
 {
     constexpr int state = 0;
-    int* mainBoard = thisBoard.mainBoard;
+    const std::uint8_t* mainBoard = thisBoard.positionCore.pieceAt;
     if (thisBoard.sideToMove)
     {
         int beginPiece = mainBoard[move.beginPlace] % 8;
@@ -4338,7 +4338,7 @@ MoveList MoveLogic::QSearchStage1Generator(Board &thisBoard, int depth, int dept
     AttackerState whiteAttacker = SetWhiteAttacker(thisBoard);
     AttackerState blackAttacker = SetBlackAttacker(thisBoard);
     MoveList fullList = MoveGenerator(thisBoard, depth, depthGone, true, false, whiteAttacker, blackAttacker, includeQuietChecks);
-    const int* mainBoard = thisBoard.mainBoard;
+    const std::uint8_t* mainBoard = thisBoard.positionCore.pieceAt;
     static const int pieceValue100[15] = {0, 100, 350, 350, 550, 975, 2500, 0, 0, 100, 350, 350, 550, 975, 2500};
 
     MoveList stage1List;
@@ -4413,16 +4413,16 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
     const bool side = thisBoard.sideToMove;
     const int turn = side ? 1 : 0;
     const int offset = side ? 8 : 0;
-    const long long wholeBoard = thisBoard.whitePieces | thisBoard.blackPieces;
-    const long long ownPieces = side ? thisBoard.blackPieces : thisBoard.whitePieces;
-    const long long enemyPieces = side ? thisBoard.whitePieces : thisBoard.blackPieces;
-    const int* mainBoard = thisBoard.mainBoard;
+    const long long wholeBoard = PositionCoreLogic::WhiteOccupancy(thisBoard.positionCore) | PositionCoreLogic::BlackOccupancy(thisBoard.positionCore);
+    const long long ownPieces = side ? PositionCoreLogic::BlackOccupancy(thisBoard.positionCore) : PositionCoreLogic::WhiteOccupancy(thisBoard.positionCore);
+    const long long enemyPieces = side ? PositionCoreLogic::WhiteOccupancy(thisBoard.positionCore) : PositionCoreLogic::BlackOccupancy(thisBoard.positionCore);
+    const std::uint8_t* mainBoard = thisBoard.positionCore.pieceAt;
 
     auto isLegal = [&](Move& m) -> bool {
         MissingInfoAboutPrevStateFromMove undo(thisBoard, m);
         GameLogic::DoMove(thisBoard, m, const_cast<Move&>(prevMove), depthGone, depthGone, &undo);
         bool legal = !BoardLogic::UnderAttack(
-            thisBoard, thisBoard.pieces[turn * 8 + 6].front(), thisBoard.sideToMove);
+            thisBoard, PositionCorePieceListsView{thisBoard.positionCore}[turn * 8 + 6].front(), thisBoard.sideToMove);
         GameLogic::UndoMove(thisBoard, m, undo);
         return legal;
     };
@@ -4435,7 +4435,7 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
         case 2:
         case 10:
         {
-            for (int pos : thisBoard.pieces[piece])
+            for (int pos : PositionCorePieceListsView{thisBoard.positionCore}[piece])
             {
                 for (int i = 0; i < 8; ++i)
                 {
@@ -4461,7 +4461,7 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
         case 3:
         case 11:
         {
-            for (int pos : thisBoard.pieces[piece])
+            for (int pos : PositionCorePieceListsView{thisBoard.positionCore}[piece])
             {
                 for (int r = 0; r < 4; ++r)
                 {
@@ -4496,7 +4496,7 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
         case 4:
         case 12:
         {
-            for (int pos : thisBoard.pieces[piece])
+            for (int pos : PositionCorePieceListsView{thisBoard.positionCore}[piece])
             {
                 for (int r = 0; r < 4; ++r)
                 {
@@ -4531,7 +4531,7 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
         case 5:
         case 13:
         {
-            for (int pos : thisBoard.pieces[piece])
+            for (int pos : PositionCorePieceListsView{thisBoard.positionCore}[piece])
             {
                 for (int r = 0; r < 8; ++r)
                 {
@@ -4565,7 +4565,7 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
         }
         case 1:
         {
-            for (int pos : thisBoard.pieces[1])
+            for (int pos : PositionCorePieceListsView{thisBoard.positionCore}[1])
             {
                 if (PieceMoves::WhitePawnMoves[pos][0] != nullptr && (PieceMoves::pawnTwoMove[pos] & wholeBoard) == 0)
                 {
@@ -4635,7 +4635,7 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
         }
         case 9:
         {
-            for (int pos : thisBoard.pieces[9])
+            for (int pos : PositionCorePieceListsView{thisBoard.positionCore}[9])
             {
                 if (PieceMoves::BlackPawnMoves[pos][0] != nullptr && (PieceMoves::pawnTwoMove[pos] & wholeBoard) == 0)
                 {
@@ -4706,9 +4706,9 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
         case 6:
         case 14:
         {
-            if (thisBoard.pieces[piece].count > 0)
+            if (PositionCorePieceListsView{thisBoard.positionCore}[piece].count > 0)
             {
-                int kingPos = thisBoard.pieces[piece].front();
+                int kingPos = PositionCorePieceListsView{thisBoard.positionCore}[piece].front();
                 Move** kingMoves = side ? PieceMoves::BlackKingMoves[kingPos] : PieceMoves::WhiteKingMoves[kingPos];
                 for (int i = 0; i < 8; ++i)
                 {

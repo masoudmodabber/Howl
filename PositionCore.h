@@ -2,6 +2,7 @@
 #define POSITION_CORE_H
 
 #include <cstdint>
+#include <cstddef>
 
 using Bitboard = std::uint64_t;
 
@@ -23,14 +24,63 @@ struct PositionCore
     std::int8_t enPassantSquare = 0;
 };
 
+struct PositionCorePieceListView
+{
+    const std::uint8_t* first;
+    std::size_t count;
+
+    const std::uint8_t* begin() const { return first; }
+    const std::uint8_t* end() const { return first + count; }
+    std::size_t size() const { return count; }
+    bool empty() const { return count == 0; }
+    int front() const { return first[0]; }
+    int operator[](std::size_t index) const { return first[index]; }
+};
+
+struct PositionCorePieceListsView
+{
+    const PositionCore& core;
+
+    PositionCorePieceListView operator[](int piece) const
+    {
+        return {core.pieceOrder[piece], core.pieceOrderCount[piece]};
+    }
+};
+
+namespace PositionCoreLogic
+{
+
+inline long long WhiteOccupancy(const PositionCore& core)
+{
+    return static_cast<long long>(core.colourOccupancy[0]);
+}
+
+inline long long BlackOccupancy(const PositionCore& core)
+{
+    return static_cast<long long>(core.colourOccupancy[1]);
+}
+
+inline long long PawnOccupancy(const PositionCore& core, bool white)
+{
+    return static_cast<long long>(core.pieceOccupancy[0] &
+                                  core.colourOccupancy[white ? 0 : 1]);
+}
+
+}
+
 class Board;
 class Move;
+class MissingInfoAboutPrevStateFromMove;
 
 namespace PositionCoreLogic
 {
 void Initialize(Board& board);
-void UpdateAfterMove(Board& board, const Move& move, bool movingWhite);
-void UpdateAfterUndo(Board& board, const Move& move, bool movingWhite);
+void PrepareMove(const Board& board, const Move& move,
+                 MissingInfoAboutPrevStateFromMove& missingInfo);
+void UpdateAfterMove(Board& board, const Move& move, bool movingWhite,
+                     const MissingInfoAboutPrevStateFromMove* missingInfo);
+void UpdateAfterUndo(Board& board, const Move& move, bool movingWhite,
+                     const MissingInfoAboutPrevStateFromMove& missingInfo);
 void Verify(const Board& board, const Move* move, const char* operation);
 }
 

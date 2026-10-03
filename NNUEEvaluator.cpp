@@ -107,14 +107,14 @@ void NNUEEvaluator::Rebuild(Board& board)
 {
     auto t=std::chrono::steady_clock::now(); ++profile.rebuildCalls;
     EnsureInitialized();
-    const int whiteKingSquare = board.pieces[6].front();
-    const int blackKingSquare = board.pieces[14].front();
+    const int whiteKingSquare = board.positionCore.kingSquare[0];
+    const int blackKingSquare = board.positionCore.kingSquare[1];
     board.nnueState.whiteAccumulator = firstBias;
     board.nnueState.blackAccumulator = firstBias;
 
     for (int square = 0; square < Squares; ++square)
     {
-        const int pieceId = board.mainBoard[square];
+        const int pieceId = board.positionCore.pieceAt[square];
         const int pieceClass = ColoredPieceClass(pieceId);
         if (pieceClass < 0)
             continue;
@@ -143,8 +143,8 @@ void NNUEEvaluator::UpdateAfterMove(Board& board, const Move& move, const NNUESt
     }
     if (move.promotionPiece < 0)
     {
-        board.nnueState.whiteKingSquare = board.pieces[6].front();
-        board.nnueState.blackKingSquare = board.pieces[14].front();
+        board.nnueState.whiteKingSquare = board.positionCore.kingSquare[0];
+        board.nnueState.blackKingSquare = board.positionCore.kingSquare[1];
         board.nnueState.initialized = true;
         return;
     }
@@ -158,13 +158,13 @@ void NNUEEvaluator::UpdateAfterMove(Board& board, const Move& move, const NNUESt
     };
     auto rebuildAnchor = [&](int anchor, bool whitePerspective, std::array<float, HiddenSize>& acc) {
         acc = firstBias;
-        for (int sq = 0; sq < Squares; ++sq) apply(anchor, whitePerspective, board.mainBoard[sq], sq, 1.0f, acc);
+        for (int sq = 0; sq < Squares; ++sq) apply(anchor, whitePerspective, board.positionCore.pieceAt[sq], sq, 1.0f, acc);
     };
     const int oldWhite = previous.whiteKingSquare, oldBlack = previous.blackKingSquare;
-    const int movedPieceAfter = board.mainBoard[move.endPlace];
+    const int movedPieceAfter = board.positionCore.pieceAt[move.endPlace];
     const bool moverWhite = movedPieceAfter > 0 && movedPieceAfter < 9;
     const int moving = (move.beginPlace >= 0 && move.beginPlace < 64) ?
-        (move.CastleFlag ? (moverWhite ? 6 : 14) : board.mainBoard[move.endPlace]) : 0;
+        (move.CastleFlag ? (moverWhite ? 6 : 14) : board.positionCore.pieceAt[move.endPlace]) : 0;
     const bool movingKing = moving == 6 || moving == 14;
     if (!castle && move.promotionPiece > 0)
     {
@@ -172,7 +172,7 @@ void NNUEEvaluator::UpdateAfterMove(Board& board, const Move& move, const NNUESt
         rebuildAnchor(oldBlack, false, board.nnueState.blackAccumulator);
     }
     else if (!castle && !movingKing) {
-        int piece = board.mainBoard[move.endPlace];
+        int piece = board.positionCore.pieceAt[move.endPlace];
         if (move.promotionPiece > 0) piece = move.promotionPiece;
         int oldPiece = (move.promotionPiece > 0) ? (piece > 8 ? 9 : 1) : piece;
         apply(oldWhite, true, oldPiece, move.beginPlace, -1.0f, board.nnueState.whiteAccumulator);
@@ -191,8 +191,8 @@ void NNUEEvaluator::UpdateAfterMove(Board& board, const Move& move, const NNUESt
         }
     } else if (movingKing || castle) {
         const bool white = moverWhite;
-        if (white) { rebuildAnchor(board.pieces[6].front(), true, board.nnueState.whiteAccumulator); board.nnueState.whiteKingSquare = board.pieces[6].front(); }
-        else { rebuildAnchor(board.pieces[14].front(), false, board.nnueState.blackAccumulator); board.nnueState.blackKingSquare = board.pieces[14].front(); }
+        if (white) { rebuildAnchor(board.positionCore.kingSquare[0], true, board.nnueState.whiteAccumulator); board.nnueState.whiteKingSquare = board.positionCore.kingSquare[0]; }
+        else { rebuildAnchor(board.positionCore.kingSquare[1], false, board.nnueState.blackAccumulator); board.nnueState.blackKingSquare = board.positionCore.kingSquare[1]; }
         if (castle) {
             int oldRook = white ? 4 : 12;
             int oldSq = move.beginPlace + ((move.CastleFlag & (Option::PowerTwo[3] | Option::PowerTwo[1])) ? 3 : -4);
@@ -202,8 +202,8 @@ void NNUEEvaluator::UpdateAfterMove(Board& board, const Move& move, const NNUESt
             apply(anchor, !white, oldRook, oldSq, -1.0f, opposite); apply(anchor, !white, oldRook, newSq, 1.0f, opposite);
         }
     }
-    board.nnueState.whiteKingSquare = board.pieces[6].front();
-    board.nnueState.blackKingSquare = board.pieces[14].front();
+    board.nnueState.whiteKingSquare = board.positionCore.kingSquare[0];
+    board.nnueState.blackKingSquare = board.positionCore.kingSquare[1];
     board.nnueState.initialized = true;
     profile.updateMs += std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-t).count();
 }
