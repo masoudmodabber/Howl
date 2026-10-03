@@ -2060,8 +2060,6 @@ void MoveLogic::ScoreAndSortMoves(Board& thisBoard, MoveList& moveList, int dept
         Move& move = moveList[i];
         ScoreMove(thisBoard, move, whiteAttacker, blackAttacker);
     }
-    std::sort(moveList.begin(), moveList.end(), [](const Move& a, const Move& b)
-              { return b.value < a.value; });
 }
 
 void MoveLogic::ScoreMove(Board& thisBoard, Move& move, const AttackerState& whiteAttacker, const AttackerState& blackAttacker)

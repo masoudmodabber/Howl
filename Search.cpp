@@ -201,6 +201,10 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     }
     int MultiPV = Option::MultiPV;
     MoveList moveList = MoveLogic::MoveGenerator(board4, -1, -1);
+    std::stable_sort(moveList.begin(), moveList.end(),
+                     [](const Move& a, const Move& b) {
+                         return a.value > b.value;
+                     });
     if (moveList.count == 0)
     {
         active = false;
