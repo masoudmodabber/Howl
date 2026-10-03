@@ -3,152 +3,77 @@
 #include <crtdbg.h>
 #endif
 #include "BoardLogic.h"
-#include "MyList.h"
+#include "PositionCore.h"
 
-bool BoardLogic::UnderAttack(Board &thisBoard, int position, bool attackerSide)
+static bool UnderAttackCore(Board &thisBoard, int position, bool attackerSide)
 {
-    long long wholeBoard = thisBoard.whitePieces | thisBoard.blackPieces;
-    const long long posBit = Option::PowerTwo[position];
-    if (!attackerSide)
+    const PositionCore& core = thisBoard.positionCore;
+    const Bitboard wholeBoard = core.colourOccupancy[0] | core.colourOccupancy[1];
+    const Bitboard positionBit = Option::PowerTwo[position];
+    const int colour = attackerSide ? 1 : 0;
+    const Bitboard attackers = core.colourOccupancy[colour];
+
+    const Bitboard pawns = core.pieceOccupancy[0] & attackers;
+    if (pawns != 0)
     {
-        for (int piece = 1; piece < 7; piece++)
+        const Bitboard reversePawnAttacks = attackerSide
+            ? static_cast<Bitboard>(AttackPlaces::WhitePawnAttackPlaces[position])
+            : static_cast<Bitboard>(AttackPlaces::BlackPawnAttackPlaces[position]);
+        if ((pawns & reversePawnAttacks) != 0)
+            return true;
+    }
+
+    const Bitboard knights = core.pieceOccupancy[1] & attackers;
+    if ((static_cast<Bitboard>(AttackPlaces::KnightAttackPlaces[position]) & knights) != 0)
+        return true;
+
+    const Bitboard bishops = core.pieceOccupancy[2] & attackers;
+    if ((static_cast<Bitboard>(AttackPlaces::BishopPseudoAttacks[position]) & bishops) != 0)
+    {
+        Bitboard pieces = bishops;
+        while (pieces != 0)
         {
-            if (thisBoard.pieces[piece].count == 0) continue;
-            switch (piece)
-            {
-            case 1:
-                if ((AttackPlaces::BlackPawnAttackPlaces[position] & thisBoard.whitePawns) == 0) break;
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    if ((AttackPlaces::WhitePawnAttackPlaces[piecePosition] & posBit) != 0)
-                    {
-                        return true;
-                    }
-                }
-                break;
-            case 2:
-                if ((AttackPlaces::KnightAttackPlaces[position] & thisBoard.whitePieces) == 0) break;
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    if ((AttackPlaces::KnightAttackPlaces[piecePosition] & posBit) != 0)
-                    {
-                        return true;
-                    }
-                }
-                break;
-            case 3:
-                if ((AttackPlaces::BishopPseudoAttacks[position] & thisBoard.whitePieces) == 0) break;
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    if ((AttackPlaces::BishopAttack[piecePosition][position] & wholeBoard) == posBit)
-                    {
-                        return true;
-                    }
-                }
-                break;
-            case 4:
-                if ((AttackPlaces::RookPseudoAttacks[position] & thisBoard.whitePieces) == 0) break;
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    if ((AttackPlaces::RookAttack[piecePosition][position] & wholeBoard) == posBit)
-                    {
-                        return true;
-                    }
-                }
-                break;
-            case 5:
-                if ((AttackPlaces::QueenPseudoAttacks[position] & thisBoard.whitePieces) == 0) break;
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    if ((AttackPlaces::QueenAttack[piecePosition][position] & wholeBoard) == posBit)
-                    {
-                        return true;
-                    }
-                }
-                break;
-            case 6:
-                if ((AttackPlaces::KingAttackPlaces[position] & thisBoard.whitePieces) == 0) break;
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    if ((AttackPlaces::KingAttackPlaces[piecePosition] & posBit) != 0)
-                    {
-                        return true;
-                    }
-                }
-                break;
-            }
+            const int from = __builtin_ctzll(pieces);
+            pieces &= pieces - 1;
+            if ((static_cast<Bitboard>(AttackPlaces::BishopAttack[from][position]) & wholeBoard) == positionBit)
+                return true;
         }
     }
-    // else part
-    else
+
+    const Bitboard rooks = core.pieceOccupancy[3] & attackers;
+    if ((static_cast<Bitboard>(AttackPlaces::RookPseudoAttacks[position]) & rooks) != 0)
     {
-        for (int piece = 9; piece < 15; piece++)
+        Bitboard pieces = rooks;
+        while (pieces != 0)
         {
-            if (thisBoard.pieces[piece].count == 0) continue;
-            switch (piece)
-            {
-            case 9:
-                if ((AttackPlaces::WhitePawnAttackPlaces[position] & thisBoard.blackPawns) == 0) break;
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    if ((AttackPlaces::BlackPawnAttackPlaces[piecePosition] & posBit) != 0)
-                    {
-                        return true;
-                    }
-                }
-                break;
-            case 10:
-                if ((AttackPlaces::KnightAttackPlaces[position] & thisBoard.blackPieces) == 0) break;
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    if ((AttackPlaces::KnightAttackPlaces[piecePosition] & posBit) != 0)
-                    {
-                        return true;
-                    }
-                }
-                break;
-            case 11:
-                if ((AttackPlaces::BishopPseudoAttacks[position] & thisBoard.blackPieces) == 0) break;
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    if ((AttackPlaces::BishopAttack[piecePosition][position] & wholeBoard) == posBit)
-                    {
-                        return true;
-                    }
-                }
-                break;
-            case 12:
-                if ((AttackPlaces::RookPseudoAttacks[position] & thisBoard.blackPieces) == 0) break;
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    if ((AttackPlaces::RookAttack[piecePosition][position] & wholeBoard) == posBit)
-                    {
-                        return true;
-                    }
-                }
-                break;
-            case 13:
-                if ((AttackPlaces::QueenPseudoAttacks[position] & thisBoard.blackPieces) == 0) break;
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    if ((AttackPlaces::QueenAttack[piecePosition][position] & wholeBoard) == posBit)
-                    {
-                        return true;
-                    }
-                }
-                break;
-            case 14:
-                if ((AttackPlaces::KingAttackPlaces[position] & thisBoard.blackPieces) == 0) break;
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    if ((AttackPlaces::KingAttackPlaces[piecePosition] & posBit) != 0)
-                    {
-                        return true;
-                    }
-                }
-                break;
-            }
+            const int from = __builtin_ctzll(pieces);
+            pieces &= pieces - 1;
+            if ((static_cast<Bitboard>(AttackPlaces::RookAttack[from][position]) & wholeBoard) == positionBit)
+                return true;
         }
     }
+
+    const Bitboard queens = core.pieceOccupancy[4] & attackers;
+    if ((static_cast<Bitboard>(AttackPlaces::QueenPseudoAttacks[position]) & queens) != 0)
+    {
+        Bitboard pieces = queens;
+        while (pieces != 0)
+        {
+            const int from = __builtin_ctzll(pieces);
+            pieces &= pieces - 1;
+            if ((static_cast<Bitboard>(AttackPlaces::QueenAttack[from][position]) & wholeBoard) == positionBit)
+                return true;
+        }
+    }
+
+    const Bitboard kings = core.pieceOccupancy[5] & attackers;
+    if ((static_cast<Bitboard>(AttackPlaces::KingAttackPlaces[position]) & kings) != 0)
+        return true;
+
     return false;
+}
+
+bool BoardLogic::UnderAttack(Board& board, int position, bool attackerSide)
+{
+    return UnderAttackCore(board, position, attackerSide);
 }

@@ -16,6 +16,14 @@
 #include "PositionCore.h"
 #include <algorithm>
 
+namespace
+{
+bool UsePositionCoreHotState()
+{
+    return Search::active.load(std::memory_order_relaxed);
+}
+}
+
 void GameLogic::HaveReachedToMoveSequence(Move &move, Move &prevMove, int depth, int depthGone)
 {
     if (move.beginPlace == 8 && move.endPlace == 16 && depth == 1 && depthGone == 2)
@@ -35,6 +43,8 @@ void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int dep
         HaveReachedToMoveSequence(thisMove, prevMove, depth, depthGone);
     int beginPlace = thisMove.beginPlace;
     Search::moveCount++;
+    if (missingInfo != nullptr && UsePositionCoreHotState())
+        PositionCoreLogic::PrepareMove(thisBoard, thisMove, *missingInfo);
     if (thisMove.promotionPiece >= 0)
     {
         if ((thisMove.CastleFlag & Option::PowerTwo[3]) != 0)
@@ -86,11 +96,11 @@ void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int dep
     const NNUEState& activeSnapshot = (thisBoard.nnueHistory->snapshotCount > 0)
         ? thisBoard.nnueHistory->snapshots[thisBoard.nnueHistory->snapshotCount - 1]
         : thisBoard.nnueState;
+    PositionCoreLogic::UpdateAfterMove(thisBoard, thisMove, movingWhite, missingInfo);
     if (!useStructured)
         NNUEEvaluator::UpdateAfterMove(thisBoard, thisMove, activeSnapshot);
     if (useStructured) ExperimentalEvaluator::UpdateStructuredAfterMove(thisBoard,thisMove,activeSnapshot);
     RepetitionHistory::Push(thisBoard.ZobristHashCode);
-    PositionCoreLogic::UpdateAfterMove(thisBoard, thisMove, movingWhite);
 #if defined(HOWL_POSITION_CORE_VERIFY) && HOWL_POSITION_CORE_VERIFY
     PositionCoreLogic::Verify(thisBoard, &thisMove, "DoMove");
 #endif
@@ -172,6 +182,15 @@ void GameLogic::SimpleMove(Board &thisBoard, Move &thisMove)
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
     int beginPiece = thisBoard.mainBoard[beginPlace];
+    if (UsePositionCoreHotState())
+    {
+        thisBoard.mainBoard[beginPlace] = 0;
+        thisBoard.mainBoard[endPlace] = beginPiece;
+        thisBoard.pieces[beginPiece].replace(beginPlace, endPlace);
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][endPlace];
+        return;
+    }
     thisBoard.mainBoard[beginPlace] = 0;
     thisBoard.mainBoard[endPlace] = beginPiece;
     thisBoard.pieces[beginPiece].replace(beginPlace, endPlace);
@@ -195,6 +214,17 @@ void GameLogic::Capture(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevSt
     int endPlace = thisMove.endPlace;
     int beginPiece = thisBoard.mainBoard[beginPlace];
     int endPiece = thisMove.endPiece;
+    if (UsePositionCoreHotState())
+    {
+        thisBoard.mainBoard[beginPlace] = 0;
+        thisBoard.mainBoard[endPlace] = beginPiece;
+        thisBoard.pieces[beginPiece].replace(beginPlace, endPlace);
+        thisBoard.pieces[endPiece].erase(endPlace);
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][endPlace];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[endPiece][endPlace];
+        return;
+    }
     thisBoard.mainBoard[beginPlace] = 0;
     thisBoard.mainBoard[endPlace] = beginPiece;
 
@@ -233,6 +263,8 @@ void GameLogic::Capture(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevSt
 
 void GameLogic::BoardPawnListsUpdate(Board &thisBoard, Move &thisMove)
 {
+    if (UsePositionCoreHotState())
+        return;
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
     int beginPiece = thisBoard.mainBoard[beginPlace];
@@ -293,6 +325,20 @@ void GameLogic::Promote(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevSt
     int endPlace = thisMove.endPlace;
     int beginPiece = thisBoard.mainBoard[beginPlace];
     int endPiece = thisMove.endPiece;
+    if (UsePositionCoreHotState())
+    {
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
+        thisBoard.mainBoard[beginPlace] = 0;
+        thisBoard.mainBoard[endPlace] = thisMove.promotionPiece;
+        thisBoard.pieces[beginPiece].erase(beginPlace);
+        thisBoard.pieces[thisMove.promotionPiece].push_back(endPlace);
+        if ((thisMove.PublicFlag & Option::PowerTwo[7]) != 0)
+            thisBoard.pieces[endPiece].erase(endPlace);
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[thisMove.promotionPiece][endPlace];
+        if ((thisMove.PublicFlag & Option::PowerTwo[7]) != 0)
+            thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[endPiece][endPlace];
+        return;
+    }
     if (beginPiece == 1)
     {
         thisBoard.whitePawns &= Option::PowerTwoComplement[beginPlace];
@@ -371,6 +417,15 @@ void GameLogic::UnSimpleMove(Board &thisBoard, Move &thisMove)
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
     int beginPiece = thisBoard.mainBoard[endPlace];
+    if (UsePositionCoreHotState())
+    {
+        thisBoard.mainBoard[beginPlace] = beginPiece;
+        thisBoard.mainBoard[endPlace] = 0;
+        thisBoard.pieces[beginPiece].replace(endPlace, beginPlace);
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][endPlace];
+        return;
+    }
     thisBoard.mainBoard[beginPlace] = beginPiece;
     thisBoard.mainBoard[endPlace] = 0;
     thisBoard.pieces[beginPiece].replace(endPlace, beginPlace);
@@ -394,6 +449,20 @@ void GameLogic::UnCapture(Board &thisBoard, Move &thisMove, const MissingInfoAbo
     int endPlace = thisMove.endPlace;
     int beginPiece = thisBoard.mainBoard[endPlace];
     int endPiece = thisMove.endPiece;
+    if (UsePositionCoreHotState())
+    {
+        thisBoard.mainBoard[beginPlace] = beginPiece;
+        thisBoard.mainBoard[endPlace] = endPiece;
+        thisBoard.pieces[beginPiece].replace(endPlace, beginPlace);
+        if (missingInfo.capturedPieceIndex >= 0)
+            thisBoard.pieces[endPiece].insert(missingInfo.capturedPieceIndex, endPlace);
+        else
+            thisBoard.pieces[endPiece].push_back(endPlace);
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][endPlace];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[endPiece][endPlace];
+        return;
+    }
     thisBoard.mainBoard[beginPlace] = beginPiece;
     thisBoard.mainBoard[endPlace] = endPiece;
     thisBoard.pieces[beginPiece].replace(endPlace, beginPlace);
@@ -430,6 +499,28 @@ void GameLogic::UnPromote(Board &thisBoard, Move &thisMove, const MissingInfoAbo
     int beginPiece = thisBoard.mainBoard[endPlace];
     beginPiece = beginPiece > 8 ? 9 : 1;
     int endPiece = thisMove.endPiece;
+    if (UsePositionCoreHotState())
+    {
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[thisMove.promotionPiece][endPlace];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
+        if ((thisMove.PublicFlag & Option::PowerTwo[7]) != 0)
+            thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[endPiece][endPlace];
+        thisBoard.mainBoard[beginPlace] = beginPiece;
+        thisBoard.mainBoard[endPlace] = (thisMove.PublicFlag & Option::PowerTwo[7]) != 0 ? endPiece : 0;
+        thisBoard.pieces[thisMove.promotionPiece].erase(endPlace);
+        if (missingInfo.movedPieceIndex >= 0)
+            thisBoard.pieces[beginPiece].insert(missingInfo.movedPieceIndex, beginPlace);
+        else
+            thisBoard.pieces[beginPiece].push_back(beginPlace);
+        if ((thisMove.PublicFlag & Option::PowerTwo[7]) != 0)
+        {
+            if (missingInfo.capturedPieceIndex >= 0)
+                thisBoard.pieces[endPiece].insert(missingInfo.capturedPieceIndex, endPlace);
+            else
+                thisBoard.pieces[endPiece].push_back(endPlace);
+        }
+        return;
+    }
     if (beginPiece == 1)
     {
         thisBoard.whitePawns |= Option::PowerTwo[beginPlace];
@@ -501,6 +592,22 @@ void GameLogic::UnUnpassent(Board &thisBoard, Move &thisMove, const MissingInfoA
     int endPlace = thisMove.endPlace;
     int beginPiece = thisBoard.mainBoard[endPlace];
     int endPiece = thisMove.endPiece;
+    if (UsePositionCoreHotState())
+    {
+        const int capturedSquare = endPlace + (beginPiece == 1 ? -8 : 8);
+        thisBoard.mainBoard[beginPlace] = beginPiece;
+        thisBoard.mainBoard[endPlace] = 0;
+        thisBoard.mainBoard[capturedSquare] = endPiece;
+        thisBoard.pieces[beginPiece].replace(endPlace, beginPlace);
+        if (missingInfo.capturedPieceIndex >= 0)
+            thisBoard.pieces[endPiece].insert(missingInfo.capturedPieceIndex, capturedSquare);
+        else
+            thisBoard.pieces[endPiece].push_back(capturedSquare);
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][beginPlace];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[beginPiece][endPlace];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[endPiece][capturedSquare];
+        return;
+    }
     if (beginPiece == 1)
     {
         thisBoard.whitePawns |= Option::PowerTwo[beginPlace];
@@ -555,6 +662,20 @@ void GameLogic::UnBlackLeftCastle(Board &thisBoard, Move &thisMove)
 {
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
+    if (UsePositionCoreHotState())
+    {
+        thisBoard.mainBoard[beginPlace] = 14;
+        thisBoard.mainBoard[beginPlace - 4] = 12;
+        thisBoard.mainBoard[beginPlace - 2] = 0;
+        thisBoard.mainBoard[beginPlace - 1] = 0;
+        thisBoard.pieces[12].replace(beginPlace - 1, beginPlace - 4);
+        thisBoard.pieces[14].replace(beginPlace - 2, beginPlace);
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[12][beginPlace - 4];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[12][beginPlace - 1];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[14][beginPlace];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[14][beginPlace - 2];
+        return;
+    }
     thisBoard.mainBoard[beginPlace] = 14;
     thisBoard.mainBoard[beginPlace - 4] = 12;
     thisBoard.mainBoard[beginPlace - 2] = 0;
@@ -575,6 +696,20 @@ void GameLogic::UnBlackRightCastle(Board &thisBoard, Move &thisMove)
 {
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
+    if (UsePositionCoreHotState())
+    {
+        thisBoard.mainBoard[beginPlace] = 14;
+        thisBoard.mainBoard[beginPlace + 3] = 12;
+        thisBoard.mainBoard[beginPlace + 2] = 0;
+        thisBoard.mainBoard[beginPlace + 1] = 0;
+        thisBoard.pieces[12].replace(beginPlace + 1, beginPlace + 3);
+        thisBoard.pieces[14].replace(beginPlace + 2, beginPlace);
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[12][beginPlace + 3];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[12][beginPlace + 1];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[14][beginPlace];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[14][beginPlace + 2];
+        return;
+    }
     thisBoard.mainBoard[beginPlace] = 14;
     thisBoard.mainBoard[beginPlace + 3] = 12;
     thisBoard.mainBoard[beginPlace + 2] = 0;
@@ -595,6 +730,20 @@ void GameLogic::UnWhiteLeftCastle(Board &thisBoard, Move &thisMove)
 {
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
+    if (UsePositionCoreHotState())
+    {
+        thisBoard.mainBoard[beginPlace] = 6;
+        thisBoard.mainBoard[beginPlace - 4] = 4;
+        thisBoard.mainBoard[beginPlace - 2] = 0;
+        thisBoard.mainBoard[beginPlace - 1] = 0;
+        thisBoard.pieces[4].replace(beginPlace - 1, beginPlace - 4);
+        thisBoard.pieces[6].replace(beginPlace - 2, beginPlace);
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[4][beginPlace - 4];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[4][beginPlace - 1];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[6][beginPlace];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[6][beginPlace - 2];
+        return;
+    }
     thisBoard.mainBoard[beginPlace] = 6;
     thisBoard.mainBoard[beginPlace - 4] = 4;
     thisBoard.mainBoard[beginPlace - 2] = 0;
@@ -615,6 +764,20 @@ void GameLogic::UnWhiteRightCastle(Board &thisBoard, Move &thisMove)
 {
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
+    if (UsePositionCoreHotState())
+    {
+        thisBoard.mainBoard[beginPlace] = 6;
+        thisBoard.mainBoard[beginPlace + 3] = 4;
+        thisBoard.mainBoard[beginPlace + 2] = 0;
+        thisBoard.mainBoard[beginPlace + 1] = 0;
+        thisBoard.pieces[4].replace(beginPlace + 1, beginPlace + 3);
+        thisBoard.pieces[6].replace(beginPlace + 2, beginPlace);
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[4][beginPlace + 3];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[4][beginPlace + 1];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[6][beginPlace];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[6][beginPlace + 2];
+        return;
+    }
     thisBoard.mainBoard[beginPlace] = 6;
     thisBoard.mainBoard[beginPlace + 3] = 4;
     thisBoard.mainBoard[beginPlace + 2] = 0;
@@ -633,6 +796,20 @@ void GameLogic::UnWhiteRightCastle(Board &thisBoard, Move &thisMove)
 
 void GameLogic::BlackRightCastle(Board &thisBoard, int beginPlace)
 {
+    if (UsePositionCoreHotState())
+    {
+        thisBoard.mainBoard[beginPlace] = 0;
+        thisBoard.mainBoard[beginPlace + 3] = 0;
+        thisBoard.mainBoard[beginPlace + 2] = 14;
+        thisBoard.mainBoard[beginPlace + 1] = 12;
+        thisBoard.pieces[14].replace(beginPlace, beginPlace + 2);
+        thisBoard.pieces[12].replace(beginPlace + 3, beginPlace + 1);
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[12][beginPlace + 3];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[12][beginPlace + 1];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[14][beginPlace];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[14][beginPlace + 2];
+        return;
+    }
     thisBoard.mainBoard[beginPlace] = 0;
     thisBoard.mainBoard[beginPlace + 3] = 0;
     thisBoard.mainBoard[beginPlace + 2] = 14;
@@ -662,6 +839,20 @@ void GameLogic::BlackRightCastle(Board &thisBoard, int beginPlace)
 
 void GameLogic::BlackLeftCastle(Board &thisBoard, int beginPlace)
 {
+    if (UsePositionCoreHotState())
+    {
+        thisBoard.mainBoard[beginPlace] = 0;
+        thisBoard.mainBoard[beginPlace - 4] = 0;
+        thisBoard.mainBoard[beginPlace - 2] = 14;
+        thisBoard.mainBoard[beginPlace - 1] = 12;
+        thisBoard.pieces[14].replace(beginPlace, beginPlace - 2);
+        thisBoard.pieces[12].replace(beginPlace - 4, beginPlace - 1);
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[12][beginPlace - 4];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[12][beginPlace - 1];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[14][beginPlace];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[14][beginPlace - 2];
+        return;
+    }
     thisBoard.mainBoard[beginPlace] = 0;
     thisBoard.mainBoard[beginPlace - 4] = 0;
     thisBoard.mainBoard[beginPlace - 2] = 14;
@@ -691,6 +882,20 @@ void GameLogic::BlackLeftCastle(Board &thisBoard, int beginPlace)
 
 void GameLogic::WhiteLeftCastle(Board &thisBoard, int beginPlace)
 {
+    if (UsePositionCoreHotState())
+    {
+        thisBoard.mainBoard[beginPlace] = 0;
+        thisBoard.mainBoard[beginPlace - 4] = 0;
+        thisBoard.mainBoard[beginPlace - 2] = 6;
+        thisBoard.mainBoard[beginPlace - 1] = 4;
+        thisBoard.pieces[6].replace(beginPlace, beginPlace - 2);
+        thisBoard.pieces[4].replace(beginPlace - 4, beginPlace - 1);
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[6][beginPlace];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[4][beginPlace - 4];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[6][beginPlace - 2];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[4][beginPlace - 1];
+        return;
+    }
     thisBoard.mainBoard[beginPlace] = 0;
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[6][beginPlace];
     thisBoard.mainBoard[beginPlace - 4] = 0;
@@ -719,6 +924,20 @@ void GameLogic::WhiteLeftCastle(Board &thisBoard, int beginPlace)
 
 void GameLogic::WhiteRightCastle(Board &thisBoard, int beginPlace)
 {
+    if (UsePositionCoreHotState())
+    {
+        thisBoard.mainBoard[beginPlace] = 0;
+        thisBoard.mainBoard[beginPlace + 3] = 0;
+        thisBoard.mainBoard[beginPlace + 2] = 6;
+        thisBoard.mainBoard[beginPlace + 1] = 4;
+        thisBoard.pieces[6].replace(beginPlace, beginPlace + 2);
+        thisBoard.pieces[4].replace(beginPlace + 3, beginPlace + 1);
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[6][beginPlace];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[4][beginPlace + 3];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[6][beginPlace + 2];
+        thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[4][beginPlace + 1];
+        return;
+    }
     thisBoard.mainBoard[beginPlace] = 0;
     thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[6][beginPlace];
     thisBoard.mainBoard[beginPlace + 3] = 0;
@@ -871,7 +1090,7 @@ void GameLogic::UndoMove(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevS
     {
         --thisBoard.nnueHistory->snapshotCount;
     }
-    PositionCoreLogic::UpdateAfterUndo(thisBoard, thisMove, movingWhite);
+    PositionCoreLogic::UpdateAfterUndo(thisBoard, thisMove, movingWhite, missingInfo);
 #if defined(HOWL_POSITION_CORE_VERIFY) && HOWL_POSITION_CORE_VERIFY
     PositionCoreLogic::Verify(thisBoard, &thisMove, "UndoMove");
 #endif
@@ -933,6 +1152,8 @@ void GameLogic::UnSetCastleFlags(Board& thisBoard, Move& thisMove, bool previous
 
 void GameLogic::UnBoardPawnListsUpdate(Board& thisBoard, Move& thisMove)
 {
+    if (UsePositionCoreHotState())
+        return;
     int beginPlace = thisMove.beginPlace;
     int endPlace = thisMove.endPlace;
     int beginPiece = thisBoard.mainBoard[endPlace];

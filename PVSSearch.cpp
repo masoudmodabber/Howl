@@ -349,7 +349,7 @@ namespace
     void UpdateCaptureHistory(const Board& board, const Move& move, int depth,
                               bool success)
     {
-        const int movingPiece = std::clamp(board.mainBoard[move.beginPlace], 0, 14);
+        const int movingPiece = std::clamp(static_cast<int>(board.positionCore.pieceAt[move.beginPlace]), 0, 14);
         const int capturedPiece = std::clamp(move.endPiece % 8, 0, 6);
         int& score = captureHistory[movingPiece][move.endPlace][capturedPiece];
         const int magnitude = StatBonus(depth);
@@ -390,7 +390,7 @@ namespace
             PVSSearch::RecordKiller(ply, move);
             UpdateHistoryByBonus(side, move, bonus2);
             UpdateContinuationHistoriesByBonus(
-                ply, board.mainBoard[move.beginPlace], move, bonus2);
+                ply, board.positionCore.pieceAt[move.beginPlace], move, bonus2);
             StoreCounterMove(board, ply, move);
             const Move* previous = StackMove(ply);
             if (previous &&
@@ -409,10 +409,10 @@ namespace
                 {
                     UpdateHistoryByBonus(side, *prior, -bonus2);
                     UpdateContinuationHistoriesByBonus(
-                        ply, board.mainBoard[prior->beginPlace], *prior, -bonus2);
+                        ply, board.positionCore.pieceAt[prior->beginPlace], *prior, -bonus2);
                 }
             }
-            if (board.mainBoard[move.beginPlace] % 8 != 1)
+            if (board.positionCore.pieceAt[move.beginPlace] % 8 != 1)
             {
                 Move reverse = move;
                 std::swap(reverse.beginPlace, reverse.endPlace);
@@ -421,7 +421,7 @@ namespace
         }
         else
         {
-            const int movingPiece = std::clamp(board.mainBoard[move.beginPlace], 0, 14);
+            const int movingPiece = std::clamp(static_cast<int>(board.positionCore.pieceAt[move.beginPlace]), 0, 14);
             const int capturedPiece = std::clamp(move.endPiece % 8, 0, 6);
             int& winning = captureHistory[movingPiece][move.endPlace][capturedPiece];
             winning += bonus1 - winning * std::abs(bonus1) / CaptureHistoryLimit;
@@ -430,7 +430,7 @@ namespace
                 Move* prior = searchedCaptures[i];
                 if (prior != &move)
                 {
-                    const int priorPiece = std::clamp(board.mainBoard[prior->beginPlace], 0, 14);
+                    const int priorPiece = std::clamp(static_cast<int>(board.positionCore.pieceAt[prior->beginPlace]), 0, 14);
                     const int priorCaptured = std::clamp(prior->endPiece % 8, 0, 6);
                     int& failed = captureHistory[priorPiece][prior->endPlace][priorCaptured];
                     failed += -bonus1 - failed * std::abs(bonus1) / CaptureHistoryLimit;
@@ -799,9 +799,9 @@ namespace
                 return false;
             const int from = TTMoveHelper::UnpackFrom(packedTTMove);
             const int to = TTMoveHelper::UnpackTo(packedTTMove);
-            if (TTMoveHelper::UnpackPromotion(packedTTMove) != 0 || board.mainBoard[to] != 0)
+            if (TTMoveHelper::UnpackPromotion(packedTTMove) != 0 || board.positionCore.pieceAt[to] != 0)
                 return true;
-            return board.mainBoard[from] % 8 == 1 && to == board.unpassentPlace;
+            return board.positionCore.pieceAt[from] % 8 == 1 && to == board.unpassentPlace;
         }
 
         void PrepareTT()
@@ -833,7 +833,7 @@ namespace
                 if (index >= 0)
                 {
                     Move& m = GetMove(entries[index]);
-                    const int movingPiece = board.mainBoard[m.beginPlace];
+                    const int movingPiece = board.positionCore.pieceAt[m.beginPlace];
                     const int capturedPiece = m.endPiece;
                     static constexpr int MgValue[7] = {0, 100, 320, 330, 500, 900, 0};
                     const int victimType = capturedPiece % 8;
@@ -946,7 +946,7 @@ namespace
                 if (entries[index].returned || IsKiller(m))
                     continue;
                 Score(index);
-                const int currentPiece = board.mainBoard[m.beginPlace];
+                const int currentPiece = board.positionCore.pieceAt[m.beginPlace];
                 entries[index].key = QuietOrderingScore(
                     turn, depthGone, currentPiece, m);
                 if (entries[index].key >=
@@ -997,17 +997,17 @@ namespace
     bool NullMoveMaterialEligible(const Board &board, int turn)
     {
         const int minorPieceCount =
-            static_cast<int>(board.pieces[turn * 8 + 2].size() +
-                             board.pieces[turn * 8 + 3].size());
+            static_cast<int>(PositionCorePieceListsView{board.positionCore}[turn * 8 + 2].size() +
+                             PositionCorePieceListsView{board.positionCore}[turn * 8 + 3].size());
         const bool hasNonPawn = minorPieceCount > 0 ||
-            board.pieces[turn * 8 + 4].size() > 0 ||
-            board.pieces[turn * 8 + 5].size() > 0;
+            PositionCorePieceListsView{board.positionCore}[turn * 8 + 4].size() > 0 ||
+            PositionCorePieceListsView{board.positionCore}[turn * 8 + 5].size() > 0;
         return hasNonPawn;
     }
 
     bool IsAdvancedPassedPawnPush(const Board& board, const Move& move, int side)
     {
-        if (board.mainBoard[move.beginPlace] % 8 != 1 || move.endPiece != 0)
+        if (board.positionCore.pieceAt[move.beginPlace] % 8 != 1 || move.endPiece != 0)
             return false;
         const int rank = move.endPlace / 8;
         if ((side == 0 && rank < 5) || (side == 1 && rank > 2))
@@ -1022,7 +1022,7 @@ namespace
             {
                 const int targetFile = file + df;
                 if (targetFile >= 0 && targetFile < 8 &&
-                    board.mainBoard[row * 8 + targetFile] == enemyPawn)
+                    board.positionCore.pieceAt[row * 8 + targetFile] == enemyPawn)
                     return false;
             }
         }
@@ -1036,10 +1036,10 @@ namespace
         int nonPawnMaterial = 0;
         for (int sideOffset : {0, 8})
         {
-            nonPawnMaterial += static_cast<int>(board.pieces[sideOffset + 2].size()) * Option::KnightValue;
-            nonPawnMaterial += static_cast<int>(board.pieces[sideOffset + 3].size()) * Option::BishopValue;
-            nonPawnMaterial += static_cast<int>(board.pieces[sideOffset + 4].size()) * Option::RookValue;
-            nonPawnMaterial += static_cast<int>(board.pieces[sideOffset + 5].size()) * Option::QueenValue;
+            nonPawnMaterial += static_cast<int>(PositionCorePieceListsView{board.positionCore}[sideOffset + 2].size()) * Option::KnightValue;
+            nonPawnMaterial += static_cast<int>(PositionCorePieceListsView{board.positionCore}[sideOffset + 3].size()) * Option::BishopValue;
+            nonPawnMaterial += static_cast<int>(PositionCorePieceListsView{board.positionCore}[sideOffset + 4].size()) * Option::RookValue;
+            nonPawnMaterial += static_cast<int>(PositionCorePieceListsView{board.positionCore}[sideOffset + 5].size()) * Option::QueenValue;
         }
         static const int values[7] = {0, Option::PawnValue, Option::KnightValue,
             Option::BishopValue, Option::RookValue, Option::QueenValue, 0};
@@ -1051,17 +1051,17 @@ namespace
     {
         const bool movingWhite = !board.sideToMove;
         const int enemyKingIndex = movingWhite ? 14 : 6;
-        if (board.pieces[enemyKingIndex].count == 0)
+        if (PositionCorePieceListsView{board.positionCore}[enemyKingIndex].count == 0)
             return false;
-        const int kingSquare = board.pieces[enemyKingIndex].front();
+        const int kingSquare = PositionCorePieceListsView{board.positionCore}[enemyKingIndex].front();
         const long long kingBit = Option::PowerTwo[kingSquare];
-        long long occupancy = (board.whitePieces | board.blackPieces) &
+        long long occupancy = (PositionCoreLogic::WhiteOccupancy(board.positionCore) | PositionCoreLogic::BlackOccupancy(board.positionCore)) &
             ~Option::PowerTwo[move.beginPlace];
         occupancy |= Option::PowerTwo[move.endPlace];
         if ((move.PublicFlag & Option::PowerTwo[6]) != 0)
             occupancy &= ~Option::PowerTwo[move.endPlace + (movingWhite ? -8 : 8)];
         const int piece = move.promotionPiece > 0
-            ? move.promotionPiece % 8 : board.mainBoard[move.beginPlace] % 8;
+            ? move.promotionPiece % 8 : board.positionCore.pieceAt[move.beginPlace] % 8;
         switch (piece)
         {
         case 1:
@@ -1107,7 +1107,7 @@ void PVSSearch::ResetHistory()
 int PVSSearch::QCaptureOrderingScore(const Board& board, const Move& move)
 {
     static constexpr int value[7] = {0, 100, 350, 350, 550, 975, 2500};
-    const int movingPiece = std::clamp(board.mainBoard[move.beginPlace], 0, 14);
+    const int movingPiece = std::clamp(static_cast<int>(board.positionCore.pieceAt[move.beginPlace]), 0, 14);
     const int capturedPiece = std::clamp(move.endPiece % 8, 0, 6);
     return SearchParameters::MoveOrdering::CaptureVictimMultiplier * value[capturedPiece] +
         captureHistory[movingPiece][move.endPlace][capturedPiece];
@@ -1116,7 +1116,7 @@ int PVSSearch::QCaptureOrderingScore(const Board& board, const Move& move)
 int PVSSearch::QQuietEvasionOrderingScore(int side, int ply,
                                            const Board& board, const Move& move)
 {
-    const int movingPiece = std::clamp(board.mainBoard[move.beginPlace], 1, 14);
+    const int movingPiece = std::clamp(static_cast<int>(board.positionCore.pieceAt[move.beginPlace]), 1, 14);
     return HistoryScore(side, move) +
         ContinuationHistoryScoreAt(ply, 1, movingPiece, move);
 }
@@ -1577,10 +1577,10 @@ void RecordNullMoveAttempt(int depth, int R, int staticMargin, const Board &boar
     else g_nullMoveStats.margin300Plus.recordAttempt(isCutoff, isVerified);
 
     // Material Class
-    int knights = board.pieces[turn * 8 + 2].size();
-    int bishops = board.pieces[turn * 8 + 3].size();
-    int rooks = board.pieces[turn * 8 + 4].size();
-    int queens = board.pieces[turn * 8 + 5].size();
+    int knights = PositionCorePieceListsView{board.positionCore}[turn * 8 + 2].size();
+    int bishops = PositionCorePieceListsView{board.positionCore}[turn * 8 + 3].size();
+    int rooks = PositionCorePieceListsView{board.positionCore}[turn * 8 + 4].size();
+    int queens = PositionCorePieceListsView{board.positionCore}[turn * 8 + 5].size();
     int totalNonPawnCount = knights + bishops + rooks + queens;
 
     if (queens > 0) g_nullMoveStats.matQueen.recordAttempt(isCutoff, isVerified);
@@ -1717,7 +1717,7 @@ void UpdateCounterMove(const Board& board, const Move& move)
 int CaptureOrder(const Board& b, const Move& m)
 {
     static constexpr int v[7]={0,100,350,350,550,975,2500};
-    const int mover=b.mainBoard[m.beginPlace];
+    const int mover=b.positionCore.pieceAt[m.beginPlace];
     const int victim=m.endPiece>8?m.endPiece-8:m.endPiece;
     const int captured=std::clamp(victim,0,6);
     return SearchParameters::MoveOrdering::CaptureVictimMultiplier*v[captured]+
@@ -1791,8 +1791,8 @@ bool PackedMoveIsTactical(const Board& board, uint16_t packed)
         return false;
     const int from = TTMoveHelper::UnpackFrom(packed);
     const int to = TTMoveHelper::UnpackTo(packed);
-    return TTMoveHelper::UnpackPromotion(packed) != 0 || board.mainBoard[to] != 0 ||
-        (board.mainBoard[from] % 8 == 1 && to == board.unpassentPlace);
+    return TTMoveHelper::UnpackPromotion(packed) != 0 || board.positionCore.pieceAt[to] != 0 ||
+        (board.positionCore.pieceAt[from] % 8 == 1 && to == board.unpassentPlace);
 }
 
 int QuietOrder(int side,int ply,const Move&m)
@@ -1819,7 +1819,7 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
     if(alpha>=beta) return {alpha,{}};
 
     const int side=b.sideToMove?1:0;
-    const bool inCheck=BoardLogic::UnderAttack(b,b.pieces[side*8+6].front(),!b.sideToMove);
+    const bool inCheck=BoardLogic::UnderAttack(b,PositionCorePieceListsView{b.positionCore}[side*8+6].front(),!b.sideToMove);
     if (ply >= SearchStackSize - 1)
         return {inCheck ? 0 : ExperimentalEvaluator::Evaluate(b), {}};
     TargetSearchFrameGuard targetFrameGuard;
@@ -1828,7 +1828,7 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
     ss.ply=ply; ss.currentMove=prev;
     ss.hasCurrentMove=prev.beginPlace>=0&&prev.endPlace>=0&&prev.promotionPiece!=-1;
     if (ss.currentMovedPiece == 0 && ss.hasCurrentMove)
-        ss.currentMovedPiece = std::clamp(b.mainBoard[prev.endPlace],0,14);
+        ss.currentMovedPiece = std::clamp(static_cast<int>(b.positionCore.pieceAt[prev.endPlace]),0,14);
     ss.moveCount=0; ss.pvNode=pv;
     if(ply<PVSSearch::MaxKillerPly){ss.killer1=&PVSSearch::killers[ply][0];ss.killer2=&PVSSearch::killers[ply][1];}
 
@@ -1846,8 +1846,8 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
         (ttBound==TT_UPPER_BOUND&&ttValue<=alpha))) {
         if(tt.bestMove!=0) {
             Move tm=UnpackMove(tt.bestMove);
-            const bool quiet=b.mainBoard[tm.endPlace]==0&&tm.promotionPiece<=0;
-            const int movingPiece=std::clamp(b.mainBoard[tm.beginPlace],0,14);
+            const bool quiet=b.positionCore.pieceAt[tm.endPlace]==0&&tm.promotionPiece<=0;
+            const int movingPiece=std::clamp(static_cast<int>(b.positionCore.pieceAt[tm.beginPlace]),0,14);
             if(quiet&&ttBound==TT_LOWER_BOUND&&ttValue>=beta){
                 PVSSearch::RecordKiller(ply,tm);StoreCounterMove(b,ply,tm);
                 UpdateHistory(side,tm,depth,true);
@@ -1942,9 +1942,9 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
                                     raised-rawStaticEval);
         int tried=0;
         while(Move*c=probCutPicker.Next()){if(tried>=ProbCutMaxCandidatesBase+2*int(cutNode))break;
-            const int moved=b.mainBoard[c->beginPlace];
+            const int moved=b.positionCore.pieceAt[c->beginPlace];
             MissingInfoAboutPrevStateFromMove u(b,*c);GameLogic::DoMove(b,*c,prev,depth,ply,&u);
-            if(BoardLogic::UnderAttack(b,b.pieces[side*8+6].front(),b.sideToMove)){GameLogic::UndoMove(b,*c,u);continue;}++tried;
+            if(BoardLogic::UnderAttack(b,PositionCorePieceListsView{b.positionCore}[side*8+6].front(),b.sideToMove)){GameLogic::UndoMove(b,*c,u);continue;}++tried;
             std::unique_ptr<MovePrintValue>q(QSearcher::QSearch(false,-raised,-raised+1,*c,ply+1,0,false,0,m2,m3,prev,b,false,ply+1,true));int qs=-q->value;
             if(qs>=raised){PrepareChildStack(ply+1,*c,moved,0);TargetResult pc=TargetSearch(false,-raised,-raised+1,depth-4,*c,m2,m3,prev,b,true,ply+1,!cutNode);qs=-pc.value;}
             GameLogic::UndoMove(b,*c,u);if(qs>=raised)return {qs,{}};}
@@ -1967,7 +1967,7 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
         pruneQuiets=ply>0&&NullMoveMaterialEligible(b,side)&&
             best>MateScore::MatedAtPly(SearchStackSize-1)&&
             ss.moveCount>=FutilityMoveCount(improving,depth);
-        const int movingPiece=std::clamp(b.mainBoard[move->beginPlace],0,14);
+        const int movingPiece=std::clamp(static_cast<int>(b.positionCore.pieceAt[move->beginPlace]),0,14);
         if(!move->givesCheckComputed){move->givesCheck=MoveLogic::MoveGivesCheck(b,*move);move->givesCheckComputed=true;}
         const bool givesCheck=move->givesCheck;
         int extension=0; bool singularLMR=false;
@@ -2037,7 +2037,7 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
                        -SearchParameters::SEE::TacticalDepthMargin*depth))continue;
         }
         MissingInfoAboutPrevStateFromMove u(b,*move);GameLogic::DoMove(b,*move,prev,depth,ply,&u);
-        if(BoardLogic::UnderAttack(b,b.pieces[side*8+6].front(),b.sideToMove)){GameLogic::UndoMove(b,*move,u);--ss.moveCount;continue;}
+        if(BoardLogic::UnderAttack(b,PositionCorePieceListsView{b.positionCore}[side*8+6].front(),b.sideToMove)){GameLogic::UndoMove(b,*move,u);--ss.moveCount;continue;}
         ++legal; PrepareChildStack(ply+1,*move,movingPiece,currentStat);
         TargetResult child; int value;
         if(pv&&legal==1){child=TargetSearch(true,-beta,-alpha,childDepth,*move,m2,m3,prev,b,true,ply+1,false);value=-child.value;}
@@ -2151,7 +2151,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     mateHorizonResult->bound = SearchBound::Upper;
                 }
             };
-            const bool inCheck = BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove);
+            const bool inCheck = BoardLogic::UnderAttack(board4, PositionCorePieceListsView{board4.positionCore}[turn * 8 + 6].front(), !board4.sideToMove);
             MoveList horizonMoves = MoveLogic::MoveGenerator(board4, 0, depthGone);
             int availMoves = 0;
             for (int i = 0; i < horizonMoves.count; ++i)
@@ -2159,7 +2159,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 Move *m = &horizonMoves[i];
                 MissingInfoAboutPrevStateFromMove undo(board4, *m);
                 GameLogic::DoMove(board4, *m, prevMove, depthGone, depthGone, &undo);
-                if (!BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove))
+                if (!BoardLogic::UnderAttack(board4, PositionCorePieceListsView{board4.positionCore}[turn * 8 + 6].front(), !board4.sideToMove))
                 {
                     availMoves++;
                     GameLogic::UndoMove(board4, *m, undo);
@@ -2232,7 +2232,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
 
     bool isNullWindow = (beta - alpha <= 1);
 
-    if (BoardLogic::UnderAttack(board4, board4.pieces[(1 - turn) * 8 + 6].front(), board4.sideToMove))
+    if (BoardLogic::UnderAttack(board4, PositionCorePieceListsView{board4.positionCore}[(1 - turn) * 8 + 6].front(), board4.sideToMove))
     {
         retValue->value = 160000;
         retValue->MarkSpeculative(SearchProvenance::InvalidMove);
@@ -2254,12 +2254,12 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             return retValue;
         }
     }
-    if (depth == 1 && BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove))
+    if (depth == 1 && BoardLogic::UnderAttack(board4, PositionCorePieceListsView{board4.positionCore}[turn * 8 + 6].front(), !board4.sideToMove))
     {
         previousMoveWasCheck = true;
     }
     const bool nodeInCheck = BoardLogic::UnderAttack(
-        board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove);
+        board4, PositionCorePieceListsView{board4.positionCore}[turn * 8 + 6].front(), !board4.sideToMove);
     const uint64_t ttKey = SearchKey(board4.ZobristHashCode, ss.excludedMove);
     TTEntry ttEntry{};
     bool ttHit = TranspositionTable::Probe(ttKey, ttEntry);
@@ -2311,15 +2311,15 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
         if (cutoff && ttEntry.bestMove != 0)
         {
             Move ttMove = UnpackMove(ttEntry.bestMove);
-            const bool enPassant = board4.mainBoard[ttMove.beginPlace] % 8 == 1 &&
+            const bool enPassant = board4.positionCore.pieceAt[ttMove.beginPlace] % 8 == 1 &&
                 ttMove.endPlace == board4.unpassentPlace;
-            if (board4.mainBoard[ttMove.endPlace] == 0 &&
+            if (board4.positionCore.pieceAt[ttMove.endPlace] == 0 &&
                 ttMove.promotionPiece == 0 && !enPassant)
             {
                 const bool success = ttEntry.score >= beta;
                 UpdateHistory(turn, ttMove, depth, success);
                 UpdateContinuationHistories(depthGone,
-                    board4.mainBoard[ttMove.beginPlace], ttMove, depth, success);
+                    board4.positionCore.pieceAt[ttMove.beginPlace], ttMove, depth, success);
             }
         }
         if (ttBase == TT_EXACT && cutoff)
@@ -2442,18 +2442,18 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
         ss.statScore < SearchParameters::NullMove::StatScoreLimit && ss.excludedMove == 0)
     {
         const int nonPawnMaterialCount =
-            static_cast<int>(board4.pieces[turn * 8 + 2].size() +
-                             board4.pieces[turn * 8 + 3].size() +
-                             board4.pieces[turn * 8 + 4].size() +
-                             board4.pieces[turn * 8 + 5].size());
+            static_cast<int>(PositionCorePieceListsView{board4.positionCore}[turn * 8 + 2].size() +
+                             PositionCorePieceListsView{board4.positionCore}[turn * 8 + 3].size() +
+                             PositionCorePieceListsView{board4.positionCore}[turn * 8 + 4].size() +
+                             PositionCorePieceListsView{board4.positionCore}[turn * 8 + 5].size());
         int totalPieceCount = 0;
         int totalNonPawnMaterialCount = 0;
         for (int sideOffset : {0, 8})
         {
             for (int piece = 1; piece <= 6; ++piece)
-                totalPieceCount += static_cast<int>(board4.pieces[sideOffset + piece].size());
+                totalPieceCount += static_cast<int>(PositionCorePieceListsView{board4.positionCore}[sideOffset + piece].size());
             for (int piece = 2; piece <= 5; ++piece)
-                totalNonPawnMaterialCount += static_cast<int>(board4.pieces[sideOffset + piece].size());
+                totalNonPawnMaterialCount += static_cast<int>(PositionCorePieceListsView{board4.positionCore}[sideOffset + piece].size());
         }
         if (NullMoveMaterialEligible(board4, turn))
         {
@@ -2606,13 +2606,13 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 MissingInfoAboutPrevStateFromMove probUndo(board4, probMove);
                 GameLogic::DoMove(board4, probMove, prevMove, depthGone, depthGone, &probUndo);
                 if (BoardLogic::UnderAttack(
-                        board4, board4.pieces[turn * 8 + 6].front(), board4.sideToMove))
+                        board4, PositionCorePieceListsView{board4.positionCore}[turn * 8 + 6].front(), board4.sideToMove))
                 {
                     GameLogic::UndoMove(board4, probMove, probUndo);
                     continue;
                 }
                 const bool givesCheck = BoardLogic::UnderAttack(
-                    board4, board4.pieces[board4.sideToMove * 8 + 6].front(),
+                    board4, PositionCorePieceListsView{board4.positionCore}[board4.sideToMove * 8 + 6].front(),
                     !board4.sideToMove);
                 const bool forcing = probMove.endPiece > 0 ||
                     probMove.promotionPiece > 0 || givesCheck;
@@ -2631,7 +2631,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 if (probValue >= probBeta && !IsMateScore(probValue))
                 {
                     PrepareChildStack(depthGone + 1, probMove,
-                        board4.mainBoard[probMove.beginPlace], 0);
+                        board4.positionCore.pieceAt[probMove.beginPlace], 0);
                     std::unique_ptr<MovePrintValue> reducedResult(PVS(
                         false, -probBeta, -probBeta + 1, depth - 4, probMove,
                         move2, move3, prevMove, board4, false, true,
@@ -2696,7 +2696,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone,
                                   &singularLegalityUndo);
                 ttMoveLegal = !BoardLogic::UnderAttack(
-                    board4, board4.pieces[turn * 8 + 6].front(), board4.sideToMove);
+                    board4, PositionCorePieceListsView{board4.positionCore}[turn * 8 + 6].front(), board4.sideToMove);
                 GameLogic::UndoMove(board4, *move, singularLegalityUndo);
                 if (ttMoveLegal)
                 {
@@ -2739,7 +2739,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             {
                 moveExtension = 1;
             }
-            if (board4.mainBoard[move->beginPlace] % 8 == 6 &&
+            if (board4.positionCore.pieceAt[move->beginPlace] % 8 == 6 &&
                 std::abs(move->endPlace - move->beginPlace) == 2)
             {
                 moveExtension = 1;
@@ -2751,7 +2751,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 MissingInfoAboutPrevStateFromMove missingInfoAboutPrevStateFromMove(board4, *move);
                 GameLogic::DoMove(board4, *move, prevMove, depthGone, depthGone, &missingInfoAboutPrevStateFromMove);
                 if (BoardLogic::UnderAttack(
-                        board4, board4.pieces[turn * 8 + 6].front(), board4.sideToMove))
+                        board4, PositionCorePieceListsView{board4.positionCore}[turn * 8 + 6].front(), board4.sideToMove))
                 {
                     GameLogic::UndoMove(board4, *move, missingInfoAboutPrevStateFromMove);
                     if (UCI::IsTest())
@@ -2785,9 +2785,9 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     }
                     delete MPValue;
                     PrepareChildStack(depthGone + 1, *move,
-                        board4.mainBoard[move->beginPlace], IsQuietMove(*move)
+                        board4.positionCore.pieceAt[move->beginPlace], IsQuietMove(*move)
                             ? QuietStatScore(turn, depthGone,
-                                board4.mainBoard[move->beginPlace], *move) : 0);
+                                board4.positionCore.pieceAt[move->beginPlace], *move) : 0);
                     MPValue = PVS(tempPVNode, -beta, -alpha,
                                   depth - 1 + moveExtension, *move, move2, move3,
                                   prevMove, board4, MAtESearch, true,
@@ -2879,7 +2879,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 const int nominalChildDepth = depth - 1 + moveExtension;
                 const int combinedHistory = IsQuietMove(*move)
                     ? QuietCombinedHistory(turn, depthGone,
-                        board4.mainBoard[move->beginPlace], *move)
+                        board4.positionCore.pieceAt[move->beginPlace], *move)
                     : 0;
                 const bool ttPvEvidence = ttPv;
                 LMRDepth = ContextualLMRReduction(
@@ -2920,10 +2920,10 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     expectedReducedDepth < SearchParameters::CounterMovePruning::ReducedDepthBase +
                         (ss.statScore > 0 || ss.moveCount == 1) &&
                     ContinuationHistoryScoreAt(depthGone, 1,
-                        board4.mainBoard[move->beginPlace], *move) <
+                        board4.positionCore.pieceAt[move->beginPlace], *move) <
                             SearchParameters::CounterMovePruning::ContinuationThreshold &&
                     ContinuationHistoryScoreAt(depthGone, 2,
-                        board4.mainBoard[move->beginPlace], *move) <
+                        board4.positionCore.pieceAt[move->beginPlace], *move) <
                             SearchParameters::CounterMovePruning::ContinuationThreshold;
                 const bool seePruningCandidate = pruningContext &&
                     !highConfidenceMove &&
@@ -2938,7 +2938,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 MissingInfoAboutPrevStateFromMove missingInfoAboutPrevStateFromMove(board4, *move);
                 GameLogic::DoMove(board4, *move, prevMove, depth, depthGone, &missingInfoAboutPrevStateFromMove);
                 if (BoardLogic::UnderAttack(
-                        board4, board4.pieces[turn * 8 + 6].front(), board4.sideToMove))
+                        board4, PositionCorePieceListsView{board4.positionCore}[turn * 8 + 6].front(), board4.sideToMove))
                 {
                     GameLogic::UndoMove(board4, *move, missingInfoAboutPrevStateFromMove);
                     if (UCI::IsTest())
@@ -2963,7 +2963,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 else
                 {
                     const bool givesCheck = BoardLogic::UnderAttack(
-                        board4, board4.pieces[board4.sideToMove * 8 + 6].front(),
+                        board4, PositionCorePieceListsView{board4.positionCore}[board4.sideToMove * 8 + 6].front(),
                         !board4.sideToMove);
                     if (!givesCheck && (moveCountPruningCandidate ||
                                        valueFutilityCandidate ||
@@ -2999,9 +2999,9 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                     const bool reducedSearch = LMRDepth > 0;
                     delete MPValue;
                     PrepareChildStack(depthGone + 1, *move,
-                        board4.mainBoard[move->beginPlace], IsQuietMove(*move)
+                        board4.positionCore.pieceAt[move->beginPlace], IsQuietMove(*move)
                             ? QuietStatScore(turn, depthGone,
-                                board4.mainBoard[move->beginPlace], *move) : 0);
+                                board4.positionCore.pieceAt[move->beginPlace], *move) : 0);
                     MPValue = PVS(reducedSearch ? false : tempPVNode,
                                   -alpha - Option::nullWindowSize, -alpha,
                                   nominalChildDepth - LMRDepth, *move, move2,
@@ -3033,9 +3033,9 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                         const int smallerReduction = LMRDepth / 2;
                         delete MPValue;
                         PrepareChildStack(depthGone + 1, *move,
-                            board4.mainBoard[move->beginPlace], IsQuietMove(*move)
+                            board4.positionCore.pieceAt[move->beginPlace], IsQuietMove(*move)
                                 ? QuietStatScore(turn, depthGone,
-                                    board4.mainBoard[move->beginPlace], *move) : 0);
+                                    board4.positionCore.pieceAt[move->beginPlace], *move) : 0);
                         MPValue = PVS(false, -alpha - Option::nullWindowSize, -alpha,
                                       nominalChildDepth - smallerReduction,
                                       *move, move2, move3,
@@ -3064,9 +3064,9 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
 #endif
                         delete MPValue;
                         PrepareChildStack(depthGone + 1, *move,
-                            board4.mainBoard[move->beginPlace], IsQuietMove(*move)
+                            board4.positionCore.pieceAt[move->beginPlace], IsQuietMove(*move)
                                 ? QuietStatScore(turn, depthGone,
-                                    board4.mainBoard[move->beginPlace], *move) : 0);
+                                    board4.positionCore.pieceAt[move->beginPlace], *move) : 0);
                         MPValue = PVS(confirmationPVNode, -beta, -alpha,
                                       nominalChildDepth,
                                       *move, move2, move3, prevMove, board4, MAtESearch,
@@ -3169,7 +3169,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             delete MPValue;
             return retValue;
         }
-        if (availMoves == 0 && !BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove))
+        if (availMoves == 0 && !BoardLogic::UnderAttack(board4, PositionCorePieceListsView{board4.positionCore}[turn * 8 + 6].front(), !board4.sideToMove))
         {
             Move stalemateMove;
             stalemateMove.value = 0;
@@ -3180,7 +3180,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
             MPValue = nullptr;
             return retValue;
         }
-        else if (availMoves == 0 && BoardLogic::UnderAttack(board4, board4.pieces[turn * 8 + 6].front(), !board4.sideToMove))
+        else if (availMoves == 0 && BoardLogic::UnderAttack(board4, PositionCorePieceListsView{board4.positionCore}[turn * 8 + 6].front(), !board4.sideToMove))
         {
             Move mateMove;
             mateMove.value = MateScore::MatedAtPly(depthGone);
@@ -3207,7 +3207,7 @@ MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int de
                 {
                     UpdateHistory(turn, *SelectedMove, depth, true);
                     UpdateContinuationHistories(depthGone,
-                        board4.mainBoard[SelectedMove->beginPlace], *SelectedMove,
+                        board4.positionCore.pieceAt[SelectedMove->beginPlace], *SelectedMove,
                         depth, true);
                 }
                 else
@@ -3452,7 +3452,7 @@ void PVSSearch::IGG(bool isPVNode, int alpha, int beta, int depth, Move &prevMov
                             else if (move->endPiece > 0)
                             {
                                 static const int pieceValLookup[8] = {0, 100, 320, 330, 500, 900, 20000, 0};
-                                int movingPieceType = board4.mainBoard[move->endPlace] % 8;
+                                int movingPieceType = board4.positionCore.pieceAt[move->endPlace] % 8;
                                 int capturedPieceType = move->endPiece % 8;
                                 if (pieceValLookup[capturedPieceType] >= pieceValLookup[movingPieceType])
                                 {

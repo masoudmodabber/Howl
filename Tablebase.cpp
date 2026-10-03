@@ -1,6 +1,7 @@
 #include "Tablebase.h"
 
 #include "Board.h"
+#include "PositionCore.h"
 #include "third_party/fathom/src/tbprobe.h"
 
 #include <cstdint>
@@ -12,21 +13,13 @@ namespace
 
     uint64_t PiecesOfType(const Board &board, int whitePiece, int blackPiece)
     {
-        uint64_t result = 0;
-        for (int i = 0; i < board.pieces[whitePiece].count; ++i)
-            result |= UINT64_C(1) << board.pieces[whitePiece].data[i];
-        for (int i = 0; i < board.pieces[blackPiece].count; ++i)
-            result |= UINT64_C(1) << board.pieces[blackPiece].data[i];
-        return result;
+        const int type = whitePiece - 1;
+        return board.positionCore.pieceOccupancy[type];
     }
 
     uint64_t SidePieces(const Board &board, int offset)
     {
-        uint64_t result = 0;
-        for (int piece = 1; piece <= 6; ++piece)
-            for (int i = 0; i < board.pieces[offset + piece].count; ++i)
-                result |= UINT64_C(1) << board.pieces[offset + piece].data[i];
-        return result;
+        return board.positionCore.colourOccupancy[offset == 0 ? 0 : 1];
     }
 }
 
@@ -58,15 +51,16 @@ int Tablebase::MaxPieces()
 int Tablebase::PieceCount(const Board &position)
 {
     int count = 0;
-    for (int offset : {0, 8})
-        for (int piece = 1; piece <= 6; ++piece)
-            count += static_cast<int>(position.pieces[offset + piece].size());
+    count = __builtin_popcountll(
+        position.positionCore.colourOccupancy[0] |
+        position.positionCore.colourOccupancy[1]);
     return count;
 }
 
 bool Tablebase::IsPositionStateSupported(const Board &position)
 {
-    if (position.pieces[6].count != 1 || position.pieces[14].count != 1)
+    if (position.positionCore.kingSquare[0] == 255 ||
+        position.positionCore.kingSquare[1] == 255)
         return false;
     if (position.whiteSmallCastle || position.whiteBigCastle ||
         position.blackSmallCastle || position.blackBigCastle)

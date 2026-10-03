@@ -7,14 +7,14 @@
 Move* ChessStringManipulation::ConvertTextToMove(const std::string& move, Board& thisBoard)
 {
     Move* thisMove = ConvertTextToMoveWithoutFlags(move);
-    int beginPiece = thisBoard.mainBoard[thisMove->beginPlace];
-    thisMove->endPiece = thisBoard.mainBoard[thisMove->endPlace];
+    int beginPiece = thisBoard.positionCore.pieceAt[thisMove->beginPlace];
+    thisMove->endPiece = thisBoard.positionCore.pieceAt[thisMove->endPlace];
 
-    if (thisMove->beginPlace / 8 == 1 && thisMove->endPlace / 8 == 3 && thisBoard.mainBoard[thisMove->beginPlace] == 1)
+    if (thisMove->beginPlace / 8 == 1 && thisMove->endPlace / 8 == 3 && thisBoard.positionCore.pieceAt[thisMove->beginPlace] == 1)
     {
         thisMove->unpassentPlace = thisMove->beginPlace + 8;
     }
-    if (thisMove->beginPlace / 8 == 6 && thisMove->endPlace / 8 == 4 && thisBoard.mainBoard[thisMove->beginPlace] == 9)
+    if (thisMove->beginPlace / 8 == 6 && thisMove->endPlace / 8 == 4 && thisBoard.positionCore.pieceAt[thisMove->beginPlace] == 9)
     {
         thisMove->unpassentPlace = thisMove->beginPlace - 8;
     }
@@ -56,19 +56,19 @@ Move* ChessStringManipulation::ConvertTextToMove(const std::string& move, Board&
     {
         thisMove->PublicFlag += (char)64;
     }
-    if (thisBoard.mainBoard[4] == 6 && thisMove->beginPlace == 4 && thisMove->endPlace == 6)
+    if (thisBoard.positionCore.pieceAt[4] == 6 && thisMove->beginPlace == 4 && thisMove->endPlace == 6)
     {
         thisMove->CastleFlag = (char)(8 + 64 + 128);
     }
-    if (thisBoard.mainBoard[4] == 6 && thisMove->beginPlace == 4 && thisMove->endPlace == 2)
+    if (thisBoard.positionCore.pieceAt[4] == 6 && thisMove->beginPlace == 4 && thisMove->endPlace == 2)
     {
         thisMove->CastleFlag = (char)(4 + 64 + 128);
     }
-    if (thisBoard.mainBoard[60] == 14 && thisMove->beginPlace == 60 && thisMove->endPlace == 62)
+    if (thisBoard.positionCore.pieceAt[60] == 14 && thisMove->beginPlace == 60 && thisMove->endPlace == 62)
     {
         thisMove->CastleFlag = (char)(2 + 16 + 32);
     }
-    if (thisBoard.mainBoard[60] == 14 && thisMove->beginPlace == 60 && thisMove->endPlace == 58)
+    if (thisBoard.positionCore.pieceAt[60] == 14 && thisMove->beginPlace == 60 && thisMove->endPlace == 58)
     {
         thisMove->CastleFlag = (char)(1 + 16 + 32);
     }
@@ -139,11 +139,11 @@ std::string ChessStringManipulation::PVToString(const Move& move, int type, bool
     int beginPlace = move.beginPlace;
     int endPlace = move.endPlace;
 
-    if (thisBoard.pieces[6].front() == 4)
+    if (thisBoard.positionCore.kingSquare[0] == 4)
     {
         whiteKingInPlace = true;
     }
-    if (thisBoard.pieces[14].front() == 60)
+    if (thisBoard.positionCore.kingSquare[1] == 60)
     {
         blackKingInPlace = true;
     }
@@ -306,5 +306,4 @@ std::string ChessStringManipulation::PVToString(const Move& move, int type, bool
     }*/
     return moveString;
 }
-
 
