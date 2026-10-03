@@ -19,6 +19,7 @@
 #include "Tablebase.h"
 #include "Option.h"
 #include "SearchParameters.h"
+#include "MoveOrdering.h"
 #include <iostream>
 #include <algorithm>
 #include <array>
@@ -612,7 +613,9 @@ namespace
                     {
                         std::stable_sort(goodTactical.begin(), goodTactical.begin() + goodCount,
                             [this](uint8_t a, uint8_t b) {
-                                return entries[a].key > entries[b].key;
+                                if (entries[a].key != entries[b].key)
+                                    return entries[a].key > entries[b].key;
+                                return MoveOrderingTieKeyGreater(entries[a].tieKey, entries[b].tieKey);
                             });
                     }
                     if (Move* move = Select(goodTactical, goodCount, goodCursor))
@@ -645,7 +648,9 @@ namespace
                     {
                         std::stable_sort(strongQuiets.begin(), strongQuiets.begin() + strongQuietCount,
                             [this](uint8_t a, uint8_t b) {
-                                return entries[a].key > entries[b].key;
+                                if (entries[a].key != entries[b].key)
+                                    return entries[a].key > entries[b].key;
+                                return MoveOrderingTieKeyGreater(entries[a].tieKey, entries[b].tieKey);
                             });
                     }
                     if (Move* move = Select(strongQuiets, strongQuietCount, strongQuietCursor))
@@ -663,7 +668,9 @@ namespace
                     {
                         std::stable_sort(remainingQuiets.begin(), remainingQuiets.begin() + remainingQuietCount,
                             [this](uint8_t a, uint8_t b) {
-                                return entries[a].key > entries[b].key;
+                                if (entries[a].key != entries[b].key)
+                                    return entries[a].key > entries[b].key;
+                                return MoveOrderingTieKeyGreater(entries[a].tieKey, entries[b].tieKey);
                             });
                     }
                     if (Move* move = Select(remainingQuiets, remainingQuietCount,
@@ -677,7 +684,9 @@ namespace
                     {
                         std::stable_sort(badTactical.begin(), badTactical.begin() + badCount,
                             [this](uint8_t a, uint8_t b) {
-                                return entries[a].key > entries[b].key;
+                                if (entries[a].key != entries[b].key)
+                                    return entries[a].key > entries[b].key;
+                                return MoveOrderingTieKeyGreater(entries[a].tieKey, entries[b].tieKey);
                             });
                     }
                     if (Move* move = Select(badTactical, badCount, badCursor))
@@ -706,6 +715,7 @@ namespace
             uint8_t listId = 0;
             uint8_t moveIndex = 0;
             int key = 0;
+            MoveOrderingTieKey tieKey{};
             bool returned = false;
             bool scored = false;
         };
@@ -842,6 +852,7 @@ namespace
                         captureHistory[std::clamp(movingPiece, 0, 14)]
                                       [m.endPlace]
                                       [std::clamp(capturedPiece % 8, 0, 6)];
+                    entries[index].tieKey = MakeMoveOrderingTieKey(m, movingPiece, false, false);
                     if (MatchesTT(m))
                         ttEntry = index;
                     if (MoveLogic::SEE_GE(board, m,
@@ -949,6 +960,7 @@ namespace
                 const int currentPiece = board.positionCore.pieceAt[m.beginPlace];
                 entries[index].key = QuietOrderingScore(
                     turn, depthGone, currentPiece, m);
+                entries[index].tieKey = MakeMoveOrderingTieKey(m, currentPiece, true, true);
                 if (entries[index].key >=
                     SearchParameters::MoveOrdering::StrongQuietDepthCoefficient * depth)
                     strongQuiets[strongQuietCount++] = static_cast<uint8_t>(index);
@@ -1051,7 +1063,7 @@ namespace
     {
         const bool movingWhite = !board.sideToMove;
         const int enemyKingIndex = movingWhite ? 14 : 6;
-        if (PositionCorePieceListsView{board.positionCore}[enemyKingIndex].count == 0)
+        if (PositionCorePieceListsView{board.positionCore}[enemyKingIndex].empty())
             return false;
         const int kingSquare = PositionCorePieceListsView{board.positionCore}[enemyKingIndex].front();
         const long long kingBit = Option::PowerTwo[kingSquare];

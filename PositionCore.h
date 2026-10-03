@@ -11,10 +11,6 @@ struct PositionCore
     Bitboard colourOccupancy[2] = {};
     Bitboard pieceOccupancy[6] = {};
     std::uint8_t pieceAt[64] = {};
-    // Preserves the legacy per-piece iteration order for consumers that must
-    // retain exact generated move ordering during the migration.
-    std::uint8_t pieceOrder[15][16] = {};
-    std::uint8_t pieceOrderCount[15] = {};
     std::uint64_t zobristHash = 0;
     std::uint32_t fullmoveNumber = 0;
     std::uint16_t halfmoveClock = 0;
@@ -26,15 +22,28 @@ struct PositionCore
 
 struct PositionCorePieceListView
 {
-    const std::uint8_t* first;
-    std::size_t count;
+    Bitboard mask;
 
-    const std::uint8_t* begin() const { return first; }
-    const std::uint8_t* end() const { return first + count; }
-    std::size_t size() const { return count; }
-    bool empty() const { return count == 0; }
-    int front() const { return first[0]; }
-    int operator[](std::size_t index) const { return first[index]; }
+    struct Iterator
+    {
+        Bitboard remaining;
+        int operator*() const { return __builtin_ctzll(remaining); }
+        Iterator& operator++() { remaining &= remaining - 1; return *this; }
+        bool operator!=(const Iterator& other) const { return remaining != other.remaining; }
+    };
+
+    Iterator begin() const { return {mask}; }
+    Iterator end() const { return {0}; }
+    std::size_t size() const { return static_cast<std::size_t>(__builtin_popcountll(mask)); }
+    bool empty() const { return mask == 0; }
+    int front() const { return __builtin_ctzll(mask); }
+    int operator[](std::size_t index) const
+    {
+        Bitboard remaining = mask;
+        while (index-- != 0)
+            remaining &= remaining - 1;
+        return __builtin_ctzll(remaining);
+    }
 };
 
 struct PositionCorePieceListsView
@@ -43,7 +52,11 @@ struct PositionCorePieceListsView
 
     PositionCorePieceListView operator[](int piece) const
     {
-        return {core.pieceOrder[piece], core.pieceOrderCount[piece]};
+        if (piece < 1 || (piece > 6 && piece < 9) || piece > 14)
+            return {0};
+        const int type = (piece > 8 ? piece - 8 : piece) - 1;
+        const int colour = piece > 8 ? 1 : 0;
+        return {core.pieceOccupancy[type] & core.colourOccupancy[colour]};
     }
 };
 

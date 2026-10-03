@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <iostream>
 
+
 namespace
 {
 thread_local bool movePoolEnabled = false;
@@ -74,6 +75,7 @@ private:
 };
 
 thread_local MovePool movePool;
+
 
 }
 
@@ -2184,22 +2186,11 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
     }
 
     const PositionCore& core = thisBoard.positionCore;
-    MyList positionCorePieceLists[15];
-    int positionCoreMainBoard[64] = {};
-    for (int piece = 0; piece < 15; ++piece)
-    {
-        for (int index = 0; index < core.pieceOrderCount[piece]; ++index)
-        {
-            const int square = core.pieceOrder[piece][index];
-            positionCorePieceLists[piece].push_back(square);
-        }
-    }
-    for (int square = 0; square < 64; ++square)
-        positionCoreMainBoard[square] = core.pieceAt[square];
+    const PositionCorePieceListsView positionCorePieceLists{core};
 
     long long whitePieces = static_cast<long long>(core.colourOccupancy[0]);
     long long blackPieces = static_cast<long long>(core.colourOccupancy[1]);
-    int *mainBoard = positionCoreMainBoard;
+    const std::uint8_t* mainBoard = core.pieceAt;
     long long wholeBoard = whitePieces | blackPieces;
 
     auto castleSquaresSafe = [&](bool white, int start, int transit, int destination)
@@ -2218,7 +2209,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
     if (onlyCapturesAndChecks && includeQuietChecks)
     {
         int enemyKingIndex = (!core.sideToMove ? 14 : 6);
-        if (positionCorePieceLists[enemyKingIndex].count > 0)
+        if (!positionCorePieceLists[enemyKingIndex].empty())
         {
             enemyKingPos = positionCorePieceLists[enemyKingIndex].front();
             enemyKingBit = Option::PowerTwo[enemyKingPos];
@@ -3945,6 +3936,33 @@ bool SameGeneratedMove(const Move& left, const Move& right)
            left.value == right.value;
 }
 
+bool SameGeneratedMoveSet(const MoveList& left, const MoveList& right, int& mismatch)
+{
+    if (left.count != right.count)
+    {
+        mismatch = 0;
+        return false;
+    }
+    bool matched[MoveList::Capacity] = {};
+    for (int i = 0; i < left.count; ++i)
+    {
+        int match = -1;
+        for (int j = 0; j < right.count; ++j)
+            if (!matched[j] && SameGeneratedMove(left[i], right[j]))
+            {
+                match = j;
+                break;
+            }
+        if (match < 0)
+        {
+            mismatch = i;
+            return false;
+        }
+        matched[match] = true;
+    }
+    return true;
+}
+
 [[noreturn]] void ReportMoveGeneratorMismatch(
     const Board& board, int depth, int depthGone,
     bool onlyCapturesAndChecks, bool scoreAndSort, bool includeQuietChecks,
@@ -4001,12 +4019,12 @@ void MoveLogic::MoveGeneratorInto(Board &thisBoard, int depth, int depthGone,
                                     onlyCapturesAndChecks, scoreAndSort,
                                     includeQuietChecks, legacyList,
                                     positionCoreList, 0);
-    for (int i = 0; i < legacyList.count; ++i)
-        if (!SameGeneratedMove(legacyList[i], positionCoreList[i]))
-            ReportMoveGeneratorMismatch(thisBoard, depth, depthGone,
-                                        onlyCapturesAndChecks, scoreAndSort,
-                                        includeQuietChecks, legacyList,
-                                        positionCoreList, i);
+    int mismatch = 0;
+    if (!SameGeneratedMoveSet(legacyList, positionCoreList, mismatch))
+        ReportMoveGeneratorMismatch(thisBoard, depth, depthGone,
+                                    onlyCapturesAndChecks, scoreAndSort,
+                                    includeQuietChecks, legacyList,
+                                    positionCoreList, mismatch);
     moveList = positionCoreList;
 #else
     PositionCoreMoveGeneratorInto(thisBoard, depth, depthGone, onlyCapturesAndChecks,
@@ -4706,7 +4724,7 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
         case 6:
         case 14:
         {
-            if (PositionCorePieceListsView{thisBoard.positionCore}[piece].count > 0)
+            if (!PositionCorePieceListsView{thisBoard.positionCore}[piece].empty())
             {
                 int kingPos = PositionCorePieceListsView{thisBoard.positionCore}[piece].front();
                 Move** kingMoves = side ? PieceMoves::BlackKingMoves[kingPos] : PieceMoves::WhiteKingMoves[kingPos];
