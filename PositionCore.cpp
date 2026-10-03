@@ -200,31 +200,66 @@ void UpdatePieceOrder(PositionCore& core, const Move& move, bool movingWhite,
     }
 }
 
-void SynchronizeMoveSquares(Board& board, const Move& move, bool movingWhite,
-                            bool undo)
+void SetPiece(PositionCore& core, int square, int piece)
 {
-    PositionCore& core = board.positionCore;
-    if (move.promotionPiece < 0)
+    const Bitboard bit = Option::PowerTwo[square];
+    const int oldPiece = core.pieceAt[square];
+    const int oldType = PieceTypeIndex(oldPiece);
+    if (oldType >= 0)
     {
-        SynchronizeScalars(core, board);
-        return;
+        const std::uint8_t colour = PieceColour(oldPiece);
+        core.colourOccupancy[colour] &= ~bit;
+        core.pieceOccupancy[oldType] &= ~bit;
+        if (oldType == 5)
+            core.kingSquare[colour] = 255;
     }
-
-    if (undo)
+    core.pieceAt[square] = static_cast<std::uint8_t>(piece);
+    const int newType = PieceTypeIndex(piece);
+    if (newType >= 0)
     {
-        SynchronizeSquare(core, board, move.endPlace);
-        SynchronizeSquare(core, board, move.beginPlace);
+        const std::uint8_t colour = PieceColour(piece);
+        core.colourOccupancy[colour] |= bit;
+        core.pieceOccupancy[newType] |= bit;
+        if (newType == 5)
+            core.kingSquare[colour] = static_cast<std::uint8_t>(square);
+    }
+}
+
+int CapturedSquare(const Move& move, bool movingWhite)
+{
+    return (move.PublicFlag & Option::PowerTwo[6]) != 0
+        ? move.endPlace + (movingWhite ? -8 : 8)
+        : move.endPlace;
+}
+
+void UpdateMoveSquares(PositionCore& core, const Move& move, bool movingWhite,
+                       bool undo)
+{
+    if (move.promotionPiece < 0)
+        return;
+
+    const int capturedSquare = CapturedSquare(move, movingWhite);
+    if (!undo)
+    {
+        const int movingPiece = core.pieceAt[move.beginPlace];
+        SetPiece(core, move.beginPlace, 0);
+        if ((move.PublicFlag & Option::PowerTwo[6]) != 0)
+            SetPiece(core, capturedSquare, 0);
+        const int promotedPiece = move.promotionPiece > 0
+            ? move.promotionPiece : movingPiece;
+        SetPiece(core, move.endPlace, promotedPiece);
     }
     else
     {
-        SynchronizeSquare(core, board, move.beginPlace);
-        SynchronizeSquare(core, board, move.endPlace);
-    }
-
-    if ((move.PublicFlag & Option::PowerTwo[6]) != 0)
-    {
-        const int capturedPawnSquare = move.endPlace + (movingWhite ? -8 : 8);
-        SynchronizeSquare(core, board, capturedPawnSquare);
+        const int currentPiece = core.pieceAt[move.endPlace];
+        const int movingPiece = move.promotionPiece > 0
+            ? (movingWhite ? 1 : 9) : currentPiece;
+        SetPiece(core, move.endPlace, 0);
+        SetPiece(core, move.beginPlace, movingPiece);
+        if ((move.PublicFlag & Option::PowerTwo[6]) != 0)
+            SetPiece(core, capturedSquare, movingWhite ? 9 : 1);
+        else if (move.endPiece > 0)
+            SetPiece(core, move.endPlace, move.endPiece);
     }
 
     int rookFrom = -1;
@@ -241,12 +276,12 @@ void SynchronizeMoveSquares(Board& board, const Move& move, bool movingWhite,
     }
     if (rookFrom >= 0)
     {
-        SynchronizeSquare(core, board, rookFrom);
-        SynchronizeSquare(core, board, rookTo);
+        const int rook = movingWhite ? 4 : 12;
+        SetPiece(core, undo ? rookTo : rookFrom, 0);
+        SetPiece(core, undo ? rookFrom : rookTo, rook);
     }
-
-    SynchronizeScalars(core, board);
 }
+
 
 [[noreturn]] void Mismatch(const Board& board, const Move* move,
                            const char* operation, const char* field,
@@ -294,7 +329,8 @@ void PositionCoreLogic::UpdateAfterMove(Board& board, const Move& move,
                                         const MissingInfoAboutPrevStateFromMove* missingInfo)
 {
     UpdatePieceOrder(board.positionCore, move, movingWhite, missingInfo, false);
-    SynchronizeMoveSquares(board, move, movingWhite, false);
+    UpdateMoveSquares(board.positionCore, move, movingWhite, false);
+    SynchronizeScalars(board.positionCore, board);
 }
 
 void PositionCoreLogic::UpdateAfterUndo(Board& board, const Move& move,
@@ -302,7 +338,8 @@ void PositionCoreLogic::UpdateAfterUndo(Board& board, const Move& move,
                                         const MissingInfoAboutPrevStateFromMove& missingInfo)
 {
     UpdatePieceOrder(board.positionCore, move, movingWhite, &missingInfo, true);
-    SynchronizeMoveSquares(board, move, movingWhite, true);
+    UpdateMoveSquares(board.positionCore, move, movingWhite, true);
+    SynchronizeScalars(board.positionCore, board);
 }
 
 void PositionCoreLogic::Verify(const Board& board, const Move* move,

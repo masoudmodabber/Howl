@@ -45,6 +45,67 @@ void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int dep
     Search::moveCount++;
     if (missingInfo != nullptr && UsePositionCoreHotState())
         PositionCoreLogic::PrepareMove(thisBoard, thisMove, *missingInfo);
+    if (UsePositionCoreHotState())
+    {
+        const int movingPiece = thisBoard.positionCore.pieceAt[beginPlace];
+        const auto xorPiece = [&](int piece, int square)
+        {
+            thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[piece][square];
+        };
+        if (thisMove.promotionPiece > 0)
+        {
+            xorPiece(movingPiece, beginPlace);
+            xorPiece(thisMove.promotionPiece, thisMove.endPlace);
+        }
+        else
+        {
+            xorPiece(movingPiece, beginPlace);
+            xorPiece(movingPiece, thisMove.endPlace);
+        }
+        if ((thisMove.PublicFlag & Option::PowerTwo[6]) != 0)
+        {
+            const int capturedSquare = thisMove.endPlace + (movingWhite ? -8 : 8);
+            xorPiece(movingWhite ? 9 : 1, capturedSquare);
+        }
+        else if ((thisMove.PublicFlag & Option::PowerTwo[7]) != 0)
+        {
+            xorPiece(thisMove.endPiece, thisMove.endPlace);
+        }
+        if ((thisMove.CastleFlag & (Option::PowerTwo[3] | Option::PowerTwo[1])) != 0)
+        {
+            xorPiece(movingWhite ? 4 : 12, beginPlace + 3);
+            xorPiece(movingWhite ? 4 : 12, beginPlace + 1);
+        }
+        else if ((thisMove.CastleFlag & (Option::PowerTwo[2] | Option::PowerTwo[0])) != 0)
+        {
+            xorPiece(movingWhite ? 4 : 12, beginPlace - 4);
+            xorPiece(movingWhite ? 4 : 12, beginPlace - 1);
+        }
+        if (thisMove.promotionPiece >= 0)
+        {
+            UpdateBoardCastleRights(thisBoard, thisMove);
+            SetUnpassent(thisBoard, thisMove);
+        }
+        else
+        {
+            SetUnpassent(thisBoard, thisMove);
+        }
+        ChangeSide(thisBoard);
+        SetCastleFlags(thisBoard, thisMove);
+        const NNUEState& activeSnapshot = (thisBoard.nnueHistory->snapshotCount > 0)
+            ? thisBoard.nnueHistory->snapshots[thisBoard.nnueHistory->snapshotCount - 1]
+            : thisBoard.nnueState;
+        PositionCoreLogic::UpdateAfterMove(thisBoard, thisMove, movingWhite, missingInfo);
+        if (!useStructured)
+            NNUEEvaluator::UpdateAfterMove(thisBoard, thisMove, activeSnapshot);
+        if (useStructured)
+            ExperimentalEvaluator::UpdateStructuredAfterMove(thisBoard, thisMove, activeSnapshot);
+        RepetitionHistory::Push(thisBoard.ZobristHashCode);
+#if defined(HOWL_POSITION_CORE_VERIFY) && HOWL_POSITION_CORE_VERIFY
+        PositionCoreLogic::Verify(thisBoard, &thisMove, "DoMove");
+#endif
+        return;
+    }
     if (thisMove.promotionPiece >= 0)
     {
         if ((thisMove.CastleFlag & Option::PowerTwo[3]) != 0)
@@ -1039,6 +1100,59 @@ void GameLogic::UndoMove(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevS
     const bool movingWhite = thisBoard.sideToMove;
     NNUEState previous = NNUEEvaluator::RestoreSnapshot(thisBoard);
     UnSideChange(thisBoard, thisMove);
+    if (UsePositionCoreHotState())
+    {
+        const bool originalMovingWhite = movingWhite;
+        const int movingPiece = thisMove.promotionPiece > 0
+            ? thisMove.promotionPiece : thisBoard.positionCore.pieceAt[thisMove.endPlace];
+        const auto xorPiece = [&](int piece, int square)
+        {
+            thisBoard.ZobristHashCode ^= BoardInitializer::ZCode[piece][square];
+        };
+        if (thisMove.promotionPiece > 0)
+        {
+            xorPiece(movingPiece, thisMove.endPlace);
+            xorPiece(originalMovingWhite ? 1 : 9, thisMove.beginPlace);
+        }
+        else
+        {
+            xorPiece(movingPiece, thisMove.beginPlace);
+            xorPiece(movingPiece, thisMove.endPlace);
+        }
+        if ((thisMove.PublicFlag & Option::PowerTwo[6]) != 0)
+        {
+            const int capturedSquare = thisMove.endPlace + (originalMovingWhite ? -8 : 8);
+            xorPiece(originalMovingWhite ? 9 : 1, capturedSquare);
+        }
+        else if ((thisMove.PublicFlag & Option::PowerTwo[7]) != 0)
+        {
+            xorPiece(thisMove.endPiece, thisMove.endPlace);
+        }
+        if ((thisMove.CastleFlag & (Option::PowerTwo[3] | Option::PowerTwo[1])) != 0)
+        {
+            xorPiece(originalMovingWhite ? 4 : 12, thisMove.beginPlace + 3);
+            xorPiece(originalMovingWhite ? 4 : 12, thisMove.beginPlace + 1);
+        }
+        else if ((thisMove.CastleFlag & (Option::PowerTwo[2] | Option::PowerTwo[0])) != 0)
+        {
+            xorPiece(originalMovingWhite ? 4 : 12, thisMove.beginPlace - 4);
+            xorPiece(originalMovingWhite ? 4 : 12, thisMove.beginPlace - 1);
+        }
+        UnSetCastleFlags(thisBoard, thisMove, missingInfo.previousWhiteBigCastle,
+                         missingInfo.previousWhiteSmallCastle,
+                         missingInfo.previousBlackBigCastle,
+                         missingInfo.previousBlackSmallCastle);
+        UnSetUnpassentPlace(thisBoard, thisMove, missingInfo.previousUnpassentPlace);
+        RepetitionHistory::Pop();
+        thisBoard.nnueState = previous;
+        if (thisBoard.nnueHistory->snapshotCount > 0)
+            --thisBoard.nnueHistory->snapshotCount;
+        PositionCoreLogic::UpdateAfterUndo(thisBoard, thisMove, originalMovingWhite, missingInfo);
+#if defined(HOWL_POSITION_CORE_VERIFY) && HOWL_POSITION_CORE_VERIFY
+        PositionCoreLogic::Verify(thisBoard, &thisMove, "UndoMove");
+#endif
+        return;
+    }
     if (thisMove.promotionPiece >= 0)
     {
         if ((thisMove.CastleFlag & Option::PowerTwo[3]) != 0)
