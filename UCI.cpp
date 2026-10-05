@@ -20,6 +20,7 @@
 #include "RepetitionHistory.h"
 #include "Option.h"
 #include "Tablebase.h"
+#include "EvaluationLogic.h"
 
 #include "DiagnosticLogger.h"
 
@@ -507,6 +508,7 @@ void UCI::Run(std::istream& in, std::ostream& out)
             Search::maxNodes = fixedNodes;
             Search::isMoveTime = false;
             Search::allowedTime = 0.0;
+            Search::maximumTime = 0.0;
             Search::finiteSearch = false;
 
             if (mateSearch)
@@ -516,6 +518,7 @@ void UCI::Run(std::istream& in, std::ostream& out)
             else if (fixedTime > 0)
             {
                 Search::allowedTime = static_cast<double>(fixedTime);
+                Search::maximumTime = static_cast<double>(fixedTime);
                 Search::isMoveTime = true;
                 Search::finiteSearch = true;
                 MainSearchStart();
@@ -539,8 +542,9 @@ void UCI::Run(std::istream& in, std::ostream& out)
             {
                 int timeMill = (!thisBoard->sideToMove) ? (wTimeMill >= 0 ? wTimeMill : 0) : (bTimeMill >= 0 ? bTimeMill : 0);
                 int incMill = (!thisBoard->sideToMove) ? wIncMill : bIncMill;
-                auto allowedTimeDuration = getAllowedTime(timeMill, incMill, remainedMoves);
-                Search::allowedTime = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(allowedTimeDuration).count());
+                auto timeBudget = getTimeBudget(*thisBoard, timeMill, incMill, remainedMoves);
+                Search::allowedTime = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(timeBudget.first).count());
+                Search::maximumTime = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(timeBudget.second).count());
                 Search::finiteSearch = true;
                 MainSearchStart();
             }
@@ -624,27 +628,26 @@ void UCI::SetAutomaticOrders(int savedOrderToProcessNo)
 
 std::chrono::nanoseconds UCI::getAllowedTime(int TimeMill, int IncMill, int remainedMoves)
 {
-    long long allocatedMs;
-    if (remainedMoves != 0)
-    {
-        if (remainedMoves != 1)
-        {
-            allocatedMs = static_cast<long long>(TimeMill * (1 + 0.01 * remainedMoves) / remainedMoves + IncMill);
-        }
-        else
-        {
-            allocatedMs = static_cast<long long>(TimeMill * 0.7);
-        }
-    }
-    else
-    {
-        allocatedMs = static_cast<long long>(TimeMill * 5.0 / 165 + IncMill);
-    }
-    if (allocatedMs < 1)
-    {
-        allocatedMs = 1;
-    }
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::milliseconds(allocatedMs));
+    const double horizon = remainedMoves > 0 ? static_cast<double>(remainedMoves) : 20.0;
+    const double reserve = std::max(100.0, static_cast<double>(TimeMill) * 0.02);
+    const double spendable = std::max(0.0, static_cast<double>(TimeMill) - reserve);
+    const long long optimumMs = std::max(1LL, static_cast<long long>(spendable / horizon + 0.8 * IncMill));
+    return std::chrono::milliseconds(optimumMs);
+}
+
+std::pair<std::chrono::nanoseconds, std::chrono::nanoseconds> UCI::getTimeBudget(
+    const Board& board, int TimeMill, int IncMill, int remainedMoves)
+{
+    const double phaseFraction = EvaluationLogic::CalculatePhase(board) / 24.0;
+    const double horizon = remainedMoves > 0
+        ? static_cast<double>(remainedMoves)
+        : 24.0 - 8.0 * phaseFraction;
+    const double reserve = std::max(100.0, static_cast<double>(TimeMill) * 0.02);
+    const double spendable = std::max(0.0, static_cast<double>(TimeMill) - reserve);
+    const double optimum = spendable / horizon + 0.8 * IncMill;
+    const long long optimumMs = std::max(1LL, static_cast<long long>(optimum));
+    const long long maximumMs = std::max(1LL, static_cast<long long>(std::min(spendable, optimum * 2.5)));
+    return {std::chrono::milliseconds(optimumMs), std::chrono::milliseconds(maximumMs)};
 }
 
 LastFourMoves *UCI::MakeMoves(std::string moves, Board &thisBoard)

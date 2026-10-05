@@ -32,6 +32,7 @@ std::atomic<bool> Search::stopRequested{false};
 time_t Search::beginTime{0};
 std::chrono::high_resolution_clock::time_point Search::startTime;
 double Search::allowedTime{0.0};
+double Search::maximumTime{0.0};
 std::string Search::bestMove{""};
 std::string Search::ponderMove{""};
 std::string Search::completedBestMove{""};
@@ -65,11 +66,11 @@ void Search::CheckLimits()
         return;
     }
 
-    if (finiteSearch && allowedTime > 0)
+    if (finiteSearch && maximumTime > 0)
     {
         auto now = std::chrono::high_resolution_clock::now();
         int64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count();
-        if (elapsed >= allowedTime)
+        if (elapsed >= maximumTime)
         {
             stopRequested.store(true, std::memory_order_relaxed);
             active.store(false, std::memory_order_relaxed);
@@ -280,8 +281,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     if (finiteSearch && allowedTime > 0)
     {
         int64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
-        double limit = isMoveTime ? allowedTime : (allowedTime * 0.75);
-        if (elapsed >= limit)
+        if (elapsed >= allowedTime)
         {
             PrintBestMove();
             finiteSearch = false;
@@ -423,10 +423,10 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                         allRootMovesCompleted = false;
                         break;
                     }
-                    if (finiteSearch && allowedTime > 0)
+                    if (finiteSearch && maximumTime > 0)
                     {
                         int64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
-                        if (elapsed >= allowedTime)
+                        if (elapsed >= maximumTime)
                         {
                             active.store(false, std::memory_order_relaxed);
                             stopRequested = true;
@@ -650,10 +650,10 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     allRootMovesCompleted = false;
                     break;
                 }
-                if (finiteSearch && allowedTime > 0)
+                if (finiteSearch && maximumTime > 0)
                 {
                     int64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
-                    if (elapsed >= allowedTime)
+                    if (elapsed >= maximumTime)
                     {
                         active.store(false, std::memory_order_relaxed);
                         stopRequested = true;
@@ -914,10 +914,10 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 allRootMovesCompleted = false;
                 break;
             }
-            if (finiteSearch && allowedTime > 0)
+            if (finiteSearch && maximumTime > 0)
             {
                 int64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
-                if (elapsed >= allowedTime)
+                if (elapsed >= maximumTime)
                 {
                     active.store(false, std::memory_order_relaxed);
                     stopRequested = true;
@@ -1092,8 +1092,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         if (finiteSearch && allowedTime > 0)
         {
             int64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
-            double softLimit = isMoveTime ? allowedTime : (allowedTime * 0.75);
-            if (elapsed >= softLimit)
+            if (elapsed >= allowedTime)
             {
                 break;
             }

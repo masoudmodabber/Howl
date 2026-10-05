@@ -47,6 +47,8 @@ public:
     static bool ApplyHashOptionCommand(const std::string& command,
                                        std::ostream& diagnostics);
     static std::chrono::nanoseconds getAllowedTime(int TimeMill, int IncMill, int remainedMoves);
+    static std::pair<std::chrono::nanoseconds, std::chrono::nanoseconds> getTimeBudget(
+        const Board& board, int TimeMill, int IncMill, int remainedMoves);
 
 private:
     static void ReleaseMoveHistory();

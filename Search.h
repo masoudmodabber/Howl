@@ -21,6 +21,7 @@ public:
     static time_t beginTime;
     static std::chrono::high_resolution_clock::time_point startTime;
     static double allowedTime;
+    static double maximumTime;
     static std::string bestMove;
     static std::string ponderMove;
     static std::string completedBestMove;
