@@ -9,11 +9,8 @@
 #include <cmath>
 
 class PVSSearch {
-    static constexpr bool ProductionIGGEnabled = false;
 public:
     static MovePrintValue* PVS(bool isPVNode, int alpha, int beta, int depth, Move& prevMove, Move& move1, Move& move2, Move& move3, Board& board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool selectiveSearch = false, bool cutNode = false);
-    // Retained as an unreferenced legacy implementation; production search does not call it.
-    static void IGG(bool isPVNode, int alpha, int beta, int depth, Move& prevMove, Move& move1, Move& move2, Move& move3, Board& board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool lastCheck, bool nullWindowSearch, MoveList moveList);
     static void deleteMoveList(MoveList moveList);
     struct KillerMove {
         int beginPlace = -1;
@@ -43,10 +40,6 @@ public:
                                           const Board& board, const Move& move);
 
 #if HOWL_CORRECTNESS_TESTING
-    static constexpr bool ProductionIGGEnabledForTesting()
-    {
-        return ProductionIGGEnabled;
-    }
     static bool NullMoveMaterialEligibleForTesting(const Board& board);
     static double NullMoveReductionForTesting(bool isPVNode, int alpha, int beta, int depth, Move& prevMove, Move& move1, Move& move2, Move& move3, Board& board4, bool mateSearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch)
     {
@@ -365,11 +358,8 @@ public:
 #endif
 
 private:
-    static MovePrintValue *SearchNode(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool selectiveSearch, bool cutNode);
     static int moveOrderingDepth[20];
-    static void NullMovePruning(bool isPVNode, int alpha, int beta, int depth, Move& prevMove, Move& move1, Move& move2, Move& move3, Board& board4, bool mAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, MovePrintValue mPValue);
     static double NullMoveReduction(bool isPVNode, int alpha, int beta, int depth, Move& prevMove, Move& move1, Move& move2, Move& move3, Board& board4, bool mateSearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch);
-    static MovePrintValue* StartQSearch(bool isPVNode, int alpha, int beta, Move& prevMove, int depthGone, Move& move1, Move& move2, Move& move3, Board& board4, bool nullWindowSearch, bool previousMoveWasCheck);
 };
 
 #endif

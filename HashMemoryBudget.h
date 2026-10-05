@@ -11,7 +11,6 @@ struct HashMemoryAccounting
     std::uint64_t requestedTotalBytes = 0;
     std::uint64_t acceptedTotalBytes = 0;
     std::uint64_t nonTableReserveBytes = 0;
-    std::uint64_t evalCacheBytes = 0;
     std::uint64_t exchangeCacheBytes = 0;
     std::uint64_t exchangeWithoutBeginPieceCacheBytes = 0;
     std::uint64_t ttBytes = 0;
@@ -32,8 +31,6 @@ public:
     static constexpr std::uint64_t ExchangeCacheBytes = 256ULL * Kibibyte;
     static constexpr std::uint64_t ExchangeWithoutBeginPieceCacheBytes =
         64ULL * Kibibyte;
-    static constexpr std::uint64_t MaximumEvalCacheBytes = 8ULL * Mebibyte;
-    static constexpr std::uint64_t MinimumEvalCacheBytes = 64ULL;
 
     static bool ConfigureMiB(int requestedMiB, std::ostream& diagnostics);
     static bool ConfigureValue(const std::string& value, std::ostream& diagnostics);
@@ -42,7 +39,6 @@ public:
     static bool SearchHasStarted();
     static bool IsConfigured();
     static HashMemoryAccounting Accounting();
-    static std::uint64_t SelectedEvalBytes(int requestedMiB);
     static std::uint64_t LastConfigurationPeakTableBytes();
 
 #if HOWL_CORRECTNESS_TESTING

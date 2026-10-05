@@ -13,7 +13,6 @@ public:
     static void DoMove(Board& thisBoard, Move& thisMove, Move& prevMove, int depth, int depthGone, MissingInfoAboutPrevStateFromMove* missingInfo = nullptr);
     static void DoMove(Board& thisBoard, Move& thisMove, MissingInfoAboutPrevStateFromMove* missingInfo = nullptr);
     static void DoMove(Board& thisBoard, Move& thisMove, MissingInfoAboutPrevStateFromMove& missingInfo);
-    static void HaveReachedToMoveSequence(Move& move, Move& prevMove, int depth, int depthGone);
     static void UndoMove(Board& thisBoard, Move& thisMove, MissingInfoAboutPrevStateFromMove& missingInfo);
 
 private:

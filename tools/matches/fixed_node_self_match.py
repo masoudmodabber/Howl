@@ -72,8 +72,6 @@ def play_game(
     production_opts = {"Hash": 32}
     if production_weights:
         production_opts["StructuredNNUEWeights"] = production_weights
-    else:
-        production_opts["BenchmarkEvaluator"] = "Classical"
 
     try:
         engine_procs[chess.WHITE] = UCIEngineProcess(

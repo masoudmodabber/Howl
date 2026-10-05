@@ -12,8 +12,7 @@
 #include "KingSetup.h"
 #include "Option.h"
 #include "PassedPawnSetup.h"
-#include "NNUEEvaluator.h"
-#include "ExperimentalEvaluator.h"
+#include "StructuredNNUEEvaluator.h"
 
 int main(int argc, char* argv[])
 {
@@ -46,12 +45,8 @@ int main(int argc, char* argv[])
     // belt-and-braces (some libcs ignore unitbuf when piped):
     setvbuf(stdout, nullptr, _IONBF, 0);    // fully unbuffer stdout
     const auto defaultWeights = (std::filesystem::path(argv[0]).parent_path().parent_path() / "weights" / "structured-v3-epoch5.weights").lexically_normal().string();
-    ExperimentalEvaluator::SetStructuredNNUEWeightsPath(defaultWeights);
-    ExperimentalEvaluator::SetMode(ExperimentalEvaluator::Mode::StructuredNNUE);
+    StructuredNNUE::SetWeightsPath(defaultWeights);
     UCI uci;
     uci.MainAsync();
-    auto p = NNUEEvaluator::GetProfile();
-    std::cerr << "NNUE_PROFILE forward " << p.forwardCalls << " " << p.forwardMs << " update " << p.updateCalls << " " << p.updateMs << " rebuild " << p.rebuildCalls << " " << p.rebuildMs << " save " << p.snapshotSaveCalls << " " << p.snapshotSaveMs << " restore " << p.snapshotRestoreCalls << " " << p.snapshotRestoreMs << "\n";
-
     return 0;
 }

@@ -31,7 +31,6 @@ public:
 
 private:
     static int pieceValue100[15];
-    static void deleteMoveList(MoveList moveList);
 };
 
 #endif

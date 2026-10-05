@@ -53,7 +53,6 @@ public:
 #endif
     
 private:
-    static void deleteMoveList(std::vector<Move*>* moveList);
     static void deleteMovesPrintValue(std::vector<MovePrintValue*>& movesPrintValue);
 };
 

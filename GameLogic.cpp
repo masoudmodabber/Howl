@@ -10,9 +10,8 @@
 #include <iostream>
 #include "BoardInitializer.h"
 #include "RepetitionHistory.h"
-#include "NNUEEvaluator.h"
+#include "NNUEHistory.h"
 #include "StructuredNNUEEvaluator.h"
-#include "ExperimentalEvaluator.h"
 #include "PositionCore.h"
 #include <algorithm>
 
@@ -24,23 +23,11 @@ bool UsePositionCoreHotState()
 }
 }
 
-void GameLogic::HaveReachedToMoveSequence(Move &move, Move &prevMove, int depth, int depthGone)
-{
-    if (move.beginPlace == 8 && move.endPlace == 16 && depth == 1 && depthGone == 2)
-    {
-        int testCounter = 0;
-        testCounter++;
-    }
-}
-
 void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int depth, int depthGone, MissingInfoAboutPrevStateFromMove* missingInfo)
 {
     const bool movingWhite = !thisBoard.sideToMove;
-    bool useStructured=ExperimentalEvaluator::GetMode()==ExperimentalEvaluator::Mode::StructuredNNUE;
-    if(useStructured) ExperimentalEvaluator::PrepareStructured(thisBoard);
-    NNUEEvaluator::SaveSnapshot(thisBoard);
-    if (UCI::IsTest())
-        HaveReachedToMoveSequence(thisMove, prevMove, depth, depthGone);
+    StructuredNNUE::Prepare(thisBoard);
+    NNUEHistoryLogic::SaveSnapshot(thisBoard);
     int beginPlace = thisMove.beginPlace;
     Search::moveCount++;
     if (missingInfo != nullptr && UsePositionCoreHotState())
@@ -96,10 +83,7 @@ void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int dep
             ? thisBoard.nnueHistory->snapshots[thisBoard.nnueHistory->snapshotCount - 1]
             : thisBoard.nnueState;
         PositionCoreLogic::UpdateAfterMove(thisBoard, thisMove, movingWhite, missingInfo);
-        if (!useStructured)
-            NNUEEvaluator::UpdateAfterMove(thisBoard, thisMove, activeSnapshot);
-        if (useStructured)
-            ExperimentalEvaluator::UpdateStructuredAfterMove(thisBoard, thisMove, activeSnapshot);
+        StructuredNNUE::UpdateAfterMove(thisBoard, thisMove, activeSnapshot);
         RepetitionHistory::Push(thisBoard.ZobristHashCode);
 #if defined(HOWL_POSITION_CORE_VERIFY) && HOWL_POSITION_CORE_VERIFY
         PositionCoreLogic::Verify(thisBoard, &thisMove, "DoMove");
@@ -158,9 +142,7 @@ void GameLogic::DoMove(Board &thisBoard, Move &thisMove, Move &prevMove, int dep
         ? thisBoard.nnueHistory->snapshots[thisBoard.nnueHistory->snapshotCount - 1]
         : thisBoard.nnueState;
     PositionCoreLogic::UpdateAfterMove(thisBoard, thisMove, movingWhite, missingInfo);
-    if (!useStructured)
-        NNUEEvaluator::UpdateAfterMove(thisBoard, thisMove, activeSnapshot);
-    if (useStructured) ExperimentalEvaluator::UpdateStructuredAfterMove(thisBoard,thisMove,activeSnapshot);
+    StructuredNNUE::UpdateAfterMove(thisBoard,thisMove,activeSnapshot);
     RepetitionHistory::Push(thisBoard.ZobristHashCode);
 #if defined(HOWL_POSITION_CORE_VERIFY) && HOWL_POSITION_CORE_VERIFY
     PositionCoreLogic::Verify(thisBoard, &thisMove, "DoMove");
@@ -1098,7 +1080,7 @@ void GameLogic::Unpassent(Board &thisBoard, Move &thisMove, MissingInfoAboutPrev
 void GameLogic::UndoMove(Board &thisBoard, Move &thisMove, MissingInfoAboutPrevStateFromMove &missingInfo)
 {
     const bool movingWhite = thisBoard.sideToMove;
-    NNUEState previous = NNUEEvaluator::RestoreSnapshot(thisBoard);
+    NNUEState previous = NNUEHistoryLogic::RestoreSnapshot(thisBoard);
     UnSideChange(thisBoard, thisMove);
     if (UsePositionCoreHotState())
     {

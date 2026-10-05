@@ -14,12 +14,7 @@ std::string Option::SyzygyPath;
 int Option::SyzygyProbeLimit = 5;
 int Option::nullWindowSize = 1;
 int Option::checkExtension = 4;
-int Option::checkExtensionNonPV = 1;
 int Option::SafetyMargin = 100;
-int Option::reductiondepth = 4;
-int Option::futilityMargin = 20;
-int Option::extendedFutilityMargin = 40;
-int Option::superExtendedFutilityMargin = 80;
 int Option::PawnValue = 120;
 int Option::KnightValue = 320;
 int Option::BishopValue = 375;
@@ -844,8 +839,6 @@ int Option::BishopMoveValueBlack[3][64] = {{0}};
 int Option::RookMoveValueBlack[3][64] = {{0}};
 int Option::QueenMoveValueBlack[3][64] = {{0}};
 int Option::KingMoveValueBlack[3][64] = {{0}};
-// public static int[] AttackArroundTheKingDangerMiddleGame = new int[4];
-// public static int[] AttackArroundTheKingDangerEndGame = new int[4];
 
 bool Option::initialized = false;
 

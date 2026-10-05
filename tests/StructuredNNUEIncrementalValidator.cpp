@@ -1,7 +1,6 @@
 #include "BoardMaker.h"
 #include "BoardInitializer.h"
 #include "StructuredNNUEEvaluator.h"
-#include "ExperimentalEvaluator.h"
 #include "GameLogic.h"
 #include "ChessStringManipulation.h"
 #include "AttackPlaces.h"
@@ -39,15 +38,15 @@ static Result oneUninitialized(const char* name,const char* fen,const char* uci,
     GameLogic::UndoMove(*board,*move,info); float uw,ub; r.undo=same(board->nnueState,before,uw,ub); delete move; return r;
 }
 int main(){try{
-    Option::Initialize(); AttackPlaces::Initialize(); BoardInitializer::Initialize(); PieceMoves::Initialize(); MoveLogic::Initialize(); KingSetup::Initialize(); PassedPawnSetup::Initialize(); ExperimentalEvaluator::SetStructuredNNUEWeightsPath(WEIGHTS); ExperimentalEvaluator::SetMode(ExperimentalEvaluator::Mode::StructuredNNUE);
+    Option::Initialize(); AttackPlaces::Initialize(); BoardInitializer::Initialize(); PieceMoves::Initialize(); MoveLogic::Initialize(); KingSetup::Initialize(); PassedPawnSetup::Initialize(); StructuredNNUE::SetWeightsPath(WEIGHTS);
     StructuredNNUEEvaluator e;e.Load(WEIGHTS);
     {
         auto root=make("r1bq1rk1/pp2bpp1/4p2p/2nN4/7B/4PN2/PPQ2PPP/R3KB1R b KQ - 0 11");
         Move* move=ChessStringManipulation::ConvertTextToMove("e6e5",*root); require(move,"orientation move conversion failed");
         MissingInfoAboutPrevStateFromMove info(*root,*move); GameLogic::DoMove(*root,*move,info);
-        const int whiteLeaf=ExperimentalEvaluator::Evaluate(*root);
+        const int whiteLeaf=StructuredNNUE::Evaluate(*root);
         auto black=make("r1bq1rk1/pp2bpp1/7p/2nNp3/7B/4PN2/PPQ2PPP/R3KB1R b KQ - 0 12");
-        const int blackLeaf=ExperimentalEvaluator::Evaluate(*black);
+        const int blackLeaf=StructuredNNUE::Evaluate(*black);
         require(whiteLeaf>0,"white-to-move StructuredNNUE leaf is not positive");
         require(blackLeaf<0,"black-to-move StructuredNNUE leaf is not negative");
         std::cout<<"orientation leaves: | white "<<whiteLeaf<<" | black "<<blackLeaf<<" | PASS\n";

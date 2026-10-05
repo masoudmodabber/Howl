@@ -1332,13 +1332,3 @@ int Search::PrintKBest(std::vector<MovePrintValue *> &movesPrintValue, int KBest
     }
     return movesPrintValue[printNumber - 1]->value;
 }
-
-void Search::deleteMoveList(std::vector<Move *> *moveList)
-{
-    for (Move *move : *moveList)
-    {
-        delete move;
-    }
-    moveList->clear();
-    delete moveList;
-}

@@ -34,7 +34,7 @@ except ModuleNotFoundError:  # Flat /app/tools layout used by cloud workers.
         EngineConfig, GameResult, MatchConfig, play_single_game, print_summary,
     )
 
-VALID_EVALUATORS = {"Classical", "NNUE", "NNUEStaticLinear", "StructuredNNUE"}
+VALID_EVALUATORS = {"StructuredNNUE"}
 
 def _validate_evaluator_config(evaluator: str, weights: str, role: str) -> None:
     if evaluator not in VALID_EVALUATORS:
@@ -54,7 +54,7 @@ def _configure_engine_processes(old_evaluator: str, new_evaluator: str, old_weig
             if evaluator == "StructuredNNUE":
                 self._send(f"setoption name StructuredNNUEWeights value {weights}")
             else:
-                self._send(f"setoption name BenchmarkEvaluator value {evaluator}")
+                raise ValueError("only StructuredNNUE is supported")
             self._send("isready")
             while self._read_line() != "readyok":
                 pass
@@ -273,7 +273,7 @@ def generate_task_specs(
     return tasks
 
 
-def run_worker_game(task: CloudTaskSpec, old_engine_path: str, new_engine_path: str, old_evaluator: str = "Classical", new_evaluator: str = "Classical", old_weights: str = "", new_weights: str = "") -> GameResult:
+def run_worker_game(task: CloudTaskSpec, old_engine_path: str, new_engine_path: str, old_evaluator: str = "StructuredNNUE", new_evaluator: str = "StructuredNNUE", old_weights: str = "", new_weights: str = "") -> GameResult:
     """
     Executes a single game worker run (used inside Docker / ACI or local simulation).
     """
@@ -309,8 +309,8 @@ class AzureCloudRunner:
         location: str = "eastus",
         candidate_regions: Optional[List[str]] = None,
         dry_run: bool = False,
-        old_evaluator: str = "Classical",
-        new_evaluator: str = "Classical",
+        old_evaluator: str = "StructuredNNUE",
+        new_evaluator: str = "StructuredNNUE",
         old_weights: str = "",
         new_weights: str = "",
     ):
@@ -900,8 +900,8 @@ def main() -> int:
         default=None,
         help="Output file for this run's PGN games (default: self-match-YYYY-MM-DD-HHMMSS.pgn)",
     )
-    parser.add_argument("--old-evaluator", default="Classical")
-    parser.add_argument("--new-evaluator", default="Classical")
+    parser.add_argument("--old-evaluator", default="StructuredNNUE")
+    parser.add_argument("--new-evaluator", default="StructuredNNUE")
     parser.add_argument("--old-weights", default="")
     parser.add_argument("--new-weights", default="")
     parser.add_argument(

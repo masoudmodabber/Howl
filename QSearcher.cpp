@@ -1,8 +1,7 @@
 #include "QSearcher.h"
 #include "BoardLogic.h"
 #include "ChessStringManipulation.h"
-#include "EvaluationLogic.h"
-#include "ExperimentalEvaluator.h"
+#include "StructuredNNUEEvaluator.h"
 #include "GameLogic.h"
 #include "MateScore.h"
 #include "MissingInfoAboutPrevStateFromMove.h"
@@ -217,12 +216,12 @@ Result SearchQ(Board& b,Move& prev,int alpha,int beta,int ply,int qDepth,bool pv
     int side=b.sideToMove?1:0;
     bool check=BoardLogic::UnderAttack(b,PositionCorePieceListsView{b.positionCore}[side*8+6].front(),!b.sideToMove);
     if(ply>=PVSSearch::MaxKillerPly-1)
-        return {check?0:ExperimentalEvaluator::Evaluate(b),{}};
+        return {check?0:StructuredNNUE::Evaluate(b),{}};
     int ttDepth=check||qDepth>=QChecks?QChecks:QNoChecks;
     int oldAlpha=alpha,staticEval=TT_NO_STATIC_EVAL,best=-Infinity;
     TTEntry tt{};bool hit=TranspositionTable::Probe(b.ZobristHashCode,tt);int ttValue=0;
     if(hit){ttValue=MateScore::FromTranspositionTable(tt.score,ply);uint8_t f=TTBaseFlag(tt.flag);if(!pv&&tt.depth>=ttDepth&&(f==TT_EXACT||(f==TT_LOWER_BOUND&&ttValue>=beta)||(f==TT_UPPER_BOUND&&ttValue<=alpha)))return {ttValue,{}};}
-    if(!check){staticEval=hit&&tt.staticEval!=TT_NO_STATIC_EVAL?tt.staticEval:ExperimentalEvaluator::Evaluate(b);best=staticEval;if(hit){uint8_t f=TTBaseFlag(tt.flag);if(f==TT_LOWER_BOUND&&ttValue>best)best=ttValue;else if(f==TT_UPPER_BOUND&&ttValue<best)best=ttValue;}if(best>=beta){TranspositionTable::Store(b.ZobristHashCode,MateScore::ToTranspositionTable(best,ply),ttDepth,TT_LOWER_BOUND,0,staticEval,pv);return {best,{}};}if(best>alpha)alpha=best;}
+    if(!check){staticEval=hit&&tt.staticEval!=TT_NO_STATIC_EVAL?tt.staticEval:StructuredNNUE::Evaluate(b);best=staticEval;if(hit){uint8_t f=TTBaseFlag(tt.flag);if(f==TT_LOWER_BOUND&&ttValue>best)best=ttValue;else if(f==TT_UPPER_BOUND&&ttValue<best)best=ttValue;}if(best>=beta){TranspositionTable::Store(b.ZobristHashCode,MateScore::ToTranspositionTable(best,ply),ttDepth,TT_LOWER_BOUND,0,staticEval,pv);return {best,{}};}if(best>alpha)alpha=best;}
     bool includeChecks=qDepth>=QChecks;
     QMovePicker picker(b,qDepth,ply,check,prev,hit?tt.bestMove:0);
     int futilityBase=best+SearchParameters::QSearch::FutilityMargin,legal=0,moveCount=0;uint16_t bestMove=0;std::string bestPv;
@@ -245,7 +244,6 @@ QSearchTestStatistics stats;
 
 int QSearcher::pieceValue100[15]={0,100,350,350,550,975,2500,0,0,100,350,350,550,975,2500};
 MovePrintValue* QSearcher::QSearch(bool pv,int alpha,int beta,Move&prev,int ply,int,bool,int depth,Move&,Move&,Move&,Board&b,bool,int,bool){Result r=SearchQ(b,prev,alpha,beta,ply,depth,pv);auto*out=new MovePrintValue();out->value=r.value;out->printString=r.pv;out->bound=r.value>=beta?SearchBound::Lower:(r.value<=alpha?SearchBound::Upper:SearchBound::Exact);out->proof=ExactProof;out->selective=false;return out;}
-void QSearcher::deleteMoveList(MoveList){}
 #ifdef HOWL_CORRECTNESS_TESTING
 void QSearcher::ResetTestStatistics(){stats={};}
 QSearchTestStatistics QSearcher::TestStatistics(){return stats;}

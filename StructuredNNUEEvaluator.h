@@ -22,3 +22,11 @@ private:
     void RebuildWhite(Board& board) const;
     void RebuildBlack(Board& board) const;
 };
+
+namespace StructuredNNUE
+{
+void SetWeightsPath(const std::string& path);
+void Prepare(Board& board);
+void UpdateAfterMove(Board& board, const Move& move, const NNUEState& previous);
+int Evaluate(Board& board);
+}

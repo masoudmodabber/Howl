@@ -4,7 +4,7 @@
 #endif
 
 #include "UCI.h"
-#include "ExperimentalEvaluator.h"
+#include "StructuredNNUEEvaluator.h"
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -352,14 +352,9 @@ void UCI::Run(std::istream& in, std::ostream& out)
                 ApplyHashOptionCommand(order, out);
                 continue;
             }
-            if (order.rfind("setoption name BenchmarkEvaluator value ", 0) == 0) {
-                const std::string value = order.substr(41);
-                ExperimentalEvaluator::SetMode(value == "Classical" ? ExperimentalEvaluator::Mode::Classical : ExperimentalEvaluator::Mode::StructuredNNUE);
-                continue;
-            }
             if (order.rfind("setoption name StructuredNNUEWeights value ", 0) == 0)
             {
-                ExperimentalEvaluator::SetStructuredNNUEWeightsPath(order.substr(43));
+                StructuredNNUE::SetWeightsPath(order.substr(43));
                 continue;
             }
             if (order.rfind("setoption name SyzygyPath", 0) == 0)

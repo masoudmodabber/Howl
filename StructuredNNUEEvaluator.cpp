@@ -1,4 +1,6 @@
 #include "StructuredNNUEEvaluator.h"
+#include <filesystem>
+#include <stdexcept>
 #include "Move.h"
 #include "Option.h"
 #include <cmath>
@@ -102,10 +104,6 @@ void StructuredNNUEEvaluator::UpdateAfterMove(Board& b,const Move& m,const NNUES
     }
     b.nnueState.whiteKingSquare=b.positionCore.kingSquare[0];b.nnueState.blackKingSquare=b.positionCore.kingSquare[1];b.nnueState.initialized=true;
 }
-#if 0
-float StructuredNNUEEvaluator::Evaluate(Board& b) const {
-    if(!b.nnueState.initialized) Rebuild(b);int wk=b.nnueState.whiteKingSquare,bk=b.nnueState.blackKingSquare;auto* sb=tensor("scalar.weight");auto* sr=tensor("sres.weight");std::array<float,256> a=b.nnueState.whiteAccumulator,o=b.nnueState.blackAccumulator;bool black=b.sideToMove;const auto& s=black?o:a;const auto& q=black?a:o;std::array<float,32> h{},h2{};auto* w1=tensor("f1.weight");auto* b1=tensor("f1.bias");auto* w2=tensor("f2.weight");auto* b2=tensor("f2.bias");auto* wo=tensor("out.weight");float bo=tensor("out.bias")[0];for(int i=0;i<32;++i){float z=b1[i];for(int j=0;j<256;++j)z+=w1[i*512+j]*s[j]+w1[i*512+256+j]*q[j];h[i]=std::max(0.f,z);}for(int i=0;i<32;++i){float z=b2[i];for(int j=0;j<32;++j)z+=w2[i*32+j]*h[j];h2[i]=std::max(0.f,z);}float n=bo;for(int i=0;i<32;++i)n+=wo[i]*h2[i];float sc=0;int king=black?bk:wk;for(int sq=0;sq<64;++sq){int p=b.positionCore.pieceAt[sq],c=cls(p,!black);if(c<0)continue;int rs=(((king^63)*10+c)*64+(sq^63));int bs=c*64+(sq^63);if(!black){rs=((king*10+c)*64+sq);bs=c*64+sq;}sc+=sb[bs]+sr[rs];}return n+std::tanh(sc);}
-#endif
 float StructuredNNUEEvaluator::Evaluate(Board& b) const {
     if(!b.nnueState.initialized) Rebuild(b); auto* b1=tensor("f1.bias");auto* w2=tensor("f2.weight");auto* b2=tensor("f2.bias");auto* wo=tensor("out.weight");float bo=tensor("out.bias")[0];
     const auto& wa=b.nnueState.whiteAccumulator;const auto& ba=b.nnueState.blackAccumulator;bool stmBlack=b.sideToMove;const auto& s=stmBlack?ba:wa;const auto& q=stmBlack?wa:ba;std::array<float,512> input{};std::array<float,32>h{},h2{};
@@ -113,4 +111,45 @@ float StructuredNNUEEvaluator::Evaluate(Board& b) const {
     FirstLayerOrdered(input.data(),transposedF1Weights.data(),b1,h.data());for(int i=0;i<32;++i)h[i]=std::max(0.f,h[i]);
     for(int i=0;i<32;++i){float z=b2[i];for(int j=0;j<32;++j)z+=w2[i*32+j]*h[j];h2[i]=std::max(0.f,z);}
     float result=bo;for(int i=0;i<32;++i)result+=wo[i]*h2[i];return result;
+}
+
+namespace StructuredNNUE
+{
+namespace
+{
+StructuredNNUEEvaluator evaluator;
+bool loaded = false;
+std::string weightsPath;
+}
+
+void SetWeightsPath(const std::string& path)
+{
+    weightsPath = path;
+    loaded = false;
+}
+
+void Prepare(Board& board)
+{
+    if (!board.nnueState.initialized)
+    {
+        if (weightsPath.empty())
+            throw std::runtime_error("StructuredNNUE weights path was not supplied");
+        evaluator.Load(std::filesystem::absolute(weightsPath).string());
+        loaded = true;
+        evaluator.Rebuild(board);
+    }
+}
+
+void UpdateAfterMove(Board& board, const Move& move, const NNUEState& previous)
+{
+    if (!loaded)
+        Prepare(board);
+    evaluator.UpdateAfterMove(board, move, previous);
+}
+
+int Evaluate(Board& board)
+{
+    Prepare(board);
+    return static_cast<int>(std::lround(evaluator.Evaluate(board)));
+}
 }

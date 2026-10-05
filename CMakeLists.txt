@@ -41,37 +41,8 @@ if(BUILD_TESTING)
     )
     target_include_directories(howl_correctness_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_definitions(howl_correctness_tests PRIVATE HOWL_CORRECTNESS_TESTING=1)
+    target_compile_definitions(howl_correctness_tests PRIVATE HOWL_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(howl_correctness_tests PRIVATE fathom)
-
-    add_executable(howl_nnue_tests
-        tests/NNUEPrototypeTests.cpp
-        ${TEST_ENGINE_SOURCES}
-    )
-    target_include_directories(howl_nnue_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_link_libraries(howl_nnue_tests PRIVATE fathom)
-    add_test(NAME nnue_prototype COMMAND howl_nnue_tests)
-
-    add_executable(howl_benchmark
-        tests/Benchmark.cpp
-        ${TEST_ENGINE_SOURCES}
-    )
-    target_include_directories(howl_benchmark PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_compile_definitions(howl_benchmark PRIVATE
-        HOWL_BENCHMARK_RELEASE=$<IF:$<CONFIG:Release>,1,0>
-        HOWL_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
-    )
-    target_link_libraries(howl_benchmark PRIVATE fathom)
-
-    add_executable(howl_memory_stress
-        tests/MemoryStress.cpp
-        ${TEST_ENGINE_SOURCES}
-    )
-    target_include_directories(howl_memory_stress PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_compile_definitions(howl_memory_stress PRIVATE
-        HOWL_MEMORY_STRESS_RELEASE=$<IF:$<CONFIG:Release>,1,0>
-        HOWL_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
-    )
-    target_link_libraries(howl_memory_stress PRIVATE fathom)
 
     foreach(POSITION start kiwipete position3 position4 position5 position6)
         add_test(
@@ -105,12 +76,7 @@ if(BUILD_TESTING)
         )
     endforeach()
 
-    add_test(
-        NAME cache_igg_depth_mapping
-        COMMAND howl_correctness_tests search igg_depth_mapping
-    )
-
-    foreach(CACHE_CASE evaluation evaluation_rook_ordering evaluation_fixed_table exchange exchange_variants exchange_promotion_key exchange_wrong_lookup exchange_field_collision exchange_attacker_bounds exchange_power_two_bounds exchange_legacy_equivalence exchange_fixed_table)
+    foreach(CACHE_CASE exchange exchange_variants exchange_promotion_key exchange_wrong_lookup exchange_field_collision exchange_attacker_bounds exchange_power_two_bounds exchange_legacy_equivalence exchange_fixed_table)
         add_test(
             NAME cache_${CACHE_CASE}
             COMMAND howl_correctness_tests cache ${CACHE_CASE}
@@ -121,11 +87,6 @@ if(BUILD_TESTING)
         NAME lifecycle_fen_replacement
         COMMAND howl_correctness_tests lifecycle fen_replacement
     )
-    add_test(
-        NAME memory_hash_budget
-        COMMAND howl_correctness_tests memory hash_budget
-    )
-
     foreach(UCI_CASE movetime depth nodes stop quit time_control)
         add_test(
             NAME uci_${UCI_CASE}
@@ -140,12 +101,6 @@ if(BUILD_TESTING)
         )
     endforeach()
 
-    foreach(EVAL_CASE lone_king_mate_guidance black_en_passant black_knight_attack bishop_pair_color king_danger_sign passed_pawn_minor_accessibility passed_pawn_table_symmetry king_safety_table_symmetry pawn_move_center_symmetry game_phase_calculation phase_taper_interpolation breakdown_reconciliation passed_pawn_phase_interpolation)
-        add_test(
-            NAME eval_${EVAL_CASE}
-            COMMAND howl_correctness_tests eval ${EVAL_CASE}
-        )
-    endforeach()
     add_test(
         NAME search_multipv_correctness
         COMMAND howl_correctness_tests search multipv_correctness

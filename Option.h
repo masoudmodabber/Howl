@@ -19,14 +19,7 @@ public:
     static int SyzygyProbeLimit;
     static int nullWindowSize;
     static int checkExtension;
-    static int checkExtensionNonPV;
     static int SafetyMargin;
-    static int reductiondepth;
-
-    // Const
-    static int futilityMargin;
-    static int extendedFutilityMargin;
-    static int superExtendedFutilityMargin;
 
     // Piece Value
     static int PawnValue;
