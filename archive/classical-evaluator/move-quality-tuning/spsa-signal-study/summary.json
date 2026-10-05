@@ -1,0 +1,142 @@
+{
+  "aggregates": [
+    {
+      "mean_absolute_D": 6.6,
+      "mean_root_disagreement": 0.825,
+      "median_absolute_D": 7.0,
+      "pairs": 8,
+      "scale": 0.5,
+      "sign_agreement": 1.0,
+      "zero_fraction": 0.1
+    },
+    {
+      "mean_absolute_D": 13.2,
+      "mean_root_disagreement": 0.825,
+      "median_absolute_D": 14.0,
+      "pairs": 16,
+      "scale": 0.5,
+      "sign_agreement": 1.0,
+      "zero_fraction": 0.1
+    },
+    {
+      "mean_absolute_D": 26.4,
+      "mean_root_disagreement": 0.825,
+      "median_absolute_D": 28.0,
+      "pairs": 32,
+      "scale": 0.5,
+      "sign_agreement": 1.0,
+      "zero_fraction": 0.1
+    },
+    {
+      "mean_absolute_D": 52.8,
+      "mean_root_disagreement": 0.825,
+      "median_absolute_D": 56.0,
+      "pairs": 64,
+      "scale": 0.5,
+      "sign_agreement": 1.0,
+      "zero_fraction": 0.1
+    },
+    {
+      "mean_absolute_D": 5.7,
+      "mean_root_disagreement": 0.95,
+      "median_absolute_D": 4.0,
+      "pairs": 8,
+      "scale": 1.0,
+      "sign_agreement": 1.0,
+      "zero_fraction": 0.15
+    },
+    {
+      "mean_absolute_D": 11.4,
+      "mean_root_disagreement": 0.95,
+      "median_absolute_D": 8.0,
+      "pairs": 16,
+      "scale": 1.0,
+      "sign_agreement": 1.0,
+      "zero_fraction": 0.15
+    },
+    {
+      "mean_absolute_D": 22.8,
+      "mean_root_disagreement": 0.95,
+      "median_absolute_D": 16.0,
+      "pairs": 32,
+      "scale": 1.0,
+      "sign_agreement": 1.0,
+      "zero_fraction": 0.15
+    },
+    {
+      "mean_absolute_D": 45.6,
+      "mean_root_disagreement": 0.95,
+      "median_absolute_D": 32.0,
+      "pairs": 64,
+      "scale": 1.0,
+      "sign_agreement": 1.0,
+      "zero_fraction": 0.15
+    },
+    {
+      "mean_absolute_D": 7.6,
+      "mean_root_disagreement": 0.9625,
+      "median_absolute_D": 6.0,
+      "pairs": 8,
+      "scale": 2.0,
+      "sign_agreement": 1.0,
+      "zero_fraction": 0.05
+    },
+    {
+      "mean_absolute_D": 15.2,
+      "mean_root_disagreement": 0.9625,
+      "median_absolute_D": 12.0,
+      "pairs": 16,
+      "scale": 2.0,
+      "sign_agreement": 1.0,
+      "zero_fraction": 0.05
+    },
+    {
+      "mean_absolute_D": 30.4,
+      "mean_root_disagreement": 0.9625,
+      "median_absolute_D": 24.0,
+      "pairs": 32,
+      "scale": 2.0,
+      "sign_agreement": 1.0,
+      "zero_fraction": 0.05
+    },
+    {
+      "mean_absolute_D": 60.8,
+      "mean_root_disagreement": 0.9625,
+      "median_absolute_D": 48.0,
+      "pairs": 64,
+      "scale": 2.0,
+      "sign_agreement": 1.0,
+      "zero_fraction": 0.05
+    }
+  ],
+  "campaign_estimates": {
+    "1000": {
+      "games": 16000,
+      "pairs_per_update": 8,
+      "seconds": 664.5026549231261
+    },
+    "2000": {
+      "games": 32000,
+      "pairs_per_update": 8,
+      "seconds": 1329.0053098462522
+    },
+    "500": {
+      "games": 8000,
+      "pairs_per_update": 8,
+      "seconds": 332.25132746156305
+    }
+  },
+  "nodes_per_move": 1000,
+  "parameters": 261,
+  "recommended_c_scale": 0.5,
+  "recommended_pairs": 8,
+  "selected_concurrency": 16,
+  "throughput": {
+    "concurrency": 16,
+    "games": 16,
+    "games_per_second": 24.07815812541935,
+    "nodes": 1672000,
+    "nodes_per_second": 2516167.5241063223,
+    "seconds": 0.6645026549231261
+  }
+}

@@ -1,0 +1,11 @@
+position_id	cluster	howl_move	reference_move	base_total_delta	cand_total_delta	base_attack_delta	cand_attack_delta	improved	ordering
+mqr-807d4cd83f6c149b	Positional Pawn Structure Distortion	e3h6	h2h3	33	33	-9	-9	no	HowlFavored
+mqr-2393787aa4fe83c7	King Exposure & Attack Overvaluation	f6g4	h8d8	0	0	0	0	no	HowlFavored
+mqr-4e7e2fd2f49d151a	King Exposure & Attack Overvaluation	d3d5	h2e5	90	91	23	24	no	HowlFavored
+mqr-356f60f0d53de8e4	Mobility / Activity Trapping	g1e1	g4g5	0	0	0	0	no	HowlFavored
+mqr-2ef7bef53f1d5ee9	King Exposure & Attack Overvaluation	d3f4	d3e5	0	0	0	0	no	HowlFavored
+mqr-088b515dd4e83799	Mobility / Activity Trapping	e3d5	f1d1	0	0	0	0	no	HowlFavored
+mqr-b9e01b944a62dc19	PST Piece Placement Collinearity	d5c6	d7b8	0	0	0	0	no	HowlFavored
+mqr-b6dbb8ca3933bdad	Positional Pawn Structure Distortion	b5c4	h5f4	64	64	16	16	no	HowlFavored
+mqr-12527c3aa41f17c2	Mobility / Activity Trapping	b8b3	a6b7	0	0	0	0	no	HowlFavored
+mqr-ab167c393e6e4ee8	Positional Pawn Structure Distortion	f5e4	d6d5	50	50	0	0	no	HowlFavored

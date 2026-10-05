@@ -16,37 +16,6 @@ list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/tools_scratch_test_node_co
 add_executable(howl ${SOURCES})
 target_link_libraries(howl PRIVATE fathom)
 
-set(TUNER_ENGINE_SOURCES ${SOURCES})
-list(REMOVE_ITEM TUNER_ENGINE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
-add_executable(howl_tuner
-    tools/TunerMain.cpp
-    ${TUNER_ENGINE_SOURCES}
-)
-target_include_directories(howl_tuner PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(howl_tuner PRIVATE fathom)
-
-add_executable(howl_search_tuner_objective
-    tools/SearchTunerObjective.cpp
-    ${TUNER_ENGINE_SOURCES}
-)
-target_include_directories(howl_search_tuner_objective PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(howl_search_tuner_objective PRIVATE fathom)
-
-add_executable(howl_eval_identifiability
-    tools/EvaluationIdentifiability.cpp
-    ${TUNER_ENGINE_SOURCES}
-)
-target_include_directories(howl_eval_identifiability PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(howl_eval_identifiability PRIVATE fathom)
-
-add_executable(howl_extract_canonical_responses
-    tools/ExtractCanonical192Responses.cpp
-    ${TUNER_ENGINE_SOURCES}
-)
-target_include_directories(howl_extract_canonical_responses PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_compile_definitions(howl_extract_canonical_responses PRIVATE HOWL_CORRECTNESS_TESTING=1)
-target_link_libraries(howl_extract_canonical_responses PRIVATE fathom)
-
 include(CTest)
 
 if(BUILD_TESTING)
@@ -57,7 +26,7 @@ if(BUILD_TESTING)
     )
     target_include_directories(howl_structured_nnue_weights_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     add_executable(howl_structured_nnue_rebuild_test
-        tests/StructuredNNUERebuildTest.cpp StructuredNNUEEvaluator.cpp StructuredNNUEWeights.cpp BoardInitializer.cpp Option.cpp
+        tests/StructuredNNUERebuildTest.cpp StructuredNNUEEvaluator.cpp StructuredNNUEWeights.cpp Board.cpp PositionCore.cpp BoardInitializer.cpp Option.cpp
     )
     target_include_directories(howl_structured_nnue_rebuild_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     add_executable(howl_structured_nnue_incremental_validator
@@ -103,36 +72,6 @@ if(BUILD_TESTING)
         HOWL_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     )
     target_link_libraries(howl_memory_stress PRIVATE fathom)
-
-    add_executable(howl_tuner_tests
-        tests/TunerTests.cpp
-        ${TEST_ENGINE_SOURCES}
-    )
-    target_include_directories(howl_tuner_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_link_libraries(howl_tuner_tests PRIVATE fathom)
-
-    foreach(TUNER_CASE piece_value_only other_family_freezes_piece_value refine1_unchanged parity_regression stops_after_unchanged_sweep mobility_v2_structure passed_pawn_v2_structure passed_pawn_v2_parallel_startup hybrid_loss_weighting external_anchor_and_attack_bounds)
-        add_test(
-            NAME tuner_${TUNER_CASE}
-            COMMAND howl_tuner_tests ${TUNER_CASE}
-        )
-    endforeach()
-
-    add_executable(howl_eval_breakdown
-        tools/EvalBreakdown.cpp
-        ${TEST_ENGINE_SOURCES}
-    )
-    target_include_directories(howl_eval_breakdown PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_compile_definitions(howl_eval_breakdown PRIVATE HOWL_CORRECTNESS_TESTING=1)
-    target_link_libraries(howl_eval_breakdown PRIVATE fathom)
-
-    add_executable(howl_phase_curve_tool
-        tools/PhaseCurveTool.cpp
-        ${TEST_ENGINE_SOURCES}
-    )
-    target_include_directories(howl_phase_curve_tool PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_compile_definitions(howl_phase_curve_tool PRIVATE HOWL_CORRECTNESS_TESTING=1)
-    target_link_libraries(howl_phase_curve_tool PRIVATE fathom)
 
     foreach(POSITION start kiwipete position3 position4 position5 position6)
         add_test(

@@ -285,7 +285,7 @@ def main():
     parser.add_argument("--pairs", type=int, default=200, help="Number of opening pairs (each played twice)")
     parser.add_argument("--nodes", type=int, default=20000, help="Fixed nodes per move")
     parser.add_argument("--concurrency", type=int, default=16, help="Concurrent games")
-    parser.add_argument("--out-dir", default="evaluator-analysis/redesign/attack/match", help="Output directory")
+    parser.add_argument("--out-dir", default="/tmp/howl-fixed-node-matches", help="Output directory")
     parser.add_argument("--candidate-weights", help="StructuredNNUE candidate weights path")
     parser.add_argument("--production-weights", help="StructuredNNUE production weights path")
     args = parser.parse_args()

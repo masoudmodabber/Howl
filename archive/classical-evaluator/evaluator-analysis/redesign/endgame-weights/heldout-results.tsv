@@ -1,0 +1,19 @@
+position_id	classification	howl_move	reference_move	base_total_delta	cand_total_delta	base_ew_delta	cand_ew_delta	improved	ordering
+mqr-818cc9a4fc09ab00	likely evaluation related	e4e5	f1e1	32	32	0	0	neutral	HowlFavored
+mqr-de4592e41ae99b67	likely search related	e7c7	g4f3	-274	-274	0	0	neutral	RefFavored
+mqr-b11e377da7611e39	likely search related	d8b8	e5f4	-97	-97	0	0	neutral	RefFavored
+mqr-2ef7bef53f1d5ee9	likely evaluation related	d3f4	d3e5	36	36	0	0	neutral	HowlFavored
+mqr-195122cd9a52f53e	mixed	h2h3	h2g3	2	2	0	0	neutral	HowlFavored
+mqr-b74ec04dea64242b	mixed	f6h5	a8d8	5	5	0	0	neutral	HowlFavored
+mqr-7e73474829d73542	unresolved	g7g6	b5b4	-8	-8	0	0	neutral	RefFavored
+mqr-e33ab47c227e813e	unresolved	d1h5	e1g1	-10	-10	0	0	neutral	RefFavored
+mqr-ef4be537017ff491	likely evaluation related	c3d5	c3e4	338	338	0	0	neutral	HowlFavored
+mqr-de15fcdc40be3424	likely search related	e3d2	e3c5	-47	-47	0	0	neutral	RefFavored
+mqr-088b515dd4e83799	likely evaluation related	e3d5	f1d1	136	136	0	0	neutral	HowlFavored
+mqr-cc99c66ee0077eb3	unresolved	f8d6	f8b4	-19	-19	0	0	neutral	RefFavored
+mqr-a152ae3cf93fb94c	likely search related	b6e3	f1g2	-57	-57	0	0	neutral	RefFavored
+mqr-5eb39cf373982078	likely evaluation related	a6b5	c6a5	36	36	0	0	neutral	HowlFavored
+mqr-ea64fb354b812a97	likely evaluation related	e2f1	c1d1	155	155	0	0	neutral	HowlFavored
+mqr-2f9464bdf3eb9dce	likely evaluation related	e2g2	h2h4	28	28	0	0	neutral	HowlFavored
+mqr-1a5120cf950cc314	unresolved	c8d7	d8c7	-9	-9	0	0	neutral	RefFavored
+mqr-c14ccde6e2ee82a6	likely evaluation related	a7a5	f6d7	44	44	0	0	neutral	HowlFavored

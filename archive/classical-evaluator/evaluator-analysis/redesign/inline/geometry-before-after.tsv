@@ -1,0 +1,10 @@
+metric	production	candidate	improvement
+parameter_count	8	7	-1 (-12.5%)
+effective_rank	7 (rank deficient)	7	Full rank (7/7)
+rank_parameter_ratio	0.875	1.000	1.000 (Zero null dimensions)
+condition_number	inf	2.42	Well-conditioned (< 3.0)
+dead_dimensions	1 (BishopPairValue)	0	-1 dead dimension excised
+low_support_parameters	4 (50.0%)	3 (42.9%)	-1 low-support dimension removed
+severe_collinear_pairs	0	0	Clean internal structure
+table_identity_with_baseline	100.0%	100.0%	100.000% exact mathematical match
+cross_family_overlap	BishopOpenFile r=0.828	BishopOpenFile r=0.828	Preserved mobility/pawn separation

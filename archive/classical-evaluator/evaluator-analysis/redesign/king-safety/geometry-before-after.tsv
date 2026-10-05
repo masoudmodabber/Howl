@@ -1,0 +1,11 @@
+metric	production	candidate	improvement
+parameter_count	23	17	-6 (-26.1%)
+effective_rank	23	17	Full rank (17/17)
+rank_parameter_ratio	1.000	1.000	1.000 (Zero null dimensions)
+condition_number	6.20	3.85	Improved (-2.35, well-conditioned < 4.0)
+baseline_zero_dimensions	6	0	-6 (-100% dead dimensions excised)
+low_support_parameters	11 (47.8%)	5 (29.4%)	-6 (-54.5% reduction)
+severe_collinear_pairs	0	0	0
+table_identity_with_baseline	100.0%	100.0%	100.000% exact mathematical match
+cross_family_overlap_attack	r=0.412	r=0.412	Preserved tactical threat separation
+cross_family_overlap_piecesquare	r=0.582	r=0.582	Preserved king placement separation

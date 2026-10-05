@@ -1,0 +1,23 @@
+representation	raw_parameter_count	optimization_coordinate_count	mapping	reason
+MaterialGlobal	12	12	identity_1_to_1	canonical representation is already structural; no further justified compression
+PawnStructure	3	3	identity_1_to_1	canonical representation is already structural; no further justified compression
+PassedPawns	15	15	identity_1_to_1	canonical representation is already structural; no further justified compression
+PST-Pawn	12	12	identity_1_to_1	canonical representation is already structural; no further justified compression
+PST-Knight	22	22	identity_1_to_1	canonical representation is already structural; no further justified compression
+PST-Bishop	22	22	identity_1_to_1	canonical representation is already structural; no further justified compression
+PST-Rook	12	12	identity_1_to_1	canonical representation is already structural; no further justified compression
+PST-Queen	12	12	identity_1_to_1	canonical representation is already structural; no further justified compression
+PST-King	14	14	identity_1_to_1	canonical representation is already structural; no further justified compression
+KnightMobility	8	8	identity_1_to_1	canonical representation is already structural; no further justified compression
+BishopMobility	10	10	identity_1_to_1	canonical representation is already structural; no further justified compression
+RookMobility	10	10	identity_1_to_1	canonical representation is already structural; no further justified compression
+QueenMobility	10	10	identity_1_to_1	canonical representation is already structural; no further justified compression
+Attack-Pawn	8	8	identity_1_to_1	canonical representation is already structural; no further justified compression
+Attack-Knight	10	10	identity_1_to_1	canonical representation is already structural; no further justified compression
+Attack-Bishop	10	10	identity_1_to_1	canonical representation is already structural; no further justified compression
+Attack-Rook	10	10	identity_1_to_1	canonical representation is already structural; no further justified compression
+Attack-Queen	9	9	identity_1_to_1	canonical representation is already structural; no further justified compression
+Attack-King	4	4	identity_1_to_1	canonical representation is already structural; no further justified compression
+PieceFeatures	8	8	identity_1_to_1	canonical representation is already structural; no further justified compression
+Endgame	5	5	identity_1_to_1	canonical representation is already structural; no further justified compression
+KingSafety	22	22	identity_1_to_1	canonical representation is already structural; no further justified compression

@@ -1,0 +1,10 @@
+positions	1
+rejected	0
+parameters	261
+exact_linear_parameters	250
+nonlinear_or_conditional_parameters	11
+production_tuner_parity_mismatches	0
+low_occurrence_count_threshold	100
+low_occurrence_fraction_threshold	0.001
+near_zero_standard_deviation_threshold	1e-09
+effective_rank_relative_tolerance	1e-10

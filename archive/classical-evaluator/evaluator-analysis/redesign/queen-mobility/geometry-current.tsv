@@ -1,0 +1,11 @@
+parameter	phase	current_value	nonzero_positions	nonzero_fraction	mean	standard_deviation	low_support	bucket_span
+QueenMobilityMiddleGameBase	MG	-6	58	0.058	-0.024	0.239633052812	yes	0
+QueenMobilityMiddleGameIncrement_1	MG	3	72	0.072	-0.012	0.268059694844	yes	1..4 (MG) / 1..3 (EG)
+QueenMobilityMiddleGameIncrement_2	MG	15	273	0.273	-0.025	0.521895583426	no	5..8 (MG) / 4..6 (EG)
+QueenMobilityMiddleGameIncrement_3	MG	4	187	0.187	-0.011	0.432295038139	no	9..12 (MG) / 7..9 (EG)
+QueenMobilityMiddleGameIncrement_4	MG	4	26	0.026	-0.006	0.161133485036	yes	13..15 (MG) / 10..12 (EG)
+QueenMobilityEndGameBase	EG	10	69	0.069	-0.005	0.262630919733	yes	0
+QueenMobilityEndGameIncrement_1	EG	30	64	0.064	-0.01	0.252784493195	yes	1..4 (MG) / 1..3 (EG)
+QueenMobilityEndGameIncrement_2	EG	33	63	0.063	-0.003	0.250980078891	yes	5..8 (MG) / 4..6 (EG)
+QueenMobilityEndGameIncrement_3	EG	31	59	0.059	-0.013	0.24255102556	yes	9..12 (MG) / 7..9 (EG)
+QueenMobilityEndGameIncrement_4	EG	27	57	0.057	-0.005	0.238694365246	yes	13..15 (MG) / 10..12 (EG)

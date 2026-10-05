@@ -1,0 +1,21 @@
+position_id	fen	result	group	split	weight
+mqr-118b687613e72cf6	r1bq1rk1/5ppp/p1pb1n2/3pp3/4P3/1P1B4/PBPNQPPP/R3K2R w KQ - 1 12	0.5	twic1660-03445	train	1
+mqr-d6cd15622f27558e	2R3k1/5pb1/4p2p/1p4pP/1p4N1/1P6/P2r1PP1/6K1 b - - 9 39	0.5	twic1660-06995	train	1
+mqr-b7f18a47f336e8b2	8/R1p1ppk1/n2p2pp/3P2P1/3N3P/3bPB2/1r3PK1/8 b - - 0 50	0.5	twic1660-01547	validation	1
+mqr-5254d1bcaa73e57f	5r1k/1p3p2/p3pNnp/2p1P3/5P1q/P2Q3P/P5P1/5RK1 b - - 0 29	0.5	twic1660-04935	train	1
+mqr-db0ef99c680e6bf0	r1b4r/5k1p/2p1ppp1/p7/1bB5/1R2B3/P1P2PPP/3R2K1 b - - 3 20	0.5	twic1660-02283	train	1
+mqr-cac4d54a43ed02b4	8/4kpp1/5b2/ppq5/4B3/4P1P1/P4PK1/3Q4 w - - 0 50	0.5	twic1660-00567	validation	1
+mqr-1ff467896a647c68	r1bqr1k1/ppp2pbp/3p1np1/4p3/2PN4/1PNP2P1/PB2PPBP/R2Q1RK1 b - - 0 10	0.5	twic1660-06265	train	1
+mqr-88f4661f41eca883	r4r1k/pb1p1p2/q7/1pPQp3/4P1p1/1B2B3/PP3P2/2K5 w - - 0 24	0.5	twic1660-03316	train	1
+mqr-52db0064a5b4d0ab	r1b1k2r/ppp2ppp/2q2n2/8/1b1P4/2N5/PPP2PPP/R1BQKB1R w KQkq - 2 8	0.5	twic1660-05264	validation	1
+mqr-d4d8be804956e1c9	8/8/3r2k1/5pp1/1R6/6P1/5PK1/8 b - - 7 79	0.5	twic1660-06400	train	1
+mqr-5ef360c489f24e7a	2r3k1/5pb1/3p2p1/3Pn2p/4R3/6PP/1qPQBBK1/8 w - - 7 51	0.5	twic1660-08675	train	1
+mqr-f17b5ba7a643bd05	rnb2rk1/ppq1ppbp/3p1np1/2p5/3PPP2/1QPB1N2/PP4PP/RNB2RK1 w - - 7 9	0.5	twic1660-05887	train	1
+mqr-0f5b0847589b6a96	r5k1/pbqn1r1p/1p2p3/2p1P1p1/2P2p2/2BB1P2/PP2Q1PP/2RR2K1 b - - 4 20	0.5	twic1660-02308	train	1
+mqr-b27f7378bc5969fd	1r2k2r/1bq1bppp/p1n1p3/1p2P3/2n2BP1/PNN5/1PP1Q1BP/2KRR3 w k - 5 18	0.5	twic1660-02641	train	1
+mqr-21d368f3e7a09a22	3r1bk1/1p1P1p1p/6p1/pN1Q1pn1/P1B5/1P5P/5qP1/2R4K w - - 1 30	0.5	twic1660-02338	train	1
+mqr-66cdd83fa4345c71	6r1/2p1rp1R/1pkp4/p4R2/2P4p/PP2PK2/5P1P/8 w - - 4 33	0.5	twic1660-04575	train	1
+mqr-4ab2993553d51bbb	7k/1p5p/3p2p1/1P2p3/1P4P1/6P1/1BPbP3/5K2 w - - 1 33	0.5	twic1660-03289	validation	1
+mqr-27c496e9a349a116	r2r2k1/1ppq1pp1/2np1n1p/4p3/p3P3/2PPbN1P/PPQ2PP1/R3RNK1 w - - 0 15	0.5	twic1660-04101	train	1
+mqr-0d194ebcdd6078f2	8/5kpp/8/8/RR6/3N3P/6P1/7K b - - 0 65	0.5	twic1660-06253	train	1
+mqr-88b944e2e7481468	5r2/8/7R/1k6/2n4B/8/1r3PPK/1R6 w - - 11 50	0.5	twic1660-08367	train	1

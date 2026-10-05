@@ -1,0 +1,48 @@
+[Event "Howl Self Match"]
+[Site "Local"]
+[Date "2026.09.28"]
+[Round "1"]
+[White "Howl-old"]
+[Black "Howl-new"]
+[Result "1-0"]
+[SetUp "1"]
+[FEN "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3"]
+[Opening "Italian Game"]
+[Termination "Engine crash (new): Engine standard output closed unexpectedly (rc=-6)"]
+[CrashDetails "Engine crash (new) on move 3 [Black] | Reason: Engine standard output closed unexpectedly | Return code: -6 | Current FEN: r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3 | Last UCI sent: go wtime 300000 btime 300000 winc 1500 binc 1500 | Last bestmove received: (none) | Stderr (last lines): |   terminate called after throwing an instance of 'std::runtime_error' |     what():  cannot open structured NNUE file"]
+
+{ Game terminated by crash:
+Engine crash (new) on move 3 [Black]
+Reason: Engine standard output closed unexpectedly
+Return code: -6
+Current FEN: r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3
+Last UCI sent: go wtime 300000 btime 300000 winc 1500 binc 1500
+Last bestmove received: (none)
+Stderr (last lines):
+  terminate called after throwing an instance of 'std::runtime_error'
+    what():  cannot open structured NNUE file } 1-0
+
+[Event "Howl Self Match"]
+[Site "Local"]
+[Date "2026.09.28"]
+[Round "2"]
+[White "Howl-new"]
+[Black "Howl-old"]
+[Result "0-1"]
+[SetUp "1"]
+[FEN "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3"]
+[Opening "Italian Game"]
+[Termination "Engine crash (new): Engine standard output closed unexpectedly (rc=-6)"]
+[CrashDetails "Engine crash (new) on move 4 [White] | Reason: Engine standard output closed unexpectedly | Return code: -6 | Current FEN: r1bqkbnr/pppp1ppp/8/4p3/2BnP3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4 | Last UCI sent: go wtime 300000 btime 290896 winc 1500 binc 1500 | Last bestmove received: (none) | Stderr (last lines): |   terminate called after throwing an instance of 'std::runtime_error' |     what():  cannot open structured NNUE file"]
+
+3... Nd4 { Game terminated by crash:
+Engine crash (new) on move 4 [White]
+Reason: Engine standard output closed unexpectedly
+Return code: -6
+Current FEN: r1bqkbnr/pppp1ppp/8/4p3/2BnP3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4
+Last UCI sent: go wtime 300000 btime 290896 winc 1500 binc 1500
+Last bestmove received: (none)
+Stderr (last lines):
+  terminate called after throwing an instance of 'std::runtime_error'
+    what():  cannot open structured NNUE file } 0-1
+

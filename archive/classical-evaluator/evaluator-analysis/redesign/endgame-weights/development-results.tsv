@@ -1,0 +1,83 @@
+position_id	classification	howl_move	reference_move	base_total_delta	cand_total_delta	base_ew_delta	cand_ew_delta	improved	ordering
+mqr-b2a9a4d0fb61c77e	likely search related	a2a3	c4e6	-173	-173	0	0	neutral	RefFavored
+mqr-57d97c07303d51cc	likely evaluation related	b6c4	b7d5	80	80	0	0	neutral	HowlFavored
+mqr-807d4cd83f6c149b	likely evaluation related	e3h6	h2h3	102	102	0	0	neutral	HowlFavored
+mqr-582c7e8f513ee18c	mixed	e4d5	e4f4	16	16	0	0	neutral	HowlFavored
+mqr-2393787aa4fe83c7	likely evaluation related	f6g4	h8d8	85	85	0	0	neutral	HowlFavored
+mqr-db0ef99c680e6bf0	mixed	c6c5	b4e7	16	16	0	0	neutral	HowlFavored
+mqr-fb0f66455d0787f8	unresolved	g5h5	g5h4	-15	-15	0	0	neutral	RefFavored
+mqr-4e7e2fd2f49d151a	likely evaluation related	d3d5	h2e5	127	127	0	0	neutral	HowlFavored
+mqr-5bfa2d94f381b59e	likely search related	g7g5	a2d5	-77	-77	0	0	neutral	RefFavored
+mqr-356f60f0d53de8e4	likely evaluation related	g1e1	g4g5	21	21	0	0	neutral	HowlFavored
+mqr-25d438a145514e34	likely search related	d7e7	a5a4	-63	-63	0	0	neutral	RefFavored
+mqr-f8d987a3bbf59936	likely evaluation related	g3g4	e1e3	170	170	0	0	neutral	HowlFavored
+mqr-2e4ecc2abd6d86cf	likely evaluation related	f4f5	c1e3	20	20	0	0	neutral	HowlFavored
+mqr-0f64a5a6e329dcad	unresolved	a8c8	d7c8	-10	-10	0	0	neutral	RefFavored
+mqr-c3946e5484dffc24	unresolved	d1b3	a1c1	-10	-10	0	0	neutral	RefFavored
+mqr-b27f7378bc5969fd	likely search related	a3a4	c1b1	-46	-46	0	0	neutral	RefFavored
+mqr-b9d8bc5042b712e6	likely search related	f3e3	f3h5	-67	-67	0	0	neutral	RefFavored
+mqr-2c4adb8968e9feee	likely evaluation related	a1h1	f2f3	54	54	0	0	neutral	HowlFavored
+mqr-c7ad4ab7ef18912c	likely evaluation related	a3b4	f4f5	102	102	0	0	neutral	HowlFavored
+mqr-ad3f2c9692ced875	likely search related	f1e2	c3e4	-52	-52	0	0	neutral	RefFavored
+mqr-1fd1890b962573b5	likely search related	f6g4	d8d1	-611	-611	0	0	neutral	RefFavored
+mqr-607528927b519c72	likely search related	g4g5	h2h4	-54	-54	0	0	neutral	RefFavored
+mqr-34fbae7a49db5786	mixed	a3a4	d4f5	3	3	0	0	neutral	HowlFavored
+mqr-cbc695b3661d9c59	mixed	h7h5	d8c7	5	5	0	0	neutral	HowlFavored
+mqr-fcfb5aca3ef9c4bd	likely search related	e7e8	f7g8	-119	-119	0	0	neutral	RefFavored
+mqr-267e018c83e11864	likely evaluation related	b8d7	b4a3	38	38	0	0	neutral	HowlFavored
+mqr-598df65ac8957446	likely search related	c6a7	e7e6	-63	-63	0	0	neutral	RefFavored
+mqr-6426f5403efb5fd8	likely search related	e6d5	b6b5	-46	-46	0	0	neutral	RefFavored
+mqr-a2b8525bbe8d7998	unresolved	f8e8	a8a6	-5	-5	0	0	neutral	RefFavored
+mqr-77d0bff2ffe3291a	likely search related	g4e6	g4f3	-318	-318	0	0	neutral	RefFavored
+mqr-fda50774b9667480	unresolved	f6d7	g6g5	0	0	0	0	neutral	RefFavored
+mqr-69d31f769b5927c1	likely search related	c5c4	e7g6	-52	-52	0	0	neutral	RefFavored
+mqr-31e82160914fd948	likely search related	g8h7	c8g4	-88	-88	0	0	neutral	RefFavored
+mqr-dc7d12d0496c294a	mixed	d3d4	e1c1	15	15	0	0	neutral	HowlFavored
+mqr-495cea97df0ab52d	mixed	c6e5	e8g8	4	4	0	0	neutral	HowlFavored
+mqr-451b947ddd4e29a7	likely evaluation related	c5a7	c5c6	27	27	0	0	neutral	HowlFavored
+mqr-c4efdb13dcb14d82	likely evaluation related	a7d4	b7c5	96	96	0	0	neutral	HowlFavored
+mqr-7590b3c12c59316a	likely search related	d1a1	g5f6	-393	-393	0	0	neutral	RefFavored
+mqr-c497558a90b9bd24	likely search related	d1d3	f3e5	-102	-102	0	0	neutral	RefFavored
+mqr-8f4ec00a04fc8118	likely search related	d8a5	c6d5	-67	-67	0	0	neutral	RefFavored
+mqr-ea40fd2c41bb3679	mixed	f1e1	b5d3	5	5	0	0	neutral	HowlFavored
+mqr-d476f67d83470966	likely evaluation related	h4h5	f2f3	33	33	0	0	neutral	HowlFavored
+mqr-3b2ef8e196b78289	likely evaluation related	f4e5	f4f5	81	81	0	0	neutral	HowlFavored
+mqr-0db8aae5a66b7b3c	likely search related	e5d5	e5a1	-33	-33	0	0	neutral	RefFavored
+mqr-32dcc92c65421940	mixed	e1g1	c1e3	11	11	0	0	neutral	HowlFavored
+mqr-29c765e9fd74d869	likely evaluation related	e4c5	e4g3	363	363	0	0	neutral	HowlFavored
+mqr-a139839363fc6cb5	likely evaluation related	f3e5	g2g4	151	151	0	0	neutral	HowlFavored
+mqr-6f34f37310742790	unresolved	b2b3	g2g3	-3	-3	0	0	neutral	RefFavored
+mqr-71749f6dcbcbd592	likely search related	c7c8	c7c3	-40	-40	0	0	neutral	RefFavored
+mqr-c578041f0fcd9d6a	likely evaluation related	e4d5	e1e3	88	88	0	0	neutral	HowlFavored
+mqr-88549acd2d4c586f	likely search related	e7d8	f8c8	-26	-26	0	0	neutral	RefFavored
+mqr-6abe9ec0b54d21fb	likely evaluation related	d8c7	g7h6	38	38	0	0	neutral	HowlFavored
+mqr-b9e01b944a62dc19	mixed	d5c6	d7b8	17	17	0	0	neutral	HowlFavored
+mqr-4941d2d95a4e2207	mixed	g2g4	e2d3	3	3	0	0	neutral	HowlFavored
+mqr-05537fca079f71d3	likely evaluation related	b5a3	b5c3	20	20	0	0	neutral	HowlFavored
+mqr-7adf9cbcb45f41bb	unresolved	f3e1	f1e1	-4	-4	0	0	neutral	RefFavored
+mqr-4f314c56f110c038	likely search related	h1g1	f4e5	-93	-93	0	0	neutral	RefFavored
+mqr-a5113d426a5b43d1	likely evaluation related	f3e5	a2a5	51	51	0	0	neutral	HowlFavored
+mqr-b2b1d091c68dbcda	likely search related	g8g7	d8e8	-21	-21	0	0	neutral	RefFavored
+mqr-5661479fcded35dc	likely search related	g5a5	h1e1	-31	-31	0	0	neutral	RefFavored
+mqr-bba30c0f62e5b30e	unresolved	h1e1	h5h6	-6	-6	0	0	neutral	RefFavored
+mqr-b6dbb8ca3933bdad	likely evaluation related	b5c4	h5f4	39	39	0	0	neutral	HowlFavored
+mqr-12527c3aa41f17c2	likely evaluation related	b8b3	a6b7	49	49	0	0	neutral	HowlFavored
+mqr-a14447381008e5a9	likely search related	e2c2	e4f5	-81	-81	0	0	neutral	RefFavored
+mqr-b00198c5be87e34f	likely search related	d8b6	e7g5	-27	-27	0	0	neutral	RefFavored
+mqr-086cf19eb60ae0d7	likely evaluation related	d2f3	e1g1	44	44	0	0	neutral	HowlFavored
+mqr-79e93ef7f507f229	likely evaluation related	h7h6	f8e7	24	24	0	0	neutral	HowlFavored
+mqr-c4a19e8bb097d572	likely evaluation related	e6d5	c6d4	103	103	0	0	neutral	HowlFavored
+mqr-8a1b8e084be32b71	likely search related	c3a4	f1d1	-24	-24	0	0	neutral	RefFavored
+mqr-ab167c393e6e4ee8	likely evaluation related	f5e4	d6d5	297	297	0	0	neutral	HowlFavored
+mqr-11aec836f2dcd66b	mixed	b7c8	b7c6	2	2	0	0	neutral	HowlFavored
+mqr-724e4b750664bde7	likely search related	c4b3	d2e4	-51	-51	0	0	neutral	RefFavored
+mqr-2f0e20540a40693a	unresolved	h2h4	f1d3	-5	-5	0	0	neutral	RefFavored
+mqr-dec62a22d20ea2ec	unresolved	a7a5	c7c6	-2	-2	0	0	neutral	RefFavored
+mqr-76b1e8f7fe196da9	unresolved	b8d7	f7f5	-13	-13	0	0	neutral	RefFavored
+mqr-2e10494acce7aa0f	unresolved	g8f6	f8b4	-16	-16	0	0	neutral	RefFavored
+mqr-2d5086aa38754e35	likely evaluation related	g3h2	d6e6	349	349	0	0	neutral	HowlFavored
+mqr-fb06c613ff3c6d7e	mixed	h6f5	g3h5	14	14	0	0	neutral	HowlFavored
+mqr-f377ba83124d09db	unresolved	d2d4	f1d3	-18	-18	0	0	neutral	RefFavored
+mqr-d4cfeed43df04859	mixed	a1d1	f1d1	4	4	0	0	neutral	HowlFavored
+mqr-1fb507bea1337785	likely evaluation related	a6a5	c5d5	83	83	0	0	neutral	HowlFavored
+mqr-006356a0a9eb8ca0	mixed	d7b6	f6d5	11	11	0	0	neutral	HowlFavored

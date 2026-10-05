@@ -55,7 +55,7 @@ The current production evaluator is a small NNUE trained specifically for Howl.
 It uses king conditioned sparse chess features and incrementally maintained accumulators so evaluation can be updated efficiently as moves are made and undone.
 The current production network is Structured NNUE V3.
 Historical weights are kept separately so trained generations can be tested against each other:
-weights/structured-v3-epoch1.weights
+archive/nnue/structured-v3-epoch1.weights
 weights/structured-v3-epoch5.weights
 The current default production weights are:
 weights/structured-v3-epoch5.weights
@@ -126,7 +126,7 @@ python tools/matches/fixed_node_self_match.py \
   --candidate build/howl \
   --production build/howl \
   --candidate-weights weights/structured-v3-epoch5.weights \
-  --production-weights weights/structured-v3-epoch1.weights \
+  --production-weights archive/nnue/structured-v3-epoch1.weights \
   --pairs 4 \
   --nodes 500000 \
   --concurrency 8 \

@@ -1,0 +1,401 @@
+game_idx	opening_id	cand_color	result	winner	cand_score	prod_score	termination	plies	nodes	crashes	illegal_moves	timeouts
+0	spsa-7cc31be897818f4b	white	0-1	production	0.0	1.0	Checkmate (Production wins)	123	2460000	0	0	0
+1	spsa-7cc31be897818f4b	black	1/2-1/2		0.5	0.5	Threefold repetition	78	1560000	0	0	0
+2	spsa-4ef90d7cef8b0a74	white	0-1	production	0.0	1.0	Checkmate (Production wins)	120	2400000	0	0	0
+3	spsa-4ef90d7cef8b0a74	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	96	1920000	0	0	0
+4	spsa-07f55712827c63ac	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	140	2800000	0	0	0
+5	spsa-07f55712827c63ac	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	81	1620000	0	0	0
+6	spsa-906e2e752075137b	white	0-1	production	0.0	1.0	Checkmate (Production wins)	246	4920000	0	0	0
+7	spsa-906e2e752075137b	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	114	2280000	0	0	0
+8	spsa-9f928639b0e5972d	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	134	2680000	0	0	0
+9	spsa-9f928639b0e5972d	black	1-0	production	0.0	1.0	Checkmate (Production wins)	76	1520000	0	0	0
+10	spsa-de8e94eb9d5a27aa	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	87	1740000	0	0	0
+11	spsa-de8e94eb9d5a27aa	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	96	1920000	0	0	0
+12	spsa-71993e14df1eae06	white	0-1	production	0.0	1.0	Checkmate (Production wins)	111	2220000	0	0	0
+13	spsa-71993e14df1eae06	black	1-0	production	0.0	1.0	Checkmate (Production wins)	100	2000000	0	0	0
+14	spsa-c723ef6232959d62	white	1/2-1/2		0.5	0.5	Threefold repetition	104	2080000	0	0	0
+15	spsa-c723ef6232959d62	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	130	2600000	0	0	0
+16	spsa-36bfeafaf34e94bc	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	137	2740000	0	0	0
+17	spsa-36bfeafaf34e94bc	black	1-0	production	0.0	1.0	Checkmate (Production wins)	91	1820000	0	0	0
+18	spsa-31982a6cc96c4c26	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	84	1680000	0	0	0
+19	spsa-31982a6cc96c4c26	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	75	1500000	0	0	0
+20	spsa-3189b09de1392336	white	0-1	production	0.0	1.0	Checkmate (Production wins)	136	2720000	0	0	0
+21	spsa-3189b09de1392336	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	134	2680000	0	0	0
+22	spsa-4ae82a52cec8e264	white	1/2-1/2		0.5	0.5	Adjudicated draw (300 plies limit)	300	6000000	0	0	0
+23	spsa-4ae82a52cec8e264	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	77	1540000	0	0	0
+24	spsa-8acd2172830e7102	white	1/2-1/2		0.5	0.5	Threefold repetition	18	360000	0	0	0
+25	spsa-8acd2172830e7102	black	1-0	production	0.0	1.0	Checkmate (Production wins)	121	2420000	0	0	0
+26	spsa-24867244dfcb2b67	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	148	2960000	0	0	0
+27	spsa-24867244dfcb2b67	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	85	1700000	0	0	0
+28	spsa-b83c627ee7723635	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	113	2260000	0	0	0
+29	spsa-b83c627ee7723635	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	112	2240000	0	0	0
+30	spsa-63eb4b35a8b2cfbd	white	1/2-1/2		0.5	0.5	Threefold repetition	74	1480000	0	0	0
+31	spsa-63eb4b35a8b2cfbd	black	1-0	production	0.0	1.0	Checkmate (Production wins)	104	2080000	0	0	0
+32	spsa-513030d2df46a262	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	97	1940000	0	0	0
+33	spsa-513030d2df46a262	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	136	2720000	0	0	0
+34	spsa-5775dc3ff7f2ec8a	white	0-1	production	0.0	1.0	Checkmate (Production wins)	78	1560000	0	0	0
+35	spsa-5775dc3ff7f2ec8a	black	1-0	production	0.0	1.0	Checkmate (Production wins)	31	620000	0	0	0
+36	spsa-d35f674618e0bbdc	white	0-1	production	0.0	1.0	Checkmate (Production wins)	97	1940000	0	0	0
+37	spsa-d35f674618e0bbdc	black	1-0	production	0.0	1.0	Checkmate (Production wins)	88	1760000	0	0	0
+38	spsa-07055937066679b4	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	67	1340000	0	0	0
+39	spsa-07055937066679b4	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	60	1200000	0	0	0
+40	spsa-40b6982d754cb5bf	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	104	2080000	0	0	0
+41	spsa-40b6982d754cb5bf	black	1/2-1/2		0.5	0.5	Insufficient material	130	2600000	0	0	0
+42	spsa-3e834c40a9ca7b1b	white	0-1	production	0.0	1.0	Checkmate (Production wins)	98	1960000	0	0	0
+43	spsa-3e834c40a9ca7b1b	black	1-0	production	0.0	1.0	Checkmate (Production wins)	99	1980000	0	0	0
+44	spsa-9758ed134cb84cf4	white	1/2-1/2		0.5	0.5	Threefold repetition	86	1720000	0	0	0
+45	spsa-9758ed134cb84cf4	black	1-0	production	0.0	1.0	Checkmate (Production wins)	110	2200000	0	0	0
+46	spsa-b4992f2d218ad7c2	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	151	3020000	0	0	0
+47	spsa-b4992f2d218ad7c2	black	1/2-1/2		0.5	0.5	Threefold repetition	25	500000	0	0	0
+48	spsa-305b71b97efdddde	white	0-1	production	0.0	1.0	Checkmate (Production wins)	81	1620000	0	0	0
+49	spsa-305b71b97efdddde	black	1-0	production	0.0	1.0	Checkmate (Production wins)	60	1200000	0	0	0
+50	spsa-472853022e5e7912	white	0-1	production	0.0	1.0	Checkmate (Production wins)	126	2520000	0	0	0
+51	spsa-472853022e5e7912	black	1-0	production	0.0	1.0	Checkmate (Production wins)	129	2580000	0	0	0
+52	spsa-8031e17d0633c084	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	97	1940000	0	0	0
+53	spsa-8031e17d0633c084	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	114	2280000	0	0	0
+54	spsa-b012541766037c76	white	0-1	production	0.0	1.0	Checkmate (Production wins)	145	2900000	0	0	0
+55	spsa-b012541766037c76	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	131	2620000	0	0	0
+56	spsa-61f5c86e48394b13	white	0-1	production	0.0	1.0	Checkmate (Production wins)	112	2240000	0	0	0
+57	spsa-61f5c86e48394b13	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	130	2600000	0	0	0
+58	spsa-f1eb3823099ed8ef	white	0-1	production	0.0	1.0	Checkmate (Production wins)	137	2740000	0	0	0
+59	spsa-f1eb3823099ed8ef	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	195	3900000	0	0	0
+60	spsa-6382f981f0f88a5e	white	0-1	production	0.0	1.0	Checkmate (Production wins)	100	2000000	0	0	0
+61	spsa-6382f981f0f88a5e	black	1/2-1/2		0.5	0.5	Threefold repetition	47	940000	0	0	0
+62	spsa-819f34778290540b	white	0-1	production	0.0	1.0	Checkmate (Production wins)	177	3540000	0	0	0
+63	spsa-819f34778290540b	black	1/2-1/2		0.5	0.5	Insufficient material	147	2940000	0	0	0
+64	spsa-e9696382a4dd85e5	white	1/2-1/2		0.5	0.5	Threefold repetition	51	1020000	0	0	0
+65	spsa-e9696382a4dd85e5	black	1/2-1/2		0.5	0.5	Threefold repetition	134	2680000	0	0	0
+66	spsa-a1540e9e42836634	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	100	2000000	0	0	0
+67	spsa-a1540e9e42836634	black	1-0	production	0.0	1.0	Checkmate (Production wins)	118	2360000	0	0	0
+68	spsa-1e2eea5e6db8a96a	white	1/2-1/2		0.5	0.5	Threefold repetition	76	1520000	0	0	0
+69	spsa-1e2eea5e6db8a96a	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	54	1080000	0	0	0
+70	spsa-4c8b8c6163e507a6	white	0-1	production	0.0	1.0	Checkmate (Production wins)	142	2840000	0	0	0
+71	spsa-4c8b8c6163e507a6	black	1/2-1/2		0.5	0.5	Insufficient material	82	1640000	0	0	0
+72	spsa-ba5a9e117b657408	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	64	1280000	0	0	0
+73	spsa-ba5a9e117b657408	black	1-0	production	0.0	1.0	Checkmate (Production wins)	122	2440000	0	0	0
+74	spsa-e31b452d0cbbeeb1	white	0-1	production	0.0	1.0	Checkmate (Production wins)	104	2080000	0	0	0
+75	spsa-e31b452d0cbbeeb1	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	140	2800000	0	0	0
+76	spsa-a4b78febddb842f2	white	1/2-1/2		0.5	0.5	Threefold repetition	67	1340000	0	0	0
+77	spsa-a4b78febddb842f2	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	103	2060000	0	0	0
+78	spsa-d968362796d9dec2	white	0-1	production	0.0	1.0	Checkmate (Production wins)	70	1400000	0	0	0
+79	spsa-d968362796d9dec2	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	222	4440000	0	0	0
+80	spsa-c2545776b372e426	white	0-1	production	0.0	1.0	Checkmate (Production wins)	93	1860000	0	0	0
+81	spsa-c2545776b372e426	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	153	3060000	0	0	0
+82	spsa-e2700279d8321fc1	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	137	2740000	0	0	0
+83	spsa-e2700279d8321fc1	black	1-0	production	0.0	1.0	Checkmate (Production wins)	127	2540000	0	0	0
+84	spsa-34380b9140298f64	white	0-1	production	0.0	1.0	Checkmate (Production wins)	143	2860000	0	0	0
+85	spsa-34380b9140298f64	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	103	2060000	0	0	0
+86	spsa-9edcdb3d89b0a359	white	1/2-1/2		0.5	0.5	Threefold repetition	74	1480000	0	0	0
+87	spsa-9edcdb3d89b0a359	black	1-0	production	0.0	1.0	Checkmate (Production wins)	79	1580000	0	0	0
+88	spsa-8d743650a2eae16a	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	93	1860000	0	0	0
+89	spsa-8d743650a2eae16a	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	100	2000000	0	0	0
+90	spsa-6d8aeddfd2b1f75f	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	132	2640000	0	0	0
+91	spsa-6d8aeddfd2b1f75f	black	1-0	production	0.0	1.0	Checkmate (Production wins)	128	2560000	0	0	0
+92	spsa-5c712a22a992e6e4	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	101	2020000	0	0	0
+93	spsa-5c712a22a992e6e4	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	94	1880000	0	0	0
+94	spsa-3dd708d33d6fdec8	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	104	2080000	0	0	0
+95	spsa-3dd708d33d6fdec8	black	1/2-1/2		0.5	0.5	Insufficient material	140	2800000	0	0	0
+96	spsa-368cf5ef94c2608a	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	47	940000	0	0	0
+97	spsa-368cf5ef94c2608a	black	1-0	production	0.0	1.0	Checkmate (Production wins)	97	1940000	0	0	0
+98	spsa-7ab10948b43d99d0	white	0-1	production	0.0	1.0	Checkmate (Production wins)	193	3860000	0	0	0
+99	spsa-7ab10948b43d99d0	black	1/2-1/2		0.5	0.5	Insufficient material	103	2060000	0	0	0
+100	spsa-e6ffae98f3760284	white	0-1	production	0.0	1.0	Checkmate (Production wins)	140	2800000	0	0	0
+101	spsa-e6ffae98f3760284	black	1-0	production	0.0	1.0	Checkmate (Production wins)	121	2420000	0	0	0
+102	spsa-91b1ce9ceff651d0	white	1/2-1/2		0.5	0.5	Threefold repetition	111	2220000	0	0	0
+103	spsa-91b1ce9ceff651d0	black	1/2-1/2		0.5	0.5	Threefold repetition	86	1720000	0	0	0
+104	spsa-7d06670a7d25fbcc	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	105	2100000	0	0	0
+105	spsa-7d06670a7d25fbcc	black	1-0	production	0.0	1.0	Checkmate (Production wins)	93	1860000	0	0	0
+106	spsa-62f30035e01004a1	white	0-1	production	0.0	1.0	Checkmate (Production wins)	98	1960000	0	0	0
+107	spsa-62f30035e01004a1	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	84	1680000	0	0	0
+108	spsa-895b473c48febf28	white	0-1	production	0.0	1.0	Checkmate (Production wins)	127	2540000	0	0	0
+109	spsa-895b473c48febf28	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	133	2660000	0	0	0
+110	spsa-524c7c1d3dbda410	white	1/2-1/2		0.5	0.5	Insufficient material	143	2860000	0	0	0
+111	spsa-524c7c1d3dbda410	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	74	1480000	0	0	0
+112	spsa-70df0e151cf472e5	white	0-1	production	0.0	1.0	Checkmate (Production wins)	189	3780000	0	0	0
+113	spsa-70df0e151cf472e5	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	117	2340000	0	0	0
+114	spsa-327d42444be38ecc	white	0-1	production	0.0	1.0	Checkmate (Production wins)	116	2320000	0	0	0
+115	spsa-327d42444be38ecc	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	70	1400000	0	0	0
+116	spsa-473676d46eac75b8	white	0-1	production	0.0	1.0	Checkmate (Production wins)	97	1940000	0	0	0
+117	spsa-473676d46eac75b8	black	1-0	production	0.0	1.0	Checkmate (Production wins)	124	2480000	0	0	0
+118	spsa-b9ad3a3db11dd096	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	85	1700000	0	0	0
+119	spsa-b9ad3a3db11dd096	black	1-0	production	0.0	1.0	Checkmate (Production wins)	69	1380000	0	0	0
+120	spsa-ff46108e51b3f909	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	64	1280000	0	0	0
+121	spsa-ff46108e51b3f909	black	1/2-1/2		0.5	0.5	Insufficient material	100	2000000	0	0	0
+122	spsa-770d4319ecb283f4	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	101	2020000	0	0	0
+123	spsa-770d4319ecb283f4	black	1/2-1/2		0.5	0.5	Threefold repetition	191	3820000	0	0	0
+124	spsa-eede6b772ca3d500	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	115	2300000	0	0	0
+125	spsa-eede6b772ca3d500	black	1-0	production	0.0	1.0	Checkmate (Production wins)	67	1340000	0	0	0
+126	spsa-6fd1ec9759656998	white	0-1	production	0.0	1.0	Checkmate (Production wins)	105	2100000	0	0	0
+127	spsa-6fd1ec9759656998	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	75	1500000	0	0	0
+128	spsa-cae84fcaac14284e	white	0-1	production	0.0	1.0	Checkmate (Production wins)	136	2720000	0	0	0
+129	spsa-cae84fcaac14284e	black	1/2-1/2		0.5	0.5	Threefold repetition	109	2180000	0	0	0
+130	spsa-4781ee1ad99dd983	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	112	2240000	0	0	0
+131	spsa-4781ee1ad99dd983	black	1-0	production	0.0	1.0	Checkmate (Production wins)	96	1920000	0	0	0
+132	spsa-7602bd22df9d84c5	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	101	2020000	0	0	0
+133	spsa-7602bd22df9d84c5	black	1-0	production	0.0	1.0	Checkmate (Production wins)	149	2980000	0	0	0
+134	spsa-463c4a466add17dc	white	1/2-1/2		0.5	0.5	Threefold repetition	140	2800000	0	0	0
+135	spsa-463c4a466add17dc	black	1-0	production	0.0	1.0	Checkmate (Production wins)	104	2080000	0	0	0
+136	spsa-cc49e48f762b9bfb	white	0-1	production	0.0	1.0	Checkmate (Production wins)	108	2160000	0	0	0
+137	spsa-cc49e48f762b9bfb	black	1-0	production	0.0	1.0	Checkmate (Production wins)	31	620000	0	0	0
+138	spsa-098443d908a11cbd	white	0-1	production	0.0	1.0	Checkmate (Production wins)	63	1260000	0	0	0
+139	spsa-098443d908a11cbd	black	1-0	production	0.0	1.0	Checkmate (Production wins)	116	2320000	0	0	0
+140	spsa-ffb81f23c1f8b69b	white	0-1	production	0.0	1.0	Checkmate (Production wins)	28	560000	0	0	0
+141	spsa-ffb81f23c1f8b69b	black	1/2-1/2		0.5	0.5	Threefold repetition	62	1240000	0	0	0
+142	spsa-6e7325359e7588bd	white	1/2-1/2		0.5	0.5	Insufficient material	97	1940000	0	0	0
+143	spsa-6e7325359e7588bd	black	1/2-1/2		0.5	0.5	Threefold repetition	86	1720000	0	0	0
+144	spsa-f79ccf9164e14ecc	white	1/2-1/2		0.5	0.5	Insufficient material	192	3840000	0	0	0
+145	spsa-f79ccf9164e14ecc	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	129	2580000	0	0	0
+146	spsa-0e2fae9befd6e6ec	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	111	2220000	0	0	0
+147	spsa-0e2fae9befd6e6ec	black	1/2-1/2		0.5	0.5	Insufficient material	120	2400000	0	0	0
+148	spsa-aa3c0864eaf50e52	white	0-1	production	0.0	1.0	Checkmate (Production wins)	95	1900000	0	0	0
+149	spsa-aa3c0864eaf50e52	black	1-0	production	0.0	1.0	Checkmate (Production wins)	124	2480000	0	0	0
+150	spsa-66c4ae8504d73cd4	white	0-1	production	0.0	1.0	Checkmate (Production wins)	136	2720000	0	0	0
+151	spsa-66c4ae8504d73cd4	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	56	1120000	0	0	0
+152	spsa-0958052c67f68a47	white	1/2-1/2		0.5	0.5	Threefold repetition	124	2480000	0	0	0
+153	spsa-0958052c67f68a47	black	1-0	production	0.0	1.0	Checkmate (Production wins)	122	2440000	0	0	0
+154	spsa-aa2f6eccfa34c566	white	0-1	production	0.0	1.0	Checkmate (Production wins)	122	2440000	0	0	0
+155	spsa-aa2f6eccfa34c566	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	162	3240000	0	0	0
+156	spsa-50e344a463f45070	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	64	1280000	0	0	0
+157	spsa-50e344a463f45070	black	1/2-1/2		0.5	0.5	Threefold repetition	15	300000	0	0	0
+158	spsa-68cc5771912ccec2	white	1/2-1/2		0.5	0.5	50-move rule	207	4140000	0	0	0
+159	spsa-68cc5771912ccec2	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	116	2320000	0	0	0
+160	spsa-633dba79e6a22e75	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	89	1780000	0	0	0
+161	spsa-633dba79e6a22e75	black	1/2-1/2		0.5	0.5	Threefold repetition	154	3080000	0	0	0
+162	spsa-3dba83ea80002a97	white	1/2-1/2		0.5	0.5	50-move rule	217	4340000	0	0	0
+163	spsa-3dba83ea80002a97	black	1/2-1/2		0.5	0.5	Threefold repetition	171	3420000	0	0	0
+164	spsa-ad914724877abd68	white	0-1	production	0.0	1.0	Checkmate (Production wins)	88	1760000	0	0	0
+165	spsa-ad914724877abd68	black	1-0	production	0.0	1.0	Checkmate (Production wins)	97	1940000	0	0	0
+166	spsa-a2bc64172d31a437	white	0-1	production	0.0	1.0	Checkmate (Production wins)	105	2100000	0	0	0
+167	spsa-a2bc64172d31a437	black	1-0	production	0.0	1.0	Checkmate (Production wins)	118	2360000	0	0	0
+168	spsa-314d7d45d403e604	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	61	1220000	0	0	0
+169	spsa-314d7d45d403e604	black	1-0	production	0.0	1.0	Checkmate (Production wins)	119	2380000	0	0	0
+170	spsa-7faf2327bd1c75b2	white	0-1	production	0.0	1.0	Checkmate (Production wins)	115	2300000	0	0	0
+171	spsa-7faf2327bd1c75b2	black	1/2-1/2		0.5	0.5	Threefold repetition	54	1080000	0	0	0
+172	spsa-28ab907ae4af9d7f	white	1/2-1/2		0.5	0.5	Insufficient material	110	2200000	0	0	0
+173	spsa-28ab907ae4af9d7f	black	1-0	production	0.0	1.0	Checkmate (Production wins)	101	2020000	0	0	0
+174	spsa-99df56b6d1687156	white	1/2-1/2		0.5	0.5	Insufficient material	112	2240000	0	0	0
+175	spsa-99df56b6d1687156	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	95	1900000	0	0	0
+176	spsa-a348a8a9b785d8af	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	91	1820000	0	0	0
+177	spsa-a348a8a9b785d8af	black	1-0	production	0.0	1.0	Checkmate (Production wins)	51	1020000	0	0	0
+178	spsa-f9d57c95418a94f1	white	0-1	production	0.0	1.0	Checkmate (Production wins)	90	1800000	0	0	0
+179	spsa-f9d57c95418a94f1	black	1/2-1/2		0.5	0.5	Threefold repetition	72	1440000	0	0	0
+180	spsa-2f45d1bf80ca5a1a	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	248	4960000	0	0	0
+181	spsa-2f45d1bf80ca5a1a	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	105	2100000	0	0	0
+182	spsa-6632997bd4518868	white	0-1	production	0.0	1.0	Checkmate (Production wins)	124	2480000	0	0	0
+183	spsa-6632997bd4518868	black	1/2-1/2		0.5	0.5	Threefold repetition	107	2140000	0	0	0
+184	spsa-72035b58cd24626d	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	124	2480000	0	0	0
+185	spsa-72035b58cd24626d	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	125	2500000	0	0	0
+186	spsa-cd34adbccf4a9167	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	103	2060000	0	0	0
+187	spsa-cd34adbccf4a9167	black	1/2-1/2		0.5	0.5	Threefold repetition	36	720000	0	0	0
+188	spsa-42fd098362977ba9	white	0-1	production	0.0	1.0	Checkmate (Production wins)	119	2380000	0	0	0
+189	spsa-42fd098362977ba9	black	1-0	production	0.0	1.0	Checkmate (Production wins)	120	2400000	0	0	0
+190	spsa-a9f489cc7101c8e3	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	73	1460000	0	0	0
+191	spsa-a9f489cc7101c8e3	black	1-0	production	0.0	1.0	Checkmate (Production wins)	113	2260000	0	0	0
+192	spsa-09bb31fc21bd3d26	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	122	2440000	0	0	0
+193	spsa-09bb31fc21bd3d26	black	1-0	production	0.0	1.0	Checkmate (Production wins)	70	1400000	0	0	0
+194	spsa-e5b88c0277856f4c	white	1/2-1/2		0.5	0.5	Threefold repetition	52	1040000	0	0	0
+195	spsa-e5b88c0277856f4c	black	1-0	production	0.0	1.0	Checkmate (Production wins)	143	2860000	0	0	0
+196	spsa-84af9c9e6fd3ad86	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	68	1360000	0	0	0
+197	spsa-84af9c9e6fd3ad86	black	1-0	production	0.0	1.0	Checkmate (Production wins)	134	2680000	0	0	0
+198	spsa-0d823e47488a79e4	white	0-1	production	0.0	1.0	Checkmate (Production wins)	256	5120000	0	0	0
+199	spsa-0d823e47488a79e4	black	1/2-1/2		0.5	0.5	Insufficient material	93	1860000	0	0	0
+200	spsa-2b203ac3ed161e2e	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	92	1840000	0	0	0
+201	spsa-2b203ac3ed161e2e	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	45	900000	0	0	0
+202	spsa-3956325e376d34f9	white	0-1	production	0.0	1.0	Checkmate (Production wins)	140	2800000	0	0	0
+203	spsa-3956325e376d34f9	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	90	1800000	0	0	0
+204	spsa-099ee2ba33913e83	white	1/2-1/2		0.5	0.5	Threefold repetition	65	1300000	0	0	0
+205	spsa-099ee2ba33913e83	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	141	2820000	0	0	0
+206	spsa-f04e2e8a382468ce	white	0-1	production	0.0	1.0	Checkmate (Production wins)	96	1920000	0	0	0
+207	spsa-f04e2e8a382468ce	black	1-0	production	0.0	1.0	Checkmate (Production wins)	117	2340000	0	0	0
+208	spsa-23288125b5b5e2fc	white	0-1	production	0.0	1.0	Checkmate (Production wins)	149	2980000	0	0	0
+209	spsa-23288125b5b5e2fc	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	163	3260000	0	0	0
+210	spsa-6fb6bf4a641ac818	white	0-1	production	0.0	1.0	Checkmate (Production wins)	128	2560000	0	0	0
+211	spsa-6fb6bf4a641ac818	black	1/2-1/2		0.5	0.5	Threefold repetition	126	2520000	0	0	0
+212	spsa-4a64f55242f98981	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	101	2020000	0	0	0
+213	spsa-4a64f55242f98981	black	1-0	production	0.0	1.0	Checkmate (Production wins)	139	2780000	0	0	0
+214	spsa-e4144f51138fae1d	white	0-1	production	0.0	1.0	Checkmate (Production wins)	129	2580000	0	0	0
+215	spsa-e4144f51138fae1d	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	107	2140000	0	0	0
+216	spsa-8ad7700486955a74	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	151	3020000	0	0	0
+217	spsa-8ad7700486955a74	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	184	3680000	0	0	0
+218	spsa-95b9de4fb51cb19a	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	98	1960000	0	0	0
+219	spsa-95b9de4fb51cb19a	black	1-0	production	0.0	1.0	Checkmate (Production wins)	74	1480000	0	0	0
+220	spsa-08a88e38c426e560	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	113	2260000	0	0	0
+221	spsa-08a88e38c426e560	black	1/2-1/2		0.5	0.5	Insufficient material	230	4600000	0	0	0
+222	spsa-d90602b27da360d5	white	0-1	production	0.0	1.0	Checkmate (Production wins)	83	1660000	0	0	0
+223	spsa-d90602b27da360d5	black	1/2-1/2		0.5	0.5	Threefold repetition	37	740000	0	0	0
+224	spsa-3866c568f62481ea	white	0-1	production	0.0	1.0	Checkmate (Production wins)	158	3160000	0	0	0
+225	spsa-3866c568f62481ea	black	1-0	production	0.0	1.0	Checkmate (Production wins)	111	2220000	0	0	0
+226	spsa-ddbe897712db10ed	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	138	2760000	0	0	0
+227	spsa-ddbe897712db10ed	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	133	2660000	0	0	0
+228	spsa-f58c01601352a7f8	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	215	4300000	0	0	0
+229	spsa-f58c01601352a7f8	black	1-0	production	0.0	1.0	Checkmate (Production wins)	81	1620000	0	0	0
+230	spsa-950aa554290a28ce	white	1/2-1/2		0.5	0.5	Threefold repetition	121	2420000	0	0	0
+231	spsa-950aa554290a28ce	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	128	2560000	0	0	0
+232	spsa-92f6011e6d3b2d24	white	0-1	production	0.0	1.0	Checkmate (Production wins)	81	1620000	0	0	0
+233	spsa-92f6011e6d3b2d24	black	1/2-1/2		0.5	0.5	Threefold repetition	49	980000	0	0	0
+234	spsa-22daf4b438c40f2e	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	85	1700000	0	0	0
+235	spsa-22daf4b438c40f2e	black	1-0	production	0.0	1.0	Checkmate (Production wins)	123	2460000	0	0	0
+236	spsa-ad184ef93465e1c8	white	1/2-1/2		0.5	0.5	Threefold repetition	49	980000	0	0	0
+237	spsa-ad184ef93465e1c8	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	67	1340000	0	0	0
+238	spsa-25f21a17cf9aba82	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	165	3300000	0	0	0
+239	spsa-25f21a17cf9aba82	black	1-0	production	0.0	1.0	Checkmate (Production wins)	131	2620000	0	0	0
+240	spsa-c637b674246f5d20	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	144	2880000	0	0	0
+241	spsa-c637b674246f5d20	black	1-0	production	0.0	1.0	Checkmate (Production wins)	158	3160000	0	0	0
+242	spsa-1afc5d40a2fb9ff8	white	1/2-1/2		0.5	0.5	Threefold repetition	40	800000	0	0	0
+243	spsa-1afc5d40a2fb9ff8	black	1/2-1/2		0.5	0.5	Insufficient material	92	1840000	0	0	0
+244	spsa-6aa60308a16d9318	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	80	1600000	0	0	0
+245	spsa-6aa60308a16d9318	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	83	1660000	0	0	0
+246	spsa-725370266716a910	white	0-1	production	0.0	1.0	Checkmate (Production wins)	112	2240000	0	0	0
+247	spsa-725370266716a910	black	1-0	production	0.0	1.0	Checkmate (Production wins)	109	2180000	0	0	0
+248	spsa-7e1de557a9c9215c	white	0-1	production	0.0	1.0	Checkmate (Production wins)	110	2200000	0	0	0
+249	spsa-7e1de557a9c9215c	black	1-0	production	0.0	1.0	Checkmate (Production wins)	103	2060000	0	0	0
+250	spsa-214ba22151049e68	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	110	2200000	0	0	0
+251	spsa-214ba22151049e68	black	1/2-1/2		0.5	0.5	Threefold repetition	89	1780000	0	0	0
+252	spsa-d0262b69518d1bd8	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	103	2060000	0	0	0
+253	spsa-d0262b69518d1bd8	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	164	3280000	0	0	0
+254	spsa-fce4c3b136357ff1	white	1/2-1/2		0.5	0.5	Threefold repetition	145	2900000	0	0	0
+255	spsa-fce4c3b136357ff1	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	81	1620000	0	0	0
+256	mqr-16747a6002406c00	white	1/2-1/2		0.5	0.5	Threefold repetition	27	540000	0	0	0
+257	mqr-16747a6002406c00	black	1/2-1/2		0.5	0.5	Threefold repetition	66	1320000	0	0	0
+258	mqr-fda50774b9667480	white	0-1	production	0.0	1.0	Checkmate (Production wins)	141	2820000	0	0	0
+259	mqr-fda50774b9667480	black	1-0	production	0.0	1.0	Checkmate (Production wins)	82	1640000	0	0	0
+260	mqr-7adf9cbcb45f41bb	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	105	2100000	0	0	0
+261	mqr-7adf9cbcb45f41bb	black	1/2-1/2		0.5	0.5	Threefold repetition	108	2160000	0	0	0
+262	mqr-9fbfeb3fbadc2aac	white	0-1	production	0.0	1.0	Checkmate (Production wins)	115	2300000	0	0	0
+263	mqr-9fbfeb3fbadc2aac	black	1-0	production	0.0	1.0	Checkmate (Production wins)	96	1920000	0	0	0
+264	mqr-fb3ae71de054702c	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	178	3560000	0	0	0
+265	mqr-fb3ae71de054702c	black	1-0	production	0.0	1.0	Checkmate (Production wins)	78	1560000	0	0	0
+266	mqr-32dcc92c65421940	white	1/2-1/2		0.5	0.5	Insufficient material	185	3700000	0	0	0
+267	mqr-32dcc92c65421940	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	120	2400000	0	0	0
+268	mqr-43f3daa7b6b49a45	white	1/2-1/2		0.5	0.5	Threefold repetition	58	1160000	0	0	0
+269	mqr-43f3daa7b6b49a45	black	1-0	production	0.0	1.0	Checkmate (Production wins)	77	1540000	0	0	0
+270	mqr-280534d8e862722c	white	0-1	production	0.0	1.0	Checkmate (Production wins)	74	1480000	0	0	0
+271	mqr-280534d8e862722c	black	1/2-1/2		0.5	0.5	Threefold repetition	103	2060000	0	0	0
+272	mqr-cbab8a95645ba90a	white	1/2-1/2		0.5	0.5	Threefold repetition	19	380000	0	0	0
+273	mqr-cbab8a95645ba90a	black	1/2-1/2		0.5	0.5	50-move rule	187	3740000	0	0	0
+274	mqr-eb99ef58e6843613	white	0-1	production	0.0	1.0	Checkmate (Production wins)	131	2620000	0	0	0
+275	mqr-eb99ef58e6843613	black	1-0	production	0.0	1.0	Checkmate (Production wins)	146	2920000	0	0	0
+276	mqr-b011dcb236068ac5	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	100	2000000	0	0	0
+277	mqr-b011dcb236068ac5	black	1-0	production	0.0	1.0	Checkmate (Production wins)	122	2440000	0	0	0
+278	mqr-f6cedb38b526c9b0	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	134	2680000	0	0	0
+279	mqr-f6cedb38b526c9b0	black	1-0	production	0.0	1.0	Checkmate (Production wins)	90	1800000	0	0	0
+280	mqr-8f4ec00a04fc8118	white	0-1	production	0.0	1.0	Checkmate (Production wins)	79	1580000	0	0	0
+281	mqr-8f4ec00a04fc8118	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	153	3060000	0	0	0
+282	mqr-0c65b30b6ae3af20	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	188	3760000	0	0	0
+283	mqr-0c65b30b6ae3af20	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	137	2740000	0	0	0
+284	mqr-d23fe37f251552a0	white	1/2-1/2		0.5	0.5	Threefold repetition	67	1340000	0	0	0
+285	mqr-d23fe37f251552a0	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	61	1220000	0	0	0
+286	mqr-9408b8a2eb8d2ce5	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	98	1960000	0	0	0
+287	mqr-9408b8a2eb8d2ce5	black	1-0	production	0.0	1.0	Checkmate (Production wins)	90	1800000	0	0	0
+288	mqr-b464a95821ef3558	white	1/2-1/2		0.5	0.5	Threefold repetition	40	800000	0	0	0
+289	mqr-b464a95821ef3558	black	1-0	production	0.0	1.0	Checkmate (Production wins)	42	840000	0	0	0
+290	mqr-9ad9dafc5b986c31	white	1/2-1/2		0.5	0.5	50-move rule	212	4240000	0	0	0
+291	mqr-9ad9dafc5b986c31	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	105	2100000	0	0	0
+292	mqr-06c920b2fdcbd8f5	white	1/2-1/2		0.5	0.5	Threefold repetition	67	1340000	0	0	0
+293	mqr-06c920b2fdcbd8f5	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	83	1660000	0	0	0
+294	mqr-8874fd0128cf69df	white	0-1	production	0.0	1.0	Checkmate (Production wins)	141	2820000	0	0	0
+295	mqr-8874fd0128cf69df	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	87	1740000	0	0	0
+296	mqr-3c767889680815c1	white	1/2-1/2		0.5	0.5	Threefold repetition	94	1880000	0	0	0
+297	mqr-3c767889680815c1	black	1/2-1/2		0.5	0.5	Threefold repetition	104	2080000	0	0	0
+298	mqr-4bc96751daf4afb6	white	0-1	production	0.0	1.0	Checkmate (Production wins)	98	1960000	0	0	0
+299	mqr-4bc96751daf4afb6	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	72	1440000	0	0	0
+300	mqr-b8b0436232927444	white	1/2-1/2		0.5	0.5	Threefold repetition	53	1060000	0	0	0
+301	mqr-b8b0436232927444	black	1-0	production	0.0	1.0	Checkmate (Production wins)	62	1240000	0	0	0
+302	mqr-0c78f6d6128151b5	white	1/2-1/2		0.5	0.5	Insufficient material	203	4060000	0	0	0
+303	mqr-0c78f6d6128151b5	black	1-0	production	0.0	1.0	Checkmate (Production wins)	150	3000000	0	0	0
+304	mqr-e1a885f5dfc36ae8	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	57	1140000	0	0	0
+305	mqr-e1a885f5dfc36ae8	black	1-0	production	0.0	1.0	Checkmate (Production wins)	65	1300000	0	0	0
+306	mqr-90d3f405e7a0da47	white	1/2-1/2		0.5	0.5	Insufficient material	133	2660000	0	0	0
+307	mqr-90d3f405e7a0da47	black	1-0	production	0.0	1.0	Checkmate (Production wins)	151	3020000	0	0	0
+308	mqr-40891851a84f1ea7	white	1/2-1/2		0.5	0.5	Threefold repetition	76	1520000	0	0	0
+309	mqr-40891851a84f1ea7	black	1-0	production	0.0	1.0	Checkmate (Production wins)	37	740000	0	0	0
+310	mqr-850ce973c3ed76c1	white	0-1	production	0.0	1.0	Checkmate (Production wins)	114	2280000	0	0	0
+311	mqr-850ce973c3ed76c1	black	1-0	production	0.0	1.0	Checkmate (Production wins)	117	2340000	0	0	0
+312	mqr-ab5f1542c6132f5f	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	87	1740000	0	0	0
+313	mqr-ab5f1542c6132f5f	black	1-0	production	0.0	1.0	Checkmate (Production wins)	99	1980000	0	0	0
+314	mqr-2331946b21f94adb	white	0-1	production	0.0	1.0	Checkmate (Production wins)	64	1280000	0	0	0
+315	mqr-2331946b21f94adb	black	1/2-1/2		0.5	0.5	Insufficient material	108	2160000	0	0	0
+316	mqr-387faa9f53e97a40	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	138	2760000	0	0	0
+317	mqr-387faa9f53e97a40	black	1-0	production	0.0	1.0	Checkmate (Production wins)	106	2120000	0	0	0
+318	mqr-b0adeadaa8d6536c	white	1/2-1/2		0.5	0.5	Insufficient material	101	2020000	0	0	0
+319	mqr-b0adeadaa8d6536c	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	66	1320000	0	0	0
+320	mqr-85a2b1ea388f5d29	white	1/2-1/2		0.5	0.5	Insufficient material	131	2620000	0	0	0
+321	mqr-85a2b1ea388f5d29	black	1/2-1/2		0.5	0.5	Threefold repetition	81	1620000	0	0	0
+322	mqr-e2541112331376ab	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	94	1880000	0	0	0
+323	mqr-e2541112331376ab	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	89	1780000	0	0	0
+324	mqr-93254b6b9c49d5e9	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	122	2440000	0	0	0
+325	mqr-93254b6b9c49d5e9	black	1-0	production	0.0	1.0	Checkmate (Production wins)	110	2200000	0	0	0
+326	mqr-08bba8d95af95942	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	142	2840000	0	0	0
+327	mqr-08bba8d95af95942	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	83	1660000	0	0	0
+328	mqr-18a87618551cdd88	white	1/2-1/2		0.5	0.5	Threefold repetition	75	1500000	0	0	0
+329	mqr-18a87618551cdd88	black	1-0	production	0.0	1.0	Checkmate (Production wins)	133	2660000	0	0	0
+330	mqr-e26a67f86714ae5e	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	136	2720000	0	0	0
+331	mqr-e26a67f86714ae5e	black	1-0	production	0.0	1.0	Checkmate (Production wins)	116	2320000	0	0	0
+332	mqr-2539ffc7fa0ae713	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	117	2340000	0	0	0
+333	mqr-2539ffc7fa0ae713	black	1-0	production	0.0	1.0	Checkmate (Production wins)	69	1380000	0	0	0
+334	mqr-607528927b519c72	white	0-1	production	0.0	1.0	Checkmate (Production wins)	68	1360000	0	0	0
+335	mqr-607528927b519c72	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	130	2600000	0	0	0
+336	mqr-09aa0e5c25712188	white	1/2-1/2		0.5	0.5	Threefold repetition	54	1080000	0	0	0
+337	mqr-09aa0e5c25712188	black	1/2-1/2		0.5	0.5	50-move rule	187	3740000	0	0	0
+338	mqr-468b460656f01293	white	0-1	production	0.0	1.0	Checkmate (Production wins)	126	2520000	0	0	0
+339	mqr-468b460656f01293	black	1/2-1/2		0.5	0.5	Insufficient material	166	3320000	0	0	0
+340	mqr-cbc695b3661d9c59	white	1/2-1/2		0.5	0.5	Threefold repetition	25	500000	0	0	0
+341	mqr-cbc695b3661d9c59	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	143	2860000	0	0	0
+342	mqr-9c489fc66c7aa702	white	1/2-1/2		0.5	0.5	Threefold repetition	113	2260000	0	0	0
+343	mqr-9c489fc66c7aa702	black	1/2-1/2		0.5	0.5	Threefold repetition	64	1280000	0	0	0
+344	mqr-fb9b9e63d20e6895	white	1/2-1/2		0.5	0.5	Threefold repetition	93	1860000	0	0	0
+345	mqr-fb9b9e63d20e6895	black	1-0	production	0.0	1.0	Checkmate (Production wins)	90	1800000	0	0	0
+346	mqr-949cba576cc7f75a	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	84	1680000	0	0	0
+347	mqr-949cba576cc7f75a	black	1/2-1/2		0.5	0.5	50-move rule	230	4600000	0	0	0
+348	mqr-ba24418fafbceddf	white	1/2-1/2		0.5	0.5	Insufficient material	98	1960000	0	0	0
+349	mqr-ba24418fafbceddf	black	1/2-1/2		0.5	0.5	Threefold repetition	82	1640000	0	0	0
+350	mqr-93ed7e3927c4c267	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	132	2640000	0	0	0
+351	mqr-93ed7e3927c4c267	black	1/2-1/2		0.5	0.5	Insufficient material	154	3080000	0	0	0
+352	mqr-aefa01bb739bd711	white	0-1	production	0.0	1.0	Checkmate (Production wins)	148	2960000	0	0	0
+353	mqr-aefa01bb739bd711	black	1/2-1/2		0.5	0.5	Insufficient material	99	1980000	0	0	0
+354	mqr-972e1690c89c3156	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	70	1400000	0	0	0
+355	mqr-972e1690c89c3156	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	91	1820000	0	0	0
+356	mqr-b31a555abc0fb5c4	white	0-1	production	0.0	1.0	Checkmate (Production wins)	145	2900000	0	0	0
+357	mqr-b31a555abc0fb5c4	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	117	2340000	0	0	0
+358	mqr-2e10494acce7aa0f	white	1/2-1/2		0.5	0.5	Threefold repetition	33	660000	0	0	0
+359	mqr-2e10494acce7aa0f	black	1-0	production	0.0	1.0	Checkmate (Production wins)	142	2840000	0	0	0
+360	mqr-52db0064a5b4d0ab	white	0-1	production	0.0	1.0	Checkmate (Production wins)	144	2880000	0	0	0
+361	mqr-52db0064a5b4d0ab	black	1/2-1/2		0.5	0.5	Threefold repetition	60	1200000	0	0	0
+362	mqr-3903fd8b36de4265	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	68	1360000	0	0	0
+363	mqr-3903fd8b36de4265	black	1-0	production	0.0	1.0	Checkmate (Production wins)	122	2440000	0	0	0
+364	mqr-b0fc3ed3191c6698	white	0-1	production	0.0	1.0	Checkmate (Production wins)	87	1740000	0	0	0
+365	mqr-b0fc3ed3191c6698	black	1-0	production	0.0	1.0	Checkmate (Production wins)	110	2200000	0	0	0
+366	mqr-818cc9a4fc09ab00	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	69	1380000	0	0	0
+367	mqr-818cc9a4fc09ab00	black	1-0	production	0.0	1.0	Checkmate (Production wins)	155	3100000	0	0	0
+368	mqr-deb95d5e5de1ba59	white	0-1	production	0.0	1.0	Checkmate (Production wins)	96	1920000	0	0	0
+369	mqr-deb95d5e5de1ba59	black	1-0	production	0.0	1.0	Checkmate (Production wins)	105	2100000	0	0	0
+370	mqr-81bd989672f3fedb	white	0-1	production	0.0	1.0	Checkmate (Production wins)	112	2240000	0	0	0
+371	mqr-81bd989672f3fedb	black	1-0	production	0.0	1.0	Checkmate (Production wins)	139	2780000	0	0	0
+372	mqr-0a13901a82082c4c	white	1/2-1/2		0.5	0.5	Threefold repetition	54	1080000	0	0	0
+373	mqr-0a13901a82082c4c	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	130	2600000	0	0	0
+374	mqr-ad69e193072c7335	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	86	1720000	0	0	0
+375	mqr-ad69e193072c7335	black	1-0	production	0.0	1.0	Checkmate (Production wins)	98	1960000	0	0	0
+376	mqr-8f3e3a2da46de7f5	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	82	1640000	0	0	0
+377	mqr-8f3e3a2da46de7f5	black	1/2-1/2		0.5	0.5	Threefold repetition	108	2160000	0	0	0
+378	mqr-06f4c5be5e538a4f	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	98	1960000	0	0	0
+379	mqr-06f4c5be5e538a4f	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	123	2460000	0	0	0
+380	mqr-bba86c06dfa085ca	white	0-1	production	0.0	1.0	Checkmate (Production wins)	70	1400000	0	0	0
+381	mqr-bba86c06dfa085ca	black	1/2-1/2		0.5	0.5	Threefold repetition	138	2760000	0	0	0
+382	mqr-345cf98155e81c3b	white	0-1	production	0.0	1.0	Checkmate (Production wins)	129	2580000	0	0	0
+383	mqr-345cf98155e81c3b	black	1-0	production	0.0	1.0	Checkmate (Production wins)	122	2440000	0	0	0
+384	mqr-086cf19eb60ae0d7	white	0-1	production	0.0	1.0	Checkmate (Production wins)	60	1200000	0	0	0
+385	mqr-086cf19eb60ae0d7	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	132	2640000	0	0	0
+386	mqr-6b815ce09c55ce08	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	156	3120000	0	0	0
+387	mqr-6b815ce09c55ce08	black	1-0	production	0.0	1.0	Checkmate (Production wins)	138	2760000	0	0	0
+388	mqr-3122aabaf757c5c1	white	0-1	production	0.0	1.0	Checkmate (Production wins)	108	2160000	0	0	0
+389	mqr-3122aabaf757c5c1	black	1-0	production	0.0	1.0	Checkmate (Production wins)	87	1740000	0	0	0
+390	mqr-495cea97df0ab52d	white	0-1	production	0.0	1.0	Checkmate (Production wins)	131	2620000	0	0	0
+391	mqr-495cea97df0ab52d	black	1-0	production	0.0	1.0	Checkmate (Production wins)	114	2280000	0	0	0
+392	mqr-2b4d0e70e4c8304f	white	0-1	production	0.0	1.0	Checkmate (Production wins)	83	1660000	0	0	0
+393	mqr-2b4d0e70e4c8304f	black	1-0	production	0.0	1.0	Checkmate (Production wins)	130	2600000	0	0	0
+394	mqr-493127e57f8435f7	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	101	2020000	0	0	0
+395	mqr-493127e57f8435f7	black	1/2-1/2		0.5	0.5	Threefold repetition	107	2140000	0	0	0
+396	mqr-1534579e008a4b64	white	1/2-1/2		0.5	0.5	Threefold repetition	85	1700000	0	0	0
+397	mqr-1534579e008a4b64	black	1-0	production	0.0	1.0	Checkmate (Production wins)	96	1920000	0	0	0
+398	mqr-da17c44af09080a6	white	0-1	production	0.0	1.0	Checkmate (Production wins)	148	2960000	0	0	0
+399	mqr-da17c44af09080a6	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	128	2560000	0	0	0

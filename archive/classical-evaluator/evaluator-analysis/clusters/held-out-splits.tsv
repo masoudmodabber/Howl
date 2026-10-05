@@ -1,0 +1,101 @@
+position_id	cluster_name	split_role	regret	dominant_component	fen
+mqr-0db8aae5a66b7b3c	Search Selective Pruning Overhang	development	0.2135	king_danger	2b1r3/5Rbk/pBPp2pp/4q3/P3p3/4Q2P/4B1P1/6K1 b - - 4 32
+mqr-1fd1890b962573b5	Search Selective Pruning Overhang	development	0.4310	material	r2r2k1/5pbp/p1p1bnp1/4p3/N3P3/1P2BB2/P1P3PP/3R1RK1 b - - 4 18
+mqr-25d438a145514e34	Search Selective Pruning Overhang	development	0.4945	piece_attacks	5rk1/3R1p1p/6p1/R7/5n2/P4P1P/5P2/1r3BK1 w - - 1 27
+mqr-31e82160914fd948	Search Selective Pruning Overhang	development	0.2970	mobility	r1b2rk1/1p2q1p1/p4p1p/2b1p3/2Pp1P2/1P1P2P1/P2NR1BP/R2Q2K1 b - - 0 17
+mqr-4f314c56f110c038	Search Selective Pruning Overhang	development	0.1260	material	r3k1nr/ppp1qpb1/2np3p/4p1p1/5P2/N1PPPNPb/PP2B2P/R1BQK2R w KQkq - 3 9
+mqr-5661479fcded35dc	Search Selective Pruning Overhang	development	0.1220	mobility	3qrbk1/pp3p1p/2p1bPp1/6Q1/6P1/2B4P/PPP3B1/1K5R w - - 0 27
+mqr-598df65ac8957446	Search Selective Pruning Overhang	development	0.3925	mobility	r2qkbnr/1bp1pppp/p1n5/1p6/2pP4/2N2NP1/PP2PPBP/R1BQ1RK1 b kq - 3 7
+mqr-5bfa2d94f381b59e	Search Selective Pruning Overhang	development	0.4990	king_danger	4r1k1/p5p1/1p5p/5p2/3P1P2/4P3/qP1QK3/2R5 b - - 1 31
+mqr-607528927b519c72	Search Selective Pruning Overhang	development	0.4275	mobility	rn2kb1r/pp3ppp/2p1pnb1/q7/2B3P1/2NP1P2/PPPBQ2P/R3K1NR w KQkq - 1 10
+mqr-6426f5403efb5fd8	Search Selective Pruning Overhang	development	0.3885	mobility	8/2k2r1p/1pp1b1nR/p4p2/P1p4P/4B1P1/1PB5/5K2 b - - 0 31
+mqr-69d31f769b5927c1	Search Selective Pruning Overhang	development	0.3090	material	1k1r3r/pbq1n3/6P1/2p1pp2/1P1pP3/5QP1/P2N2B1/2R2RK1 b - - 0 25
+mqr-71749f6dcbcbd592	Search Selective Pruning Overhang	development	0.1905	material	8/2R3pp/p3rk2/5p2/8/2pK2P1/2P4P/8 w - - 1 33
+mqr-724e4b750664bde7	Search Selective Pruning Overhang	development	0.0890	mobility	r1bq1r2/1pp1ppbk/p1n3pp/3n4/P1BP4/2P2N2/1P1N1PPP/R1BQR1K1 w - - 0 11
+mqr-7590b3c12c59316a	Search Selective Pruning Overhang	development	0.2370	material	5rk1/2p1bppp/p1p1pn2/P5B1/1qpP4/2N3P1/1PQ1PP1P/3R2K1 w - - 0 17
+mqr-77d0bff2ffe3291a	Search Selective Pruning Overhang	development	0.3215	material	rn1q1rk1/ppp1ppbp/1n4p1/8/3PP1b1/4BN1P/PP1N1PP1/R2QKB1R b KQ - 0 9
+mqr-88549acd2d4c586f	Search Selective Pruning Overhang	development	0.1805	mobility	1r3rk1/1nq1bpp1/p2p1n1p/2pPp3/P1P5/3P1N1P/B2B1PP1/1R1QR1K1 b - - 2 21
+mqr-8a1b8e084be32b71	Search Selective Pruning Overhang	development	0.0950	mobility	r1bq1rk1/1p2nppp/p1np4/4p3/2P1P3/1NNBQ3/PP3PPP/R4RK1 w - - 0 13
+mqr-8f4ec00a04fc8118	Search Selective Pruning Overhang	development	0.2310	material	rnbq1rk1/pp2ppbp/2pp1np1/3P3P/2P1P1P1/2N5/PP2BP2/R1BQK1NR b KQ - 0 9
+mqr-a14447381008e5a9	Search Selective Pruning Overhang	development	0.1080	material	3r1rk1/p3q1pp/2pp2n1/2p2p2/2P1P3/1P2BP1P/P3Q1P1/3R1RK1 w - - 0 20
+mqr-a152ae3cf93fb94c	Search Selective Pruning Overhang	development	0.1490	mobility	1nr1r1k1/4bppp/1Bq1p3/pp2P3/4pPP1/P7/1PPR1Q1P/3R1BK1 w - - 0 25
+mqr-ad3f2c9692ced875	Search Selective Pruning Overhang	held_out	0.4555	mobility	rnb1kb1r/1p1n1pp1/p3p2p/4P3/3N3B/q1N5/P1PQ2PP/1R2KB1R w Kkq - 1 13
+mqr-b00198c5be87e34f	Search Selective Pruning Overhang	held_out	0.1080	king_danger	r2qk2r/pp1nbp1p/4b2p/3p3P/3P2P1/2NB1P2/PP6/R2QK1NR b KQkq - 0 13
+mqr-b11e377da7611e39	Search Selective Pruning Overhang	held_out	0.4180	material	r2qk2r/1p3pp1/p3bn2/2bpp2p/5P2/2N1P3/PPPBB1PP/R2Q1R1K b kq - 0 13
+mqr-b27f7378bc5969fd	Search Selective Pruning Overhang	held_out	0.4855	mobility	1r2k2r/1bq1bppp/p1n1p3/1p2P3/2n2BP1/PNN5/1PP1Q1BP/2KRR3 w k - 5 18
+mqr-b2a9a4d0fb61c77e	Search Selective Pruning Overhang	held_out	0.6400	material	r1b1kb1r/1p1n1ppp/p2ppn2/6B1/2BNP3/2N5/PqPQ1PPP/R4RK1 w kq - 0 10
+mqr-b2b1d091c68dbcda	Search Selective Pruning Overhang	held_out	0.1250	king_danger	r2r2k1/3q1p2/4b1p1/p2p3p/3R4/1P2QB1P/P4PP1/3R2K1 b - - 1 25
+mqr-b9d8bc5042b712e6	Search Selective Pruning Overhang	held_out	0.4795	mobility	r2q1rk1/pp2ppb1/2np3p/3Nn1p1/4P3/2P2QB1/PP2BPPP/3RK2R w K - 1 15
+mqr-c497558a90b9bd24	Search Selective Pruning Overhang	held_out	0.2350	king_danger	r1bq1rk1/pp3pp1/2pbpn1p/8/2PP4/5N2/PPB2PPP/R1BQ1RK1 w - - 0 12
+mqr-de15fcdc40be3424	Search Selective Pruning Overhang	held_out	0.1920	mobility	r1bq1rk1/ppp2pbp/3n4/3Pp1P1/2P2p1P/2N1B3/PP2BP2/R2QK2R w KQ - 0 19
+mqr-de4592e41ae99b67	Search Selective Pruning Overhang	held_out	0.4550	material	3rr1k1/Qp2qpb1/2pp2np/7n/P3P1b1/1PN2NP1/1BPR1PB1/4R1K1 b - - 0 22
+mqr-fcfb5aca3ef9c4bd	Search Selective Pruning Overhang	held_out	0.4160	king_danger	2r5/3brkpn/2q1pp1p/p2p3P/1p1P1PP1/P3Q1B1/1PPR4/1NK3R1 b - - 1 24
+mqr-05537fca079f71d3	Mobility / Activity Trapping	development	0.1400	mobility	3r1rk1/1pp1q1pp/pnn1pb2/1N3b2/2PP4/4BN2/PP1QB1PP/3R1R1K w - - 0 17
+mqr-088b515dd4e83799	Mobility / Activity Trapping	development	0.1690	mobility	r3r1k1/2qbbppp/p1npp3/1p6/2P1PP2/1P1QN1PP/P2B2BK/2R2R2 w - - 1 23
+mqr-12527c3aa41f17c2	Mobility / Activity Trapping	development	0.1125	mobility	1r1q1rk1/p2nbppp/b3p3/2p5/P2PQ3/B1P2NP1/5PBP/R3R1K1 b - - 0 15
+mqr-2e4ecc2abd6d86cf	Mobility / Activity Trapping	development	0.4920	mobility	2kr1b1r/3q1p1p/bpn1pnp1/3p4/Pp1N1P2/2P3N1/2B3PP/R1BQR2K w - - 0 20
+mqr-2f9464bdf3eb9dce	Mobility / Activity Trapping	development	0.0850	mobility	r4rk1/pp1qnpbp/2np2p1/2p5/5PP1/1PN5/PBPPQ2P/2KR2NR w - - 1 13
+mqr-356f60f0d53de8e4	Mobility / Activity Trapping	development	0.4990	mobility	r2r2k1/1b3pp1/5n1p/p1p1pP2/1p1qP1P1/1P5P/1PP1Q1BK/R1B3R1 w - - 4 23
+mqr-451b947ddd4e29a7	Mobility / Activity Trapping	development	0.2705	mobility	2r2rk1/7p/p4ppP/1pq1p3/2n1Q1P1/1N3P2/PPP5/1K1RR3 b - - 1 26
+mqr-57d97c07303d51cc	Mobility / Activity Trapping	development	0.5000	mobility	r5k1/1b3rbp/1n2B1p1/1pq5/p4B2/P1P3QP/1P3PP1/R3R1K1 b - - 0 23
+mqr-5eb39cf373982078	Mobility / Activity Trapping	development	0.1025	mobility	2kr3r/1ppqn3/p1nb1p2/PP1p1bpp/B2P4/2P2N2/5PPP/RNBQ1RK1 b - - 0 13
+mqr-6abe9ec0b54d21fb	Mobility / Activity Trapping	development	0.1630	mobility	1r1q1rk1/3nppbp/6p1/3Pp3/1pP1P3/4RBP1/P4P1P/R1NQ2K1 b - - 2 19
+mqr-76b1e8f7fe196da9	Mobility / Activity Trapping	development	0.0830	mobility	rn1qk2r/pbp1npb1/1p1pp1pp/8/2PP1B1P/P1N2N2/1PQ1PPP1/2KR1B1R b kq - 3 9
+mqr-79e93ef7f507f229	Mobility / Activity Trapping	development	0.0995	mobility	rnbqkb1r/pp3ppp/3pp3/3nP3/2BP4/5N2/PP3PPP/RNBQK2R b KQkq - 1 7
+mqr-818cc9a4fc09ab00	Mobility / Activity Trapping	development	0.6200	mobility	r3k2r/pbqpbppp/1p2pn2/n7/2pPP3/P1P2N2/1PBNQPPP/R1B2RK1 w kq - 2 11
+mqr-a139839363fc6cb5	Mobility / Activity Trapping	held_out	0.1970	mobility	r4rk1/p2bb2p/1qp1ppp1/3p3n/3P3B/4PN2/PPQN1PPP/2R2RK1 w - - 4 15
+mqr-a5113d426a5b43d1	Mobility / Activity Trapping	held_out	0.1255	mobility	r1r3k1/qb3ppp/p3pn2/2np4/2P5/5NP1/Q2NPPBP/1RR3K1 w - - 0 21
+mqr-c4efdb13dcb14d82	Mobility / Activity Trapping	held_out	0.2640	mobility	2b3k1/bn4p1/2p5/r3p3/P3N3/3P4/2P1BpP1/R1B2K2 b - - 3 25
+mqr-cc99c66ee0077eb3	Mobility / Activity Trapping	held_out	0.1520	mobility	r1b1rbk1/1pq2pp1/2p2nnp/p2P4/P2N4/2N1BP1P/BPP2QP1/3RR1K1 b - - 0 17
+mqr-dc7d12d0496c294a	Mobility / Activity Trapping	held_out	0.2935	mobility	r3k1nr/pp2bpp1/2p5/2q4p/4P1b1/2NQ1N2/PPP1B1PP/R3K2R w KQkq - 0 13
+mqr-f8d987a3bbf59936	Mobility / Activity Trapping	held_out	0.4925	mobility	r3r1k1/pbp4p/3p1p2/2p2q2/2P1p3/1PQ3P1/P4PBP/4RRK1 w - - 0 24
+mqr-fb06c613ff3c6d7e	Mobility / Activity Trapping	held_out	0.0795	mobility	r4r1k/b2q1pp1/2p1bnnN/pp1pp3/4P3/2PP1QNP/PPB2PP1/R1B2RK1 w - - 1 18
+mqr-267e018c83e11864	Positional Pawn Structure Distortion	development	0.4115	material	rn1q1rk1/4bppp/2p1p3/p2p2P1/1p1PP2P/P3QN2/1PP2P2/1NKRR3 b - - 1 16
+mqr-29c765e9fd74d869	Positional Pawn Structure Distortion	development	0.1990	material	2r2rk1/pb3ppp/1p1Rp3/q1n1P3/2p1NP2/P1N1Q3/1PP3PP/2KR4 w - - 6 20
+mqr-3b2ef8e196b78289	Positional Pawn Structure Distortion	development	0.2185	material	r2q1rk1/pb2p1bp/1p1p2p1/2pPp2n/2P1PP2/3B2B1/PP1QN1PP/R4RK1 w - - 1 16
+mqr-6f34f37310742790	Positional Pawn Structure Distortion	development	0.1940	pawn_base	2k4r/ppp2p2/2n1p3/3pP1rp/3P2pR/2PN4/PP3PP1/R3K3 w Q - 0 19
+mqr-807d4cd83f6c149b	Positional Pawn Structure Distortion	development	0.5000	material	1b2r3/6pk/5n1p/3P4/PP2q1bQ/4B3/5PPP/R1R3K1 w - - 5 31
+mqr-ab167c393e6e4ee8	Positional Pawn Structure Distortion	development	0.0945	material	r4rk1/pppq2bp/2np2p1/5b2/4NR2/3P2P1/PPP3BP/R1BQ2K1 b - - 0 13
+mqr-b6dbb8ca3933bdad	Positional Pawn Structure Distortion	development	0.1165	material	r5k1/1bp3pp/3p4/1p1Pp2n/pPP1N1PP/P3Br2/5P2/R3K2R b KQ - 0 24
+mqr-c4a19e8bb097d572	Positional Pawn Structure Distortion	held_out	0.0980	material	r1bq1rk1/pp2npbp/2n1p1p1/2pP4/8/1BNPB3/PPPN1PPP/R2Q1RK1 b - - 0 10
+mqr-c578041f0fcd9d6a	Positional Pawn Structure Distortion	held_out	0.1820	material	r2qrnk1/4bpp1/1p2b2p/pP1p4/N1pPP3/5N1P/P4PP1/1BRQR1K1 w - - 3 19
+mqr-c7ad4ab7ef18912c	Positional Pawn Structure Distortion	held_out	0.4690	material	2rr1nk1/1b2qppp/1n2p3/1pN1N3/1p1P1P2/P5Q1/6PP/1B1RR1K1 w - - 0 24
+mqr-ef4be537017ff491	Positional Pawn Structure Distortion	held_out	0.2510	material	r1bq1rk1/p2p1ppp/2p1p3/3nP3/1b6/2N5/PPP1BPPP/R1BQ1RK1 w - - 1 10
+mqr-11aec836f2dcd66b	Endgame Scaling & Minor Piece Conversion	development	0.0930	piece_attacks	8/pb3pkp/1p1n2p1/2pNb3/P3P3/1P4PP/2P1N1B1/6K1 b - - 4 23
+mqr-582c7e8f513ee18c	Endgame Scaling & Minor Piece Conversion	held_out	0.5000	mobility	5B2/8/8/7p/p1ppk2P/8/1P2K3/8 b - - 41 60
+mqr-0f64a5a6e329dcad	King Exposure & Attack Overvaluation	development	0.4915	king_danger	r1R1nbk1/3q1pp1/7p/1p1pB2N/3P3P/1P1Q1P2/Pp4P1/1K2R3 b - - 0 24
+mqr-1a5120cf950cc314	King Exposure & Attack Overvaluation	development	0.0835	king_danger	r1bq1rk1/pp3ppp/2n1pn2/2p5/2BP4/P1P1PN2/5PPP/R1BQ1RK1 b - - 3 10
+mqr-1fb507bea1337785	King Exposure & Attack Overvaluation	development	0.0785	king_danger	5rk1/1p1r2bp/p3p1p1/2q1p1B1/P3Q3/2P4P/1P2RPP1/R5K1 b - - 0 21
+mqr-2393787aa4fe83c7	King Exposure & Attack Overvaluation	development	0.5000	king_danger	Q1b4r/p3kppp/4pn2/8/2pq4/P5P1/1P1NPP1P/R3K2R b KQ - 0 13
+mqr-2c4adb8968e9feee	King Exposure & Attack Overvaluation	development	0.4750	king_danger	1rq2k2/Q3pp2/p2p2p1/Pp6/4PP2/6P1/1P3K2/R7 w - - 2 28
+mqr-2d5086aa38754e35	King Exposure & Attack Overvaluation	development	0.0800	king_danger	r1b1k2r/p1p1b1p1/2pq4/3p4/3Pp3/BP4p1/P3P1BP/RNQ2RK1 b kq - 3 15
+mqr-2e10494acce7aa0f	King Exposure & Attack Overvaluation	development	0.0805	piece_attacks	r1b1kbnr/ppqp1ppp/2n1p3/8/4P3/1NN1B3/PPP2PPP/R2QKB1R b KQkq - 3 7
+mqr-2ef7bef53f1d5ee9	King Exposure & Attack Overvaluation	development	0.3950	piece_attacks	r1bn1r1k/ppq3bp/2p3p1/5p2/2P1p3/1PBNP3/PQ2BPPP/3R1RK1 w - - 0 19
+mqr-4941d2d95a4e2207	King Exposure & Attack Overvaluation	development	0.1530	pawn_shield	1r1qr1k1/3nppbp/1pbp1np1/p7/P1P1P3/NPN1BP1P/4BQP1/2R2RK1 w - - 0 24
+mqr-495cea97df0ab52d	King Exposure & Attack Overvaluation	development	0.2770	king_placement	r1b1k2r/1pqpbppp/p1n1pn2/8/2PNP3/P1N1B3/1P2BPPP/R2QK2R b KQkq - 3 9
+mqr-4e7e2fd2f49d151a	King Exposure & Attack Overvaluation	development	0.5000	king_danger	2r1kr2/pp1n4/3P3p/4pp2/6pP/3QP3/P1P1KPqB/2RR4 w - - 0 21
+mqr-c14ccde6e2ee82a6	King Exposure & Attack Overvaluation	held_out	0.0765	king_danger	r1b1k2r/pp2bppp/1q2pnn1/3pN1B1/3P1P2/2PB4/PP1N2PP/1R1QK2R b Kkq - 4 11
+mqr-d476f67d83470966	King Exposure & Attack Overvaluation	held_out	0.2295	king_danger	r1b1rb2/pp3kp1/1qpppn1p/5p2/2PP1N1P/8/PP1QRPPB/1B3K1R w - - 9 21
+mqr-ea64fb354b812a97	King Exposure & Attack Overvaluation	held_out	0.1010	king_danger	1k4r1/p2q1p2/Pp1bb3/3p4/3P1p1p/1N3Q1P/1P2BPP1/2R4K w - - 11 35
+mqr-f377ba83124d09db	King Exposure & Attack Overvaluation	held_out	0.0795	king_danger	r1bq1rk1/ppp1bppp/3p1n2/8/8/2P1BN2/PPPQ1PPP/2KR1B1R w - - 7 10
+mqr-fb0f66455d0787f8	King Exposure & Attack Overvaluation	held_out	0.5000	king_danger	5Q2/7N/p2Pr1p1/bp3pk1/5q2/P6P/6P1/3R2K1 b - - 0 53
+mqr-fda50774b9667480	King Exposure & Attack Overvaluation	held_out	0.3145	king_danger	rn1q1rk1/pp2ppb1/3p1npp/2pP4/2P4B/2NQPN2/PP3PPP/R3K2R b KQ - 0 10
+mqr-006356a0a9eb8ca0	PST Piece Placement Collinearity	development	0.0775	piece_square	r3kb1r/pp1n1ppp/2pqpn2/8/3P2P1/2N1BQ1P/PPP2P2/2KR1B1R b kq - 0 10
+mqr-086cf19eb60ae0d7	PST Piece Placement Collinearity	development	0.1025	piece_square	r1b1kb1r/pp1n2pp/2n1pq2/3p4/3P4/3B4/PP1NNPPP/R1BQK2R w KQkq - 0 10
+mqr-195122cd9a52f53e	PST Piece Placement Collinearity	development	0.3915	piece_square	2r2rk1/5p1p/4p1p1/pn1p4/R4PP1/1BP5/PP2R2q/1K1Q4 b - - 1 33
+mqr-2f0e20540a40693a	PST Piece Placement Collinearity	development	0.0870	piece_square	r2qkb1r/1p3ppp/p1n1pn2/2pp1b2/3P4/PP2PN2/1BPN1PPP/R2QKB1R w KQkq - 0 8
+mqr-32dcc92c65421940	PST Piece Placement Collinearity	development	0.2070	piece_square	r2qkb1r/pppb2pp/5p2/1B2p3/8/2P5/PPP1QPPP/R1B1K2R w KQkq - 0 11
+mqr-34fbae7a49db5786	PST Piece Placement Collinearity	development	0.4200	piece_square	1r1q1rk1/1p1b1pp1/p2p1n1p/b3n3/2PN4/PP4PP/1BQ1NPB1/R4RK1 w - - 1 17
+mqr-7adf9cbcb45f41bb	PST Piece Placement Collinearity	development	0.1380	piece_square	r1bqr1k1/bpp2pp1/p1np1n1p/4p3/P1B1P3/2PP1N1P/1P1N1PP1/R1BQ1RK1 w - - 4 11
+mqr-7e73474829d73542	PST Piece Placement Collinearity	development	0.3040	piece_square	r1b2rk1/3nbppp/pqn1p3/1pppP3/3P1P2/2P1BN2/PP1NB1PP/R2Q1R1K b - - 5 12
+mqr-a2b8525bbe8d7998	PST Piece Placement Collinearity	development	0.3860	piece_square	r1b2rk1/1pp2q1p/7P/p1pPp1b1/2P1Q1p1/1P2N1P1/P3PPB1/R3KR2 b Q - 2 23
+mqr-b74ec04dea64242b	PST Piece Placement Collinearity	development	0.3250	piece_square	r4rk1/ppq1bppp/2npbn2/2p1p1B1/P1B1P3/N1PP1N2/1P3PPP/R2QR1K1 b - - 6 12
+mqr-b9e01b944a62dc19	PST Piece Placement Collinearity	development	0.1600	piece_square	2r2r2/1p1n1k2/p3p1p1/P2b1p2/1P1B3P/3B1P2/5KP1/2R1R3 b - - 0 29
+mqr-bba30c0f62e5b30e	PST Piece Placement Collinearity	development	0.1175	piece_square	2r2rk1/pb2q2p/1p2p3/4PppP/3Np3/2P1Q3/PP3PP1/2KR3R w - - 0 21
+mqr-c3946e5484dffc24	PST Piece Placement Collinearity	held_out	0.4870	piece_square	r2qk2r/1p2bppp/2n1bn2/p1Pp2B1/8/P1N1PN2/1P3PPP/R2QKB1R w KQkq - 0 10
+mqr-cbc695b3661d9c59	PST Piece Placement Collinearity	held_out	0.4175	piece_square	rnbqk2r/1p2bppp/p2ppn2/6B1/3NPP2/2N2Q2/PPP3PP/R3KB1R b KQkq - 2 8
+mqr-d4cfeed43df04859	PST Piece Placement Collinearity	held_out	0.0790	piece_square	r3rnk1/ppq2pbp/2p2np1/4p3/P1N1P1b1/1P3NP1/1BP1QPBP/R4RK1 w - - 3 14
+mqr-db0ef99c680e6bf0	PST Piece Placement Collinearity	held_out	0.5000	piece_square	r1b4r/5k1p/2p1ppp1/p7/1bB5/1R2B3/P1P2PPP/3R2K1 b - - 3 20
+mqr-dec62a22d20ea2ec	PST Piece Placement Collinearity	held_out	0.0845	piece_square	r2qkb1r/pppn1n2/4p1p1/3pPp1p/3P1PbP/4B3/PPPQNNP1/2KR1B1R b kq - 1 13
+mqr-e33ab47c227e813e	PST Piece Placement Collinearity	held_out	0.2755	piece_square	r1b1kbnr/pp3ppp/2n1p3/8/1qBpN3/8/PPPN1PPP/R1BQK2R w KQkq - 6 9
+mqr-ea40fd2c41bb3679	PST Piece Placement Collinearity	held_out	0.2305	piece_square	r4rk1/1pp1nppp/1pn5/1B1qpb2/4N3/2P5/PP1PQPPP/R1B2RK1 w - - 1 12

@@ -253,8 +253,6 @@ scratch/
 # Diagnostics and benchmark artifacts
 diagnostics/
 search-sensitivity/
-evaluator-analysis/
-move-quality-tuning/
 
 # CTest outputs
 Testing/
@@ -262,3 +260,7 @@ Testing/
 # Tooling and IDE
 .codex/
 checkpoints/*.pt
+
+# Archived material is intentionally visible until it is moved outside the repository.
+!archive/
+!archive/**

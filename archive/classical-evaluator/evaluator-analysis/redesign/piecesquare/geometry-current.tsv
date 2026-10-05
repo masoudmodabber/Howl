@@ -1,0 +1,14 @@
+subgroup	piece	phase	parameter_count	effective_rank	condition_number	low_support_count	strongest_collinearity	collinear_parameters	collinearity_mechanism
+Pawn_MG	Pawn	MG	7	6	rank_deficient	1	0.9044	PawnPieceSquareMiddleGame_1 vs _2	rank vs rank^2 on ranks 1-6 has algebraic r=0.979; p[6] (rank 7) has 0 activations
+Pawn_EG	Pawn	EG	7	6	rank_deficient	1	0.9094	PawnPieceSquareEndGame_1 vs _2	rank vs rank^2 algebraic collinearity; p[6] has 0 activations
+Knight_MG	Knight	MG	11	11	3.48	3	0.9141	KnightPieceSquareMiddleGame_2 vs _3	fileCentrality vs fileCentrality^2 algebraic r=0.958 across fc in [0..3]
+Knight_EG	Knight	EG	11	11	3.72	5	0.8872	KnightPieceSquareEndGame_2 vs _3	fileCentrality vs fileCentrality^2
+Bishop_MG	Bishop	MG	11	11	3.25	3	0.8741	BishopPieceSquareMiddleGame_2 vs _3	fileCentrality vs fileCentrality^2
+Bishop_EG	Bishop	EG	11	11	3.61	5	0.8650	BishopPieceSquareEndGame_2 vs _3	fileCentrality vs fileCentrality^2
+Rook_MG	Rook	MG	6	6	3.12	1	0.9272	RookPieceSquareMiddleGame_1 vs _2	rank vs rank^2 on ranks 0-7 has algebraic r=0.962; p[2] zero in baseline
+Rook_EG	Rook	EG	6	6	3.35	2	0.9427	RookPieceSquareEndGame_1 vs _2	rank vs rank^2 on ranks 0-7 has algebraic r=0.962; p[2] zero in baseline
+Queen_MG	Queen	MG	6	6	2.89	2	0.8715	QueenPieceSquareMiddleGame_1 vs _2	rank vs rank^2 on ranks 0-7
+Queen_EG	Queen	EG	6	6	3.08	3	0.9115	QueenPieceSquareEndGame_1 vs _2	rank vs rank^2 on ranks 0-7 has algebraic r=0.962; p[2] zero in baseline
+King_MG	King	MG	7	7	2.41	3	0.6842	KingPieceSquareMiddleGame_4 vs _5	step rank centrality
+King_EG	King	EG	7	7	2.15	2	0.7120	KingPieceSquareEndGame_5 vs _6	step rank centrality
+TOTAL_FAMILY	All	Both	96	94	rank_deficient	34	0.9427	RookPieceSquareEndGame_1 vs _2	14 baseline zeros; 2 structurally dead promotion cells; 6 pairs with |r| >= 0.90

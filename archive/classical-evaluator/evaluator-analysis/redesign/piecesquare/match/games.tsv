@@ -1,0 +1,801 @@
+game_idx	opening_id	cand_color	result	winner	cand_score	prod_score	termination	plies	nodes	crashes	illegal_moves	timeouts
+0	open400-000	white	1/2-1/2		0.5	0.5	50-move rule	178	17800000	0	0	0
+1	open400-000	black	1/2-1/2		0.5	0.5	Threefold repetition	99	9900000	0	0	0
+2	open400-001	white	1/2-1/2		0.5	0.5	Threefold repetition	68	6800000	0	0	0
+3	open400-001	black	1-0	production	0.0	1.0	Checkmate (Production wins)	131	13100000	0	0	0
+4	open400-002	white	1/2-1/2		0.5	0.5	Threefold repetition	53	5300000	0	0	0
+5	open400-002	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	95	9500000	0	0	0
+6	open400-003	white	1/2-1/2		0.5	0.5	Threefold repetition	101	10100000	0	0	0
+7	open400-003	black	1/2-1/2		0.5	0.5	Threefold repetition	73	7300000	0	0	0
+8	open400-004	white	1/2-1/2		0.5	0.5	Threefold repetition	95	9500000	0	0	0
+9	open400-004	black	1-0	production	0.0	1.0	Checkmate (Production wins)	82	8200000	0	0	0
+10	open400-005	white	1/2-1/2		0.5	0.5	Threefold repetition	60	6000000	0	0	0
+11	open400-005	black	1/2-1/2		0.5	0.5	Threefold repetition	55	5500000	0	0	0
+12	open400-006	white	1/2-1/2		0.5	0.5	Threefold repetition	70	7000000	0	0	0
+13	open400-006	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	123	12300000	0	0	0
+14	open400-007	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	163	16300000	0	0	0
+15	open400-007	black	1-0	production	0.0	1.0	Checkmate (Production wins)	83	8300000	0	0	0
+16	open400-008	white	0-1	production	0.0	1.0	Checkmate (Production wins)	134	13400000	0	0	0
+17	open400-008	black	1-0	production	0.0	1.0	Checkmate (Production wins)	109	10900000	0	0	0
+18	open400-009	white	1/2-1/2		0.5	0.5	Insufficient material	129	12900000	0	0	0
+19	open400-009	black	1/2-1/2		0.5	0.5	Threefold repetition	48	4800000	0	0	0
+20	open400-010	white	1/2-1/2		0.5	0.5	Threefold repetition	43	4300000	0	0	0
+21	open400-010	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	204	20400000	0	0	0
+22	open400-011	white	1/2-1/2		0.5	0.5	Threefold repetition	41	4100000	0	0	0
+23	open400-011	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	89	8900000	0	0	0
+24	open400-012	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	111	11100000	0	0	0
+25	open400-012	black	1/2-1/2		0.5	0.5	Threefold repetition	9	900000	0	0	0
+26	open400-013	white	0-1	production	0.0	1.0	Checkmate (Production wins)	73	7300000	0	0	0
+27	open400-013	black	1/2-1/2		0.5	0.5	Threefold repetition	55	5500000	0	0	0
+28	open400-014	white	1/2-1/2		0.5	0.5	Threefold repetition	103	10300000	0	0	0
+29	open400-014	black	1/2-1/2		0.5	0.5	Threefold repetition	37	3700000	0	0	0
+30	open400-015	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	126	12600000	0	0	0
+31	open400-015	black	1/2-1/2		0.5	0.5	Threefold repetition	50	5000000	0	0	0
+32	open400-016	white	0-1	production	0.0	1.0	Checkmate (Production wins)	136	13600000	0	0	0
+33	open400-016	black	1/2-1/2		0.5	0.5	Threefold repetition	57	5700000	0	0	0
+34	open400-017	white	0-1	production	0.0	1.0	Checkmate (Production wins)	66	6600000	0	0	0
+35	open400-017	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	132	13200000	0	0	0
+36	open400-018	white	0-1	production	0.0	1.0	Checkmate (Production wins)	167	16700000	0	0	0
+37	open400-018	black	1-0	production	0.0	1.0	Checkmate (Production wins)	118	11800000	0	0	0
+38	open400-019	white	1/2-1/2		0.5	0.5	Threefold repetition	49	4900000	0	0	0
+39	open400-019	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	112	11200000	0	0	0
+40	open400-020	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	78	7800000	0	0	0
+41	open400-020	black	1-0	production	0.0	1.0	Checkmate (Production wins)	108	10800000	0	0	0
+42	open400-021	white	1/2-1/2		0.5	0.5	Threefold repetition	54	5400000	0	0	0
+43	open400-021	black	1/2-1/2		0.5	0.5	Threefold repetition	65	6500000	0	0	0
+44	open400-022	white	1/2-1/2		0.5	0.5	Threefold repetition	89	8900000	0	0	0
+45	open400-022	black	1/2-1/2		0.5	0.5	Threefold repetition	63	6300000	0	0	0
+46	open400-023	white	1/2-1/2		0.5	0.5	50-move rule	219	21900000	0	0	0
+47	open400-023	black	1-0	production	0.0	1.0	Checkmate (Production wins)	117	11700000	0	0	0
+48	open400-024	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	114	11400000	0	0	0
+49	open400-024	black	1-0	production	0.0	1.0	Checkmate (Production wins)	130	13000000	0	0	0
+50	open400-025	white	1/2-1/2		0.5	0.5	Threefold repetition	8	800000	0	0	0
+51	open400-025	black	1-0	production	0.0	1.0	Checkmate (Production wins)	91	9100000	0	0	0
+52	open400-026	white	0-1	production	0.0	1.0	Checkmate (Production wins)	110	11000000	0	0	0
+53	open400-026	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	130	13000000	0	0	0
+54	open400-027	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	102	10200000	0	0	0
+55	open400-027	black	1/2-1/2		0.5	0.5	Threefold repetition	19	1900000	0	0	0
+56	open400-028	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	69	6900000	0	0	0
+57	open400-028	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	148	14800000	0	0	0
+58	open400-029	white	0-1	production	0.0	1.0	Checkmate (Production wins)	129	12900000	0	0	0
+59	open400-029	black	1/2-1/2		0.5	0.5	Threefold repetition	126	12600000	0	0	0
+60	open400-030	white	1/2-1/2		0.5	0.5	Threefold repetition	73	7300000	0	0	0
+61	open400-030	black	1-0	production	0.0	1.0	Checkmate (Production wins)	139	13900000	0	0	0
+62	open400-031	white	1/2-1/2		0.5	0.5	Threefold repetition	61	6100000	0	0	0
+63	open400-031	black	1-0	production	0.0	1.0	Checkmate (Production wins)	116	11600000	0	0	0
+64	open400-032	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	109	10900000	0	0	0
+65	open400-032	black	1-0	production	0.0	1.0	Checkmate (Production wins)	57	5700000	0	0	0
+66	open400-033	white	0-1	production	0.0	1.0	Checkmate (Production wins)	117	11700000	0	0	0
+67	open400-033	black	1-0	production	0.0	1.0	Checkmate (Production wins)	50	5000000	0	0	0
+68	open400-034	white	0-1	production	0.0	1.0	Checkmate (Production wins)	110	11000000	0	0	0
+69	open400-034	black	1-0	production	0.0	1.0	Checkmate (Production wins)	107	10700000	0	0	0
+70	open400-035	white	0-1	production	0.0	1.0	Checkmate (Production wins)	130	13000000	0	0	0
+71	open400-035	black	1/2-1/2		0.5	0.5	Threefold repetition	53	5300000	0	0	0
+72	open400-036	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	92	9200000	0	0	0
+73	open400-036	black	1-0	production	0.0	1.0	Checkmate (Production wins)	130	13000000	0	0	0
+74	open400-037	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	147	14700000	0	0	0
+75	open400-037	black	1-0	production	0.0	1.0	Checkmate (Production wins)	79	7900000	0	0	0
+76	open400-038	white	1/2-1/2		0.5	0.5	Threefold repetition	48	4800000	0	0	0
+77	open400-038	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	83	8300000	0	0	0
+78	open400-039	white	0-1	production	0.0	1.0	Checkmate (Production wins)	106	10600000	0	0	0
+79	open400-039	black	1/2-1/2		0.5	0.5	Threefold repetition	38	3800000	0	0	0
+80	open400-040	white	0-1	production	0.0	1.0	Checkmate (Production wins)	109	10900000	0	0	0
+81	open400-040	black	1-0	production	0.0	1.0	Checkmate (Production wins)	104	10400000	0	0	0
+82	open400-041	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	109	10900000	0	0	0
+83	open400-041	black	1-0	production	0.0	1.0	Checkmate (Production wins)	105	10500000	0	0	0
+84	open400-042	white	0-1	production	0.0	1.0	Checkmate (Production wins)	111	11100000	0	0	0
+85	open400-042	black	1/2-1/2		0.5	0.5	Threefold repetition	42	4200000	0	0	0
+86	open400-043	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	151	15100000	0	0	0
+87	open400-043	black	1-0	production	0.0	1.0	Checkmate (Production wins)	161	16100000	0	0	0
+88	open400-044	white	1/2-1/2		0.5	0.5	Threefold repetition	76	7600000	0	0	0
+89	open400-044	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	114	11400000	0	0	0
+90	open400-045	white	0-1	production	0.0	1.0	Checkmate (Production wins)	129	12900000	0	0	0
+91	open400-045	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	61	6100000	0	0	0
+92	open400-046	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	161	16100000	0	0	0
+93	open400-046	black	1-0	production	0.0	1.0	Checkmate (Production wins)	117	11700000	0	0	0
+94	open400-047	white	0-1	production	0.0	1.0	Checkmate (Production wins)	147	14700000	0	0	0
+95	open400-047	black	1-0	production	0.0	1.0	Checkmate (Production wins)	86	8600000	0	0	0
+96	open400-048	white	0-1	production	0.0	1.0	Checkmate (Production wins)	126	12600000	0	0	0
+97	open400-048	black	1/2-1/2		0.5	0.5	Threefold repetition	104	10400000	0	0	0
+98	open400-049	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	116	11600000	0	0	0
+99	open400-049	black	1/2-1/2		0.5	0.5	Threefold repetition	83	8300000	0	0	0
+100	open400-050	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	153	15300000	0	0	0
+101	open400-050	black	1-0	production	0.0	1.0	Checkmate (Production wins)	107	10700000	0	0	0
+102	open400-051	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	54	5400000	0	0	0
+103	open400-051	black	1-0	production	0.0	1.0	Checkmate (Production wins)	72	7200000	0	0	0
+104	open400-052	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	113	11300000	0	0	0
+105	open400-052	black	1/2-1/2		0.5	0.5	Threefold repetition	68	6800000	0	0	0
+106	open400-053	white	0-1	production	0.0	1.0	Checkmate (Production wins)	128	12800000	0	0	0
+107	open400-053	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	120	12000000	0	0	0
+108	open400-054	white	0-1	production	0.0	1.0	Checkmate (Production wins)	131	13100000	0	0	0
+109	open400-054	black	1-0	production	0.0	1.0	Checkmate (Production wins)	122	12200000	0	0	0
+110	open400-055	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	149	14900000	0	0	0
+111	open400-055	black	1/2-1/2		0.5	0.5	Threefold repetition	50	5000000	0	0	0
+112	open400-056	white	1/2-1/2		0.5	0.5	Threefold repetition	65	6500000	0	0	0
+113	open400-056	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	43	4300000	0	0	0
+114	open400-057	white	0-1	production	0.0	1.0	Checkmate (Production wins)	92	9200000	0	0	0
+115	open400-057	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	74	7400000	0	0	0
+116	open400-058	white	1/2-1/2		0.5	0.5	Threefold repetition	65	6500000	0	0	0
+117	open400-058	black	1-0	production	0.0	1.0	Checkmate (Production wins)	160	16000000	0	0	0
+118	open400-059	white	1/2-1/2		0.5	0.5	Threefold repetition	82	8200000	0	0	0
+119	open400-059	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	76	7600000	0	0	0
+120	open400-060	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	76	7600000	0	0	0
+121	open400-060	black	1/2-1/2		0.5	0.5	Threefold repetition	37	3700000	0	0	0
+122	open400-061	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	103	10300000	0	0	0
+123	open400-061	black	1-0	production	0.0	1.0	Checkmate (Production wins)	129	12900000	0	0	0
+124	open400-062	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	113	11300000	0	0	0
+125	open400-062	black	1/2-1/2		0.5	0.5	Threefold repetition	17	1700000	0	0	0
+126	open400-063	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	106	10600000	0	0	0
+127	open400-063	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	105	10500000	0	0	0
+128	open400-064	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	125	12500000	0	0	0
+129	open400-064	black	1/2-1/2		0.5	0.5	Insufficient material	112	11200000	0	0	0
+130	open400-065	white	0-1	production	0.0	1.0	Checkmate (Production wins)	105	10500000	0	0	0
+131	open400-065	black	1/2-1/2		0.5	0.5	50-move rule	221	22100000	0	0	0
+132	open400-066	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	135	13500000	0	0	0
+133	open400-066	black	1-0	production	0.0	1.0	Checkmate (Production wins)	121	12100000	0	0	0
+134	open400-067	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	118	11800000	0	0	0
+135	open400-067	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	147	14700000	0	0	0
+136	open400-068	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	95	9500000	0	0	0
+137	open400-068	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	86	8600000	0	0	0
+138	open400-069	white	1/2-1/2		0.5	0.5	Threefold repetition	44	4400000	0	0	0
+139	open400-069	black	1/2-1/2		0.5	0.5	Threefold repetition	14	1400000	0	0	0
+140	open400-070	white	0-1	production	0.0	1.0	Checkmate (Production wins)	100	10000000	0	0	0
+141	open400-070	black	1-0	production	0.0	1.0	Checkmate (Production wins)	135	13500000	0	0	0
+142	open400-071	white	1/2-1/2		0.5	0.5	Threefold repetition	27	2700000	0	0	0
+143	open400-071	black	1-0	production	0.0	1.0	Checkmate (Production wins)	281	28100000	0	0	0
+144	open400-072	white	1/2-1/2		0.5	0.5	Threefold repetition	73	7300000	0	0	0
+145	open400-072	black	1-0	production	0.0	1.0	Checkmate (Production wins)	124	12400000	0	0	0
+146	open400-073	white	1/2-1/2		0.5	0.5	Threefold repetition	52	5200000	0	0	0
+147	open400-073	black	1-0	production	0.0	1.0	Checkmate (Production wins)	153	15300000	0	0	0
+148	open400-074	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	78	7800000	0	0	0
+149	open400-074	black	1-0	production	0.0	1.0	Checkmate (Production wins)	108	10800000	0	0	0
+150	open400-075	white	1/2-1/2		0.5	0.5	Threefold repetition	99	9900000	0	0	0
+151	open400-075	black	1-0	production	0.0	1.0	Checkmate (Production wins)	103	10300000	0	0	0
+152	open400-076	white	0-1	production	0.0	1.0	Checkmate (Production wins)	177	17700000	0	0	0
+153	open400-076	black	1/2-1/2		0.5	0.5	Threefold repetition	47	4700000	0	0	0
+154	open400-077	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	109	10900000	0	0	0
+155	open400-077	black	1/2-1/2		0.5	0.5	Insufficient material	121	12100000	0	0	0
+156	open400-078	white	0-1	production	0.0	1.0	Checkmate (Production wins)	137	13700000	0	0	0
+157	open400-078	black	1-0	production	0.0	1.0	Checkmate (Production wins)	116	11600000	0	0	0
+158	open400-079	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	131	13100000	0	0	0
+159	open400-079	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	134	13400000	0	0	0
+160	open400-080	white	1/2-1/2		0.5	0.5	Threefold repetition	46	4600000	0	0	0
+161	open400-080	black	1-0	production	0.0	1.0	Checkmate (Production wins)	31	3100000	0	0	0
+162	open400-081	white	0-1	production	0.0	1.0	Checkmate (Production wins)	141	14100000	0	0	0
+163	open400-081	black	1/2-1/2		0.5	0.5	Threefold repetition	14	1400000	0	0	0
+164	open400-082	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	93	9300000	0	0	0
+165	open400-082	black	1/2-1/2		0.5	0.5	Threefold repetition	27	2700000	0	0	0
+166	open400-083	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	120	12000000	0	0	0
+167	open400-083	black	1/2-1/2		0.5	0.5	Threefold repetition	28	2800000	0	0	0
+168	open400-084	white	1/2-1/2		0.5	0.5	Threefold repetition	77	7700000	0	0	0
+169	open400-084	black	1/2-1/2		0.5	0.5	Threefold repetition	31	3100000	0	0	0
+170	open400-085	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	122	12200000	0	0	0
+171	open400-085	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	51	5100000	0	0	0
+172	open400-086	white	0-1	production	0.0	1.0	Checkmate (Production wins)	124	12400000	0	0	0
+173	open400-086	black	1-0	production	0.0	1.0	Checkmate (Production wins)	175	17500000	0	0	0
+174	open400-087	white	1/2-1/2		0.5	0.5	Threefold repetition	145	14500000	0	0	0
+175	open400-087	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	113	11300000	0	0	0
+176	open400-088	white	1/2-1/2		0.5	0.5	Threefold repetition	66	6600000	0	0	0
+177	open400-088	black	1-0	production	0.0	1.0	Checkmate (Production wins)	127	12700000	0	0	0
+178	open400-089	white	0-1	production	0.0	1.0	Checkmate (Production wins)	98	9800000	0	0	0
+179	open400-089	black	1-0	production	0.0	1.0	Checkmate (Production wins)	139	13900000	0	0	0
+180	open400-090	white	1/2-1/2		0.5	0.5	Threefold repetition	7	700000	0	0	0
+181	open400-090	black	1/2-1/2		0.5	0.5	Threefold repetition	30	3000000	0	0	0
+182	open400-091	white	1/2-1/2		0.5	0.5	Threefold repetition	62	6200000	0	0	0
+183	open400-091	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	130	13000000	0	0	0
+184	open400-092	white	0-1	production	0.0	1.0	Checkmate (Production wins)	109	10900000	0	0	0
+185	open400-092	black	1/2-1/2		0.5	0.5	Threefold repetition	87	8700000	0	0	0
+186	open400-093	white	1/2-1/2		0.5	0.5	Threefold repetition	37	3700000	0	0	0
+187	open400-093	black	1-0	production	0.0	1.0	Checkmate (Production wins)	107	10700000	0	0	0
+188	open400-094	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	110	11000000	0	0	0
+189	open400-094	black	1/2-1/2		0.5	0.5	Threefold repetition	45	4500000	0	0	0
+190	open400-095	white	1/2-1/2		0.5	0.5	Threefold repetition	53	5300000	0	0	0
+191	open400-095	black	1/2-1/2		0.5	0.5	Threefold repetition	68	6800000	0	0	0
+192	open400-096	white	0-1	production	0.0	1.0	Checkmate (Production wins)	125	12500000	0	0	0
+193	open400-096	black	1/2-1/2		0.5	0.5	Threefold repetition	56	5600000	0	0	0
+194	open400-097	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	111	11100000	0	0	0
+195	open400-097	black	1-0	production	0.0	1.0	Checkmate (Production wins)	129	12900000	0	0	0
+196	open400-098	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	88	8800000	0	0	0
+197	open400-098	black	1/2-1/2		0.5	0.5	Threefold repetition	28	2800000	0	0	0
+198	open400-099	white	1/2-1/2		0.5	0.5	Threefold repetition	49	4900000	0	0	0
+199	open400-099	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	158	15800000	0	0	0
+200	open400-100	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	138	13800000	0	0	0
+201	open400-100	black	1-0	production	0.0	1.0	Checkmate (Production wins)	156	15600000	0	0	0
+202	open400-101	white	0-1	production	0.0	1.0	Checkmate (Production wins)	116	11600000	0	0	0
+203	open400-101	black	1/2-1/2		0.5	0.5	Threefold repetition	51	5100000	0	0	0
+204	open400-102	white	1/2-1/2		0.5	0.5	Threefold repetition	51	5100000	0	0	0
+205	open400-102	black	1/2-1/2		0.5	0.5	Threefold repetition	55	5500000	0	0	0
+206	open400-103	white	1/2-1/2		0.5	0.5	Threefold repetition	26	2600000	0	0	0
+207	open400-103	black	1-0	production	0.0	1.0	Checkmate (Production wins)	133	13300000	0	0	0
+208	open400-104	white	0-1	production	0.0	1.0	Checkmate (Production wins)	131	13100000	0	0	0
+209	open400-104	black	1/2-1/2		0.5	0.5	Threefold repetition	95	9500000	0	0	0
+210	open400-105	white	0-1	production	0.0	1.0	Checkmate (Production wins)	154	15400000	0	0	0
+211	open400-105	black	1-0	production	0.0	1.0	Checkmate (Production wins)	127	12700000	0	0	0
+212	open400-106	white	0-1	production	0.0	1.0	Checkmate (Production wins)	134	13400000	0	0	0
+213	open400-106	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	106	10600000	0	0	0
+214	open400-107	white	1/2-1/2		0.5	0.5	Threefold repetition	71	7100000	0	0	0
+215	open400-107	black	1-0	production	0.0	1.0	Checkmate (Production wins)	110	11000000	0	0	0
+216	open400-108	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	91	9100000	0	0	0
+217	open400-108	black	1-0	production	0.0	1.0	Checkmate (Production wins)	91	9100000	0	0	0
+218	open400-109	white	0-1	production	0.0	1.0	Checkmate (Production wins)	103	10300000	0	0	0
+219	open400-109	black	1-0	production	0.0	1.0	Checkmate (Production wins)	90	9000000	0	0	0
+220	open400-110	white	1/2-1/2		0.5	0.5	Threefold repetition	57	5700000	0	0	0
+221	open400-110	black	1-0	production	0.0	1.0	Checkmate (Production wins)	111	11100000	0	0	0
+222	open400-111	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	108	10800000	0	0	0
+223	open400-111	black	1/2-1/2		0.5	0.5	Threefold repetition	24	2400000	0	0	0
+224	open400-112	white	0-1	production	0.0	1.0	Checkmate (Production wins)	132	13200000	0	0	0
+225	open400-112	black	1/2-1/2		0.5	0.5	Threefold repetition	81	8100000	0	0	0
+226	open400-113	white	1/2-1/2		0.5	0.5	Adjudicated draw (300 plies limit)	300	30000000	0	0	0
+227	open400-113	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	123	12300000	0	0	0
+228	open400-114	white	1/2-1/2		0.5	0.5	Threefold repetition	91	9100000	0	0	0
+229	open400-114	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	54	5400000	0	0	0
+230	open400-115	white	1/2-1/2		0.5	0.5	Threefold repetition	63	6300000	0	0	0
+231	open400-115	black	1-0	production	0.0	1.0	Checkmate (Production wins)	111	11100000	0	0	0
+232	open400-116	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	186	18600000	0	0	0
+233	open400-116	black	1/2-1/2		0.5	0.5	Insufficient material	133	13300000	0	0	0
+234	open400-117	white	0-1	production	0.0	1.0	Checkmate (Production wins)	92	9200000	0	0	0
+235	open400-117	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	94	9400000	0	0	0
+236	open400-118	white	0-1	production	0.0	1.0	Checkmate (Production wins)	65	6500000	0	0	0
+237	open400-118	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	49	4900000	0	0	0
+238	open400-119	white	1/2-1/2		0.5	0.5	Threefold repetition	63	6300000	0	0	0
+239	open400-119	black	1/2-1/2		0.5	0.5	Threefold repetition	44	4400000	0	0	0
+240	open400-120	white	0-1	production	0.0	1.0	Checkmate (Production wins)	119	11900000	0	0	0
+241	open400-120	black	1/2-1/2		0.5	0.5	Threefold repetition	174	17400000	0	0	0
+242	open400-121	white	1/2-1/2		0.5	0.5	Threefold repetition	29	2900000	0	0	0
+243	open400-121	black	1-0	production	0.0	1.0	Checkmate (Production wins)	101	10100000	0	0	0
+244	open400-122	white	1/2-1/2		0.5	0.5	Threefold repetition	89	8900000	0	0	0
+245	open400-122	black	1-0	production	0.0	1.0	Checkmate (Production wins)	70	7000000	0	0	0
+246	open400-123	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	103	10300000	0	0	0
+247	open400-123	black	1/2-1/2		0.5	0.5	Threefold repetition	97	9700000	0	0	0
+248	open400-124	white	1/2-1/2		0.5	0.5	Threefold repetition	79	7900000	0	0	0
+249	open400-124	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	132	13200000	0	0	0
+250	open400-125	white	0-1	production	0.0	1.0	Checkmate (Production wins)	127	12700000	0	0	0
+251	open400-125	black	1/2-1/2		0.5	0.5	Insufficient material	128	12800000	0	0	0
+252	open400-126	white	0-1	production	0.0	1.0	Checkmate (Production wins)	96	9600000	0	0	0
+253	open400-126	black	1-0	production	0.0	1.0	Checkmate (Production wins)	119	11900000	0	0	0
+254	open400-127	white	1/2-1/2		0.5	0.5	Threefold repetition	161	16100000	0	0	0
+255	open400-127	black	1-0	production	0.0	1.0	Checkmate (Production wins)	114	11400000	0	0	0
+256	open400-128	white	1/2-1/2		0.5	0.5	Threefold repetition	88	8800000	0	0	0
+257	open400-128	black	1/2-1/2		0.5	0.5	Threefold repetition	74	7400000	0	0	0
+258	open400-129	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	128	12800000	0	0	0
+259	open400-129	black	1-0	production	0.0	1.0	Checkmate (Production wins)	128	12800000	0	0	0
+260	open400-130	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	145	14500000	0	0	0
+261	open400-130	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	112	11200000	0	0	0
+262	open400-131	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	128	12800000	0	0	0
+263	open400-131	black	1/2-1/2		0.5	0.5	Threefold repetition	135	13500000	0	0	0
+264	open400-132	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	92	9200000	0	0	0
+265	open400-132	black	1-0	production	0.0	1.0	Checkmate (Production wins)	88	8800000	0	0	0
+266	open400-133	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	93	9300000	0	0	0
+267	open400-133	black	1/2-1/2		0.5	0.5	Threefold repetition	62	6200000	0	0	0
+268	open400-134	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	91	9100000	0	0	0
+269	open400-134	black	1-0	production	0.0	1.0	Checkmate (Production wins)	163	16300000	0	0	0
+270	open400-135	white	1/2-1/2		0.5	0.5	Threefold repetition	91	9100000	0	0	0
+271	open400-135	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	120	12000000	0	0	0
+272	open400-136	white	0-1	production	0.0	1.0	Checkmate (Production wins)	98	9800000	0	0	0
+273	open400-136	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	142	14200000	0	0	0
+274	open400-137	white	0-1	production	0.0	1.0	Checkmate (Production wins)	163	16300000	0	0	0
+275	open400-137	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	117	11700000	0	0	0
+276	open400-138	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	58	5800000	0	0	0
+277	open400-138	black	1-0	production	0.0	1.0	Checkmate (Production wins)	116	11600000	0	0	0
+278	open400-139	white	0-1	production	0.0	1.0	Checkmate (Production wins)	125	12500000	0	0	0
+279	open400-139	black	1/2-1/2		0.5	0.5	Threefold repetition	30	3000000	0	0	0
+280	open400-140	white	0-1	production	0.0	1.0	Checkmate (Production wins)	147	14700000	0	0	0
+281	open400-140	black	1/2-1/2		0.5	0.5	Threefold repetition	170	17000000	0	0	0
+282	open400-141	white	0-1	production	0.0	1.0	Checkmate (Production wins)	133	13300000	0	0	0
+283	open400-141	black	1/2-1/2		0.5	0.5	Threefold repetition	77	7700000	0	0	0
+284	open400-142	white	1/2-1/2		0.5	0.5	Threefold repetition	40	4000000	0	0	0
+285	open400-142	black	1-0	production	0.0	1.0	Checkmate (Production wins)	100	10000000	0	0	0
+286	open400-143	white	1/2-1/2		0.5	0.5	Threefold repetition	43	4300000	0	0	0
+287	open400-143	black	1-0	production	0.0	1.0	Checkmate (Production wins)	104	10400000	0	0	0
+288	open400-144	white	1/2-1/2		0.5	0.5	Threefold repetition	46	4600000	0	0	0
+289	open400-144	black	1-0	production	0.0	1.0	Checkmate (Production wins)	108	10800000	0	0	0
+290	open400-145	white	0-1	production	0.0	1.0	Checkmate (Production wins)	107	10700000	0	0	0
+291	open400-145	black	1-0	production	0.0	1.0	Checkmate (Production wins)	106	10600000	0	0	0
+292	open400-146	white	1/2-1/2		0.5	0.5	50-move rule	212	21200000	0	0	0
+293	open400-146	black	1-0	production	0.0	1.0	Checkmate (Production wins)	110	11000000	0	0	0
+294	open400-147	white	0-1	production	0.0	1.0	Checkmate (Production wins)	159	15900000	0	0	0
+295	open400-147	black	1-0	production	0.0	1.0	Checkmate (Production wins)	92	9200000	0	0	0
+296	open400-148	white	0-1	production	0.0	1.0	Checkmate (Production wins)	138	13800000	0	0	0
+297	open400-148	black	1/2-1/2		0.5	0.5	Threefold repetition	114	11400000	0	0	0
+298	open400-149	white	0-1	production	0.0	1.0	Checkmate (Production wins)	100	10000000	0	0	0
+299	open400-149	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	54	5400000	0	0	0
+300	open400-150	white	1/2-1/2		0.5	0.5	Threefold repetition	52	5200000	0	0	0
+301	open400-150	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	77	7700000	0	0	0
+302	open400-151	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	112	11200000	0	0	0
+303	open400-151	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	145	14500000	0	0	0
+304	open400-152	white	0-1	production	0.0	1.0	Checkmate (Production wins)	78	7800000	0	0	0
+305	open400-152	black	1-0	production	0.0	1.0	Checkmate (Production wins)	99	9900000	0	0	0
+306	open400-153	white	1/2-1/2		0.5	0.5	Threefold repetition	47	4700000	0	0	0
+307	open400-153	black	1/2-1/2		0.5	0.5	Threefold repetition	64	6400000	0	0	0
+308	open400-154	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	99	9900000	0	0	0
+309	open400-154	black	1-0	production	0.0	1.0	Checkmate (Production wins)	77	7700000	0	0	0
+310	open400-155	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	75	7500000	0	0	0
+311	open400-155	black	1/2-1/2		0.5	0.5	Threefold repetition	55	5500000	0	0	0
+312	open400-156	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	123	12300000	0	0	0
+313	open400-156	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	122	12200000	0	0	0
+314	open400-157	white	1/2-1/2		0.5	0.5	Threefold repetition	37	3700000	0	0	0
+315	open400-157	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	100	10000000	0	0	0
+316	open400-158	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	116	11600000	0	0	0
+317	open400-158	black	1-0	production	0.0	1.0	Checkmate (Production wins)	102	10200000	0	0	0
+318	open400-159	white	1/2-1/2		0.5	0.5	Threefold repetition	66	6600000	0	0	0
+319	open400-159	black	1/2-1/2		0.5	0.5	Threefold repetition	137	13700000	0	0	0
+320	open400-160	white	1/2-1/2		0.5	0.5	50-move rule	261	26100000	0	0	0
+321	open400-160	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	116	11600000	0	0	0
+322	open400-161	white	0-1	production	0.0	1.0	Checkmate (Production wins)	139	13900000	0	0	0
+323	open400-161	black	1/2-1/2		0.5	0.5	Threefold repetition	35	3500000	0	0	0
+324	open400-162	white	1/2-1/2		0.5	0.5	Threefold repetition	102	10200000	0	0	0
+325	open400-162	black	1-0	production	0.0	1.0	Checkmate (Production wins)	88	8800000	0	0	0
+326	open400-163	white	0-1	production	0.0	1.0	Checkmate (Production wins)	73	7300000	0	0	0
+327	open400-163	black	1/2-1/2		0.5	0.5	Threefold repetition	99	9900000	0	0	0
+328	open400-164	white	1/2-1/2		0.5	0.5	Threefold repetition	84	8400000	0	0	0
+329	open400-164	black	1-0	production	0.0	1.0	Checkmate (Production wins)	151	15100000	0	0	0
+330	open400-165	white	0-1	production	0.0	1.0	Checkmate (Production wins)	107	10700000	0	0	0
+331	open400-165	black	1/2-1/2		0.5	0.5	Threefold repetition	39	3900000	0	0	0
+332	open400-166	white	0-1	production	0.0	1.0	Checkmate (Production wins)	190	19000000	0	0	0
+333	open400-166	black	1/2-1/2		0.5	0.5	Threefold repetition	57	5700000	0	0	0
+334	open400-167	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	121	12100000	0	0	0
+335	open400-167	black	1-0	production	0.0	1.0	Checkmate (Production wins)	131	13100000	0	0	0
+336	open400-168	white	0-1	production	0.0	1.0	Checkmate (Production wins)	123	12300000	0	0	0
+337	open400-168	black	1/2-1/2		0.5	0.5	Threefold repetition	46	4600000	0	0	0
+338	open400-169	white	0-1	production	0.0	1.0	Checkmate (Production wins)	122	12200000	0	0	0
+339	open400-169	black	1-0	production	0.0	1.0	Checkmate (Production wins)	125	12500000	0	0	0
+340	open400-170	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	92	9200000	0	0	0
+341	open400-170	black	1-0	production	0.0	1.0	Checkmate (Production wins)	48	4800000	0	0	0
+342	open400-171	white	1/2-1/2		0.5	0.5	Threefold repetition	70	7000000	0	0	0
+343	open400-171	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	102	10200000	0	0	0
+344	open400-172	white	0-1	production	0.0	1.0	Checkmate (Production wins)	91	9100000	0	0	0
+345	open400-172	black	1-0	production	0.0	1.0	Checkmate (Production wins)	156	15600000	0	0	0
+346	open400-173	white	0-1	production	0.0	1.0	Checkmate (Production wins)	109	10900000	0	0	0
+347	open400-173	black	1-0	production	0.0	1.0	Checkmate (Production wins)	130	13000000	0	0	0
+348	open400-174	white	1/2-1/2		0.5	0.5	Threefold repetition	178	17800000	0	0	0
+349	open400-174	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	158	15800000	0	0	0
+350	open400-175	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	78	7800000	0	0	0
+351	open400-175	black	1-0	production	0.0	1.0	Checkmate (Production wins)	126	12600000	0	0	0
+352	open400-176	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	99	9900000	0	0	0
+353	open400-176	black	1/2-1/2		0.5	0.5	Insufficient material	119	11900000	0	0	0
+354	open400-177	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	96	9600000	0	0	0
+355	open400-177	black	1-0	production	0.0	1.0	Checkmate (Production wins)	108	10800000	0	0	0
+356	open400-178	white	1/2-1/2		0.5	0.5	Threefold repetition	85	8500000	0	0	0
+357	open400-178	black	1/2-1/2		0.5	0.5	Threefold repetition	65	6500000	0	0	0
+358	open400-179	white	0-1	production	0.0	1.0	Checkmate (Production wins)	77	7700000	0	0	0
+359	open400-179	black	1/2-1/2		0.5	0.5	Threefold repetition	46	4600000	0	0	0
+360	open400-180	white	1/2-1/2		0.5	0.5	Threefold repetition	53	5300000	0	0	0
+361	open400-180	black	1/2-1/2		0.5	0.5	Threefold repetition	80	8000000	0	0	0
+362	open400-181	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	110	11000000	0	0	0
+363	open400-181	black	1/2-1/2		0.5	0.5	Threefold repetition	12	1200000	0	0	0
+364	open400-182	white	1/2-1/2		0.5	0.5	Threefold repetition	74	7400000	0	0	0
+365	open400-182	black	1/2-1/2		0.5	0.5	Threefold repetition	71	7100000	0	0	0
+366	open400-183	white	0-1	production	0.0	1.0	Checkmate (Production wins)	102	10200000	0	0	0
+367	open400-183	black	1-0	production	0.0	1.0	Checkmate (Production wins)	55	5500000	0	0	0
+368	open400-184	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	113	11300000	0	0	0
+369	open400-184	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	80	8000000	0	0	0
+370	open400-185	white	0-1	production	0.0	1.0	Checkmate (Production wins)	190	19000000	0	0	0
+371	open400-185	black	1-0	production	0.0	1.0	Checkmate (Production wins)	107	10700000	0	0	0
+372	open400-186	white	0-1	production	0.0	1.0	Checkmate (Production wins)	96	9600000	0	0	0
+373	open400-186	black	1/2-1/2		0.5	0.5	Threefold repetition	62	6200000	0	0	0
+374	open400-187	white	1/2-1/2		0.5	0.5	Threefold repetition	85	8500000	0	0	0
+375	open400-187	black	1-0	production	0.0	1.0	Checkmate (Production wins)	146	14600000	0	0	0
+376	open400-188	white	0-1	production	0.0	1.0	Checkmate (Production wins)	135	13500000	0	0	0
+377	open400-188	black	1-0	production	0.0	1.0	Checkmate (Production wins)	142	14200000	0	0	0
+378	open400-189	white	1/2-1/2		0.5	0.5	Threefold repetition	35	3500000	0	0	0
+379	open400-189	black	1/2-1/2		0.5	0.5	50-move rule	214	21400000	0	0	0
+380	open400-190	white	0-1	production	0.0	1.0	Checkmate (Production wins)	96	9600000	0	0	0
+381	open400-190	black	1-0	production	0.0	1.0	Checkmate (Production wins)	111	11100000	0	0	0
+382	open400-191	white	1/2-1/2		0.5	0.5	Threefold repetition	146	14600000	0	0	0
+383	open400-191	black	1-0	production	0.0	1.0	Checkmate (Production wins)	140	14000000	0	0	0
+384	open400-192	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	105	10500000	0	0	0
+385	open400-192	black	1-0	production	0.0	1.0	Checkmate (Production wins)	145	14500000	0	0	0
+386	open400-193	white	0-1	production	0.0	1.0	Checkmate (Production wins)	169	16900000	0	0	0
+387	open400-193	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	57	5700000	0	0	0
+388	open400-194	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	133	13300000	0	0	0
+389	open400-194	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	196	19600000	0	0	0
+390	open400-195	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	116	11600000	0	0	0
+391	open400-195	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	151	15100000	0	0	0
+392	open400-196	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	134	13400000	0	0	0
+393	open400-196	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	99	9900000	0	0	0
+394	open400-197	white	1/2-1/2		0.5	0.5	Threefold repetition	67	6700000	0	0	0
+395	open400-197	black	1-0	production	0.0	1.0	Checkmate (Production wins)	71	7100000	0	0	0
+396	open400-198	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	230	23000000	0	0	0
+397	open400-198	black	1/2-1/2		0.5	0.5	Threefold repetition	42	4200000	0	0	0
+398	open400-199	white	1/2-1/2		0.5	0.5	Threefold repetition	138	13800000	0	0	0
+399	open400-199	black	1/2-1/2		0.5	0.5	Threefold repetition	115	11500000	0	0	0
+400	open400-200	white	0-1	production	0.0	1.0	Checkmate (Production wins)	129	12900000	0	0	0
+401	open400-200	black	1/2-1/2		0.5	0.5	Threefold repetition	66	6600000	0	0	0
+402	open400-201	white	1/2-1/2		0.5	0.5	Threefold repetition	36	3600000	0	0	0
+403	open400-201	black	1-0	production	0.0	1.0	Checkmate (Production wins)	103	10300000	0	0	0
+404	open400-202	white	1/2-1/2		0.5	0.5	Insufficient material	128	12800000	0	0	0
+405	open400-202	black	1-0	production	0.0	1.0	Checkmate (Production wins)	98	9800000	0	0	0
+406	open400-203	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	99	9900000	0	0	0
+407	open400-203	black	1/2-1/2		0.5	0.5	Threefold repetition	16	1600000	0	0	0
+408	open400-204	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	90	9000000	0	0	0
+409	open400-204	black	1-0	production	0.0	1.0	Checkmate (Production wins)	190	19000000	0	0	0
+410	open400-205	white	1/2-1/2		0.5	0.5	Threefold repetition	40	4000000	0	0	0
+411	open400-205	black	1-0	production	0.0	1.0	Checkmate (Production wins)	134	13400000	0	0	0
+412	open400-206	white	0-1	production	0.0	1.0	Checkmate (Production wins)	104	10400000	0	0	0
+413	open400-206	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	124	12400000	0	0	0
+414	open400-207	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	55	5500000	0	0	0
+415	open400-207	black	1/2-1/2		0.5	0.5	Threefold repetition	61	6100000	0	0	0
+416	open400-208	white	1/2-1/2		0.5	0.5	Threefold repetition	63	6300000	0	0	0
+417	open400-208	black	1-0	production	0.0	1.0	Checkmate (Production wins)	83	8300000	0	0	0
+418	open400-209	white	0-1	production	0.0	1.0	Checkmate (Production wins)	106	10600000	0	0	0
+419	open400-209	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	94	9400000	0	0	0
+420	open400-210	white	0-1	production	0.0	1.0	Checkmate (Production wins)	97	9700000	0	0	0
+421	open400-210	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	135	13500000	0	0	0
+422	open400-211	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	45	4500000	0	0	0
+423	open400-211	black	1/2-1/2		0.5	0.5	Threefold repetition	58	5800000	0	0	0
+424	open400-212	white	0-1	production	0.0	1.0	Checkmate (Production wins)	112	11200000	0	0	0
+425	open400-212	black	1/2-1/2		0.5	0.5	Insufficient material	190	19000000	0	0	0
+426	open400-213	white	0-1	production	0.0	1.0	Checkmate (Production wins)	134	13400000	0	0	0
+427	open400-213	black	1/2-1/2		0.5	0.5	Threefold repetition	110	11000000	0	0	0
+428	open400-214	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	94	9400000	0	0	0
+429	open400-214	black	1/2-1/2		0.5	0.5	Threefold repetition	67	6700000	0	0	0
+430	open400-215	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	74	7400000	0	0	0
+431	open400-215	black	1-0	production	0.0	1.0	Checkmate (Production wins)	72	7200000	0	0	0
+432	open400-216	white	1/2-1/2		0.5	0.5	Threefold repetition	12	1200000	0	0	0
+433	open400-216	black	1-0	production	0.0	1.0	Checkmate (Production wins)	99	9900000	0	0	0
+434	open400-217	white	0-1	production	0.0	1.0	Checkmate (Production wins)	101	10100000	0	0	0
+435	open400-217	black	1-0	production	0.0	1.0	Checkmate (Production wins)	94	9400000	0	0	0
+436	open400-218	white	0-1	production	0.0	1.0	Checkmate (Production wins)	81	8100000	0	0	0
+437	open400-218	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	97	9700000	0	0	0
+438	open400-219	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	149	14900000	0	0	0
+439	open400-219	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	120	12000000	0	0	0
+440	open400-220	white	1/2-1/2		0.5	0.5	Threefold repetition	71	7100000	0	0	0
+441	open400-220	black	1/2-1/2		0.5	0.5	50-move rule	183	18300000	0	0	0
+442	open400-221	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	100	10000000	0	0	0
+443	open400-221	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	93	9300000	0	0	0
+444	open400-222	white	0-1	production	0.0	1.0	Checkmate (Production wins)	116	11600000	0	0	0
+445	open400-222	black	1-0	production	0.0	1.0	Checkmate (Production wins)	133	13300000	0	0	0
+446	open400-223	white	0-1	production	0.0	1.0	Checkmate (Production wins)	190	19000000	0	0	0
+447	open400-223	black	1-0	production	0.0	1.0	Checkmate (Production wins)	169	16900000	0	0	0
+448	open400-224	white	1/2-1/2		0.5	0.5	Threefold repetition	12	1200000	0	0	0
+449	open400-224	black	1/2-1/2		0.5	0.5	Threefold repetition	21	2100000	0	0	0
+450	open400-225	white	0-1	production	0.0	1.0	Checkmate (Production wins)	83	8300000	0	0	0
+451	open400-225	black	1-0	production	0.0	1.0	Checkmate (Production wins)	216	21600000	0	0	0
+452	open400-226	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	89	8900000	0	0	0
+453	open400-226	black	1-0	production	0.0	1.0	Checkmate (Production wins)	149	14900000	0	0	0
+454	open400-227	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	92	9200000	0	0	0
+455	open400-227	black	1-0	production	0.0	1.0	Checkmate (Production wins)	92	9200000	0	0	0
+456	open400-228	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	67	6700000	0	0	0
+457	open400-228	black	1-0	production	0.0	1.0	Checkmate (Production wins)	77	7700000	0	0	0
+458	open400-229	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	88	8800000	0	0	0
+459	open400-229	black	1-0	production	0.0	1.0	Checkmate (Production wins)	72	7200000	0	0	0
+460	open400-230	white	0-1	production	0.0	1.0	Checkmate (Production wins)	93	9300000	0	0	0
+461	open400-230	black	1-0	production	0.0	1.0	Checkmate (Production wins)	82	8200000	0	0	0
+462	open400-231	white	0-1	production	0.0	1.0	Checkmate (Production wins)	107	10700000	0	0	0
+463	open400-231	black	1-0	production	0.0	1.0	Checkmate (Production wins)	96	9600000	0	0	0
+464	open400-232	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	112	11200000	0	0	0
+465	open400-232	black	1/2-1/2		0.5	0.5	Threefold repetition	27	2700000	0	0	0
+466	open400-233	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	139	13900000	0	0	0
+467	open400-233	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	178	17800000	0	0	0
+468	open400-234	white	1/2-1/2		0.5	0.5	Threefold repetition	64	6400000	0	0	0
+469	open400-234	black	1-0	production	0.0	1.0	Checkmate (Production wins)	137	13700000	0	0	0
+470	open400-235	white	0-1	production	0.0	1.0	Checkmate (Production wins)	131	13100000	0	0	0
+471	open400-235	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	141	14100000	0	0	0
+472	open400-236	white	0-1	production	0.0	1.0	Checkmate (Production wins)	63	6300000	0	0	0
+473	open400-236	black	1/2-1/2		0.5	0.5	Threefold repetition	90	9000000	0	0	0
+474	open400-237	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	56	5600000	0	0	0
+475	open400-237	black	1-0	production	0.0	1.0	Checkmate (Production wins)	98	9800000	0	0	0
+476	open400-238	white	1/2-1/2		0.5	0.5	Threefold repetition	145	14500000	0	0	0
+477	open400-238	black	1/2-1/2		0.5	0.5	Insufficient material	132	13200000	0	0	0
+478	open400-239	white	1/2-1/2		0.5	0.5	Threefold repetition	80	8000000	0	0	0
+479	open400-239	black	1-0	production	0.0	1.0	Checkmate (Production wins)	158	15800000	0	0	0
+480	open400-240	white	0-1	production	0.0	1.0	Checkmate (Production wins)	90	9000000	0	0	0
+481	open400-240	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	108	10800000	0	0	0
+482	open400-241	white	0-1	production	0.0	1.0	Checkmate (Production wins)	124	12400000	0	0	0
+483	open400-241	black	1-0	production	0.0	1.0	Checkmate (Production wins)	99	9900000	0	0	0
+484	open400-242	white	1/2-1/2		0.5	0.5	Threefold repetition	48	4800000	0	0	0
+485	open400-242	black	1/2-1/2		0.5	0.5	Threefold repetition	61	6100000	0	0	0
+486	open400-243	white	0-1	production	0.0	1.0	Checkmate (Production wins)	92	9200000	0	0	0
+487	open400-243	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	112	11200000	0	0	0
+488	open400-244	white	1/2-1/2		0.5	0.5	Threefold repetition	74	7400000	0	0	0
+489	open400-244	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	109	10900000	0	0	0
+490	open400-245	white	1/2-1/2		0.5	0.5	Threefold repetition	63	6300000	0	0	0
+491	open400-245	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	127	12700000	0	0	0
+492	open400-246	white	0-1	production	0.0	1.0	Checkmate (Production wins)	115	11500000	0	0	0
+493	open400-246	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	119	11900000	0	0	0
+494	open400-247	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	72	7200000	0	0	0
+495	open400-247	black	1-0	production	0.0	1.0	Checkmate (Production wins)	98	9800000	0	0	0
+496	open400-248	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	94	9400000	0	0	0
+497	open400-248	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	53	5300000	0	0	0
+498	open400-249	white	0-1	production	0.0	1.0	Checkmate (Production wins)	55	5500000	0	0	0
+499	open400-249	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	93	9300000	0	0	0
+500	open400-250	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	101	10100000	0	0	0
+501	open400-250	black	1-0	production	0.0	1.0	Checkmate (Production wins)	89	8900000	0	0	0
+502	open400-251	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	102	10200000	0	0	0
+503	open400-251	black	1-0	production	0.0	1.0	Checkmate (Production wins)	130	13000000	0	0	0
+504	open400-252	white	0-1	production	0.0	1.0	Checkmate (Production wins)	89	8900000	0	0	0
+505	open400-252	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	179	17900000	0	0	0
+506	open400-253	white	0-1	production	0.0	1.0	Checkmate (Production wins)	154	15400000	0	0	0
+507	open400-253	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	80	8000000	0	0	0
+508	open400-254	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	100	10000000	0	0	0
+509	open400-254	black	1-0	production	0.0	1.0	Checkmate (Production wins)	90	9000000	0	0	0
+510	open400-255	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	123	12300000	0	0	0
+511	open400-255	black	1-0	production	0.0	1.0	Checkmate (Production wins)	119	11900000	0	0	0
+512	open400-256	white	1/2-1/2		0.5	0.5	Threefold repetition	53	5300000	0	0	0
+513	open400-256	black	1/2-1/2		0.5	0.5	Threefold repetition	30	3000000	0	0	0
+514	open400-257	white	1/2-1/2		0.5	0.5	Threefold repetition	55	5500000	0	0	0
+515	open400-257	black	1-0	production	0.0	1.0	Checkmate (Production wins)	110	11000000	0	0	0
+516	open400-258	white	1/2-1/2		0.5	0.5	Threefold repetition	56	5600000	0	0	0
+517	open400-258	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	97	9700000	0	0	0
+518	open400-259	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	78	7800000	0	0	0
+519	open400-259	black	1/2-1/2		0.5	0.5	Threefold repetition	63	6300000	0	0	0
+520	open400-260	white	1/2-1/2		0.5	0.5	Threefold repetition	24	2400000	0	0	0
+521	open400-260	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	109	10900000	0	0	0
+522	open400-261	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	116	11600000	0	0	0
+523	open400-261	black	1/2-1/2		0.5	0.5	Threefold repetition	64	6400000	0	0	0
+524	open400-262	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	102	10200000	0	0	0
+525	open400-262	black	1-0	production	0.0	1.0	Checkmate (Production wins)	100	10000000	0	0	0
+526	open400-263	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	81	8100000	0	0	0
+527	open400-263	black	1/2-1/2		0.5	0.5	Threefold repetition	37	3700000	0	0	0
+528	open400-264	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	128	12800000	0	0	0
+529	open400-264	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	121	12100000	0	0	0
+530	open400-265	white	0-1	production	0.0	1.0	Checkmate (Production wins)	118	11800000	0	0	0
+531	open400-265	black	1-0	production	0.0	1.0	Checkmate (Production wins)	121	12100000	0	0	0
+532	open400-266	white	1/2-1/2		0.5	0.5	Threefold repetition	30	3000000	0	0	0
+533	open400-266	black	1-0	production	0.0	1.0	Checkmate (Production wins)	110	11000000	0	0	0
+534	open400-267	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	90	9000000	0	0	0
+535	open400-267	black	1-0	production	0.0	1.0	Checkmate (Production wins)	108	10800000	0	0	0
+536	open400-268	white	1/2-1/2		0.5	0.5	50-move rule	295	29500000	0	0	0
+537	open400-268	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	110	11000000	0	0	0
+538	open400-269	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	131	13100000	0	0	0
+539	open400-269	black	1-0	production	0.0	1.0	Checkmate (Production wins)	95	9500000	0	0	0
+540	open400-270	white	0-1	production	0.0	1.0	Checkmate (Production wins)	100	10000000	0	0	0
+541	open400-270	black	1-0	production	0.0	1.0	Checkmate (Production wins)	101	10100000	0	0	0
+542	open400-271	white	1/2-1/2		0.5	0.5	Threefold repetition	66	6600000	0	0	0
+543	open400-271	black	1-0	production	0.0	1.0	Checkmate (Production wins)	116	11600000	0	0	0
+544	open400-272	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	92	9200000	0	0	0
+545	open400-272	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	181	18100000	0	0	0
+546	open400-273	white	1/2-1/2		0.5	0.5	Threefold repetition	66	6600000	0	0	0
+547	open400-273	black	1/2-1/2		0.5	0.5	Threefold repetition	65	6500000	0	0	0
+548	open400-274	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	90	9000000	0	0	0
+549	open400-274	black	1-0	production	0.0	1.0	Checkmate (Production wins)	94	9400000	0	0	0
+550	open400-275	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	117	11700000	0	0	0
+551	open400-275	black	1-0	production	0.0	1.0	Checkmate (Production wins)	139	13900000	0	0	0
+552	open400-276	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	144	14400000	0	0	0
+553	open400-276	black	1/2-1/2		0.5	0.5	Threefold repetition	8	800000	0	0	0
+554	open400-277	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	109	10900000	0	0	0
+555	open400-277	black	1/2-1/2		0.5	0.5	Threefold repetition	27	2700000	0	0	0
+556	open400-278	white	0-1	production	0.0	1.0	Checkmate (Production wins)	113	11300000	0	0	0
+557	open400-278	black	1/2-1/2		0.5	0.5	Threefold repetition	81	8100000	0	0	0
+558	open400-279	white	1/2-1/2		0.5	0.5	Threefold repetition	89	8900000	0	0	0
+559	open400-279	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	89	8900000	0	0	0
+560	open400-280	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	74	7400000	0	0	0
+561	open400-280	black	1/2-1/2		0.5	0.5	Threefold repetition	33	3300000	0	0	0
+562	open400-281	white	1/2-1/2		0.5	0.5	Threefold repetition	110	11000000	0	0	0
+563	open400-281	black	1-0	production	0.0	1.0	Checkmate (Production wins)	110	11000000	0	0	0
+564	open400-282	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	99	9900000	0	0	0
+565	open400-282	black	1/2-1/2		0.5	0.5	Threefold repetition	133	13300000	0	0	0
+566	open400-283	white	1/2-1/2		0.5	0.5	Threefold repetition	25	2500000	0	0	0
+567	open400-283	black	1-0	production	0.0	1.0	Checkmate (Production wins)	80	8000000	0	0	0
+568	open400-284	white	1/2-1/2		0.5	0.5	Threefold repetition	92	9200000	0	0	0
+569	open400-284	black	1-0	production	0.0	1.0	Checkmate (Production wins)	115	11500000	0	0	0
+570	open400-285	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	138	13800000	0	0	0
+571	open400-285	black	1-0	production	0.0	1.0	Checkmate (Production wins)	138	13800000	0	0	0
+572	open400-286	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	101	10100000	0	0	0
+573	open400-286	black	1-0	production	0.0	1.0	Checkmate (Production wins)	101	10100000	0	0	0
+574	open400-287	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	62	6200000	0	0	0
+575	open400-287	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	73	7300000	0	0	0
+576	open400-288	white	1/2-1/2		0.5	0.5	Threefold repetition	73	7300000	0	0	0
+577	open400-288	black	1-0	production	0.0	1.0	Checkmate (Production wins)	89	8900000	0	0	0
+578	open400-289	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	116	11600000	0	0	0
+579	open400-289	black	1/2-1/2		0.5	0.5	Threefold repetition	83	8300000	0	0	0
+580	open400-290	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	86	8600000	0	0	0
+581	open400-290	black	1-0	production	0.0	1.0	Checkmate (Production wins)	152	15200000	0	0	0
+582	open400-291	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	39	3900000	0	0	0
+583	open400-291	black	1-0	production	0.0	1.0	Checkmate (Production wins)	129	12900000	0	0	0
+584	open400-292	white	1/2-1/2		0.5	0.5	Threefold repetition	21	2100000	0	0	0
+585	open400-292	black	1-0	production	0.0	1.0	Checkmate (Production wins)	97	9700000	0	0	0
+586	open400-293	white	1/2-1/2		0.5	0.5	Insufficient material	171	17100000	0	0	0
+587	open400-293	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	184	18400000	0	0	0
+588	open400-294	white	1/2-1/2		0.5	0.5	Threefold repetition	42	4200000	0	0	0
+589	open400-294	black	1/2-1/2		0.5	0.5	Threefold repetition	101	10100000	0	0	0
+590	open400-295	white	0-1	production	0.0	1.0	Checkmate (Production wins)	105	10500000	0	0	0
+591	open400-295	black	1/2-1/2		0.5	0.5	Insufficient material	95	9500000	0	0	0
+592	open400-296	white	0-1	production	0.0	1.0	Checkmate (Production wins)	141	14100000	0	0	0
+593	open400-296	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	119	11900000	0	0	0
+594	open400-297	white	0-1	production	0.0	1.0	Checkmate (Production wins)	101	10100000	0	0	0
+595	open400-297	black	1-0	production	0.0	1.0	Checkmate (Production wins)	86	8600000	0	0	0
+596	open400-298	white	0-1	production	0.0	1.0	Checkmate (Production wins)	168	16800000	0	0	0
+597	open400-298	black	1/2-1/2		0.5	0.5	Threefold repetition	51	5100000	0	0	0
+598	open400-299	white	1/2-1/2		0.5	0.5	Threefold repetition	36	3600000	0	0	0
+599	open400-299	black	1/2-1/2		0.5	0.5	Threefold repetition	44	4400000	0	0	0
+600	open400-300	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	110	11000000	0	0	0
+601	open400-300	black	1/2-1/2		0.5	0.5	Threefold repetition	99	9900000	0	0	0
+602	open400-301	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	156	15600000	0	0	0
+603	open400-301	black	1-0	production	0.0	1.0	Checkmate (Production wins)	88	8800000	0	0	0
+604	open400-302	white	0-1	production	0.0	1.0	Checkmate (Production wins)	104	10400000	0	0	0
+605	open400-302	black	1-0	production	0.0	1.0	Checkmate (Production wins)	113	11300000	0	0	0
+606	open400-303	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	139	13900000	0	0	0
+607	open400-303	black	1-0	production	0.0	1.0	Checkmate (Production wins)	91	9100000	0	0	0
+608	open400-304	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	117	11700000	0	0	0
+609	open400-304	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	70	7000000	0	0	0
+610	open400-305	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	155	15500000	0	0	0
+611	open400-305	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	116	11600000	0	0	0
+612	open400-306	white	1/2-1/2		0.5	0.5	Threefold repetition	58	5800000	0	0	0
+613	open400-306	black	1-0	production	0.0	1.0	Checkmate (Production wins)	101	10100000	0	0	0
+614	open400-307	white	0-1	production	0.0	1.0	Checkmate (Production wins)	58	5800000	0	0	0
+615	open400-307	black	1-0	production	0.0	1.0	Checkmate (Production wins)	83	8300000	0	0	0
+616	open400-308	white	1/2-1/2		0.5	0.5	Insufficient material	212	21200000	0	0	0
+617	open400-308	black	1-0	production	0.0	1.0	Checkmate (Production wins)	98	9800000	0	0	0
+618	open400-309	white	1/2-1/2		0.5	0.5	Threefold repetition	34	3400000	0	0	0
+619	open400-309	black	1/2-1/2		0.5	0.5	Threefold repetition	62	6200000	0	0	0
+620	open400-310	white	1/2-1/2		0.5	0.5	Threefold repetition	41	4100000	0	0	0
+621	open400-310	black	1-0	production	0.0	1.0	Checkmate (Production wins)	87	8700000	0	0	0
+622	open400-311	white	0-1	production	0.0	1.0	Checkmate (Production wins)	114	11400000	0	0	0
+623	open400-311	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	132	13200000	0	0	0
+624	open400-312	white	0-1	production	0.0	1.0	Checkmate (Production wins)	131	13100000	0	0	0
+625	open400-312	black	1-0	production	0.0	1.0	Checkmate (Production wins)	90	9000000	0	0	0
+626	open400-313	white	0-1	production	0.0	1.0	Checkmate (Production wins)	157	15700000	0	0	0
+627	open400-313	black	1/2-1/2		0.5	0.5	Threefold repetition	11	1100000	0	0	0
+628	open400-314	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	96	9600000	0	0	0
+629	open400-314	black	1-0	production	0.0	1.0	Checkmate (Production wins)	82	8200000	0	0	0
+630	open400-315	white	1/2-1/2		0.5	0.5	Threefold repetition	57	5700000	0	0	0
+631	open400-315	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	114	11400000	0	0	0
+632	open400-316	white	1/2-1/2		0.5	0.5	Threefold repetition	53	5300000	0	0	0
+633	open400-316	black	1-0	production	0.0	1.0	Checkmate (Production wins)	136	13600000	0	0	0
+634	open400-317	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	99	9900000	0	0	0
+635	open400-317	black	1-0	production	0.0	1.0	Checkmate (Production wins)	117	11700000	0	0	0
+636	open400-318	white	0-1	production	0.0	1.0	Checkmate (Production wins)	103	10300000	0	0	0
+637	open400-318	black	1/2-1/2		0.5	0.5	Threefold repetition	78	7800000	0	0	0
+638	open400-319	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	132	13200000	0	0	0
+639	open400-319	black	1-0	production	0.0	1.0	Checkmate (Production wins)	106	10600000	0	0	0
+640	open400-320	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	115	11500000	0	0	0
+641	open400-320	black	1-0	production	0.0	1.0	Checkmate (Production wins)	115	11500000	0	0	0
+642	open400-321	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	189	18900000	0	0	0
+643	open400-321	black	1/2-1/2		0.5	0.5	Insufficient material	127	12700000	0	0	0
+644	open400-322	white	0-1	production	0.0	1.0	Checkmate (Production wins)	105	10500000	0	0	0
+645	open400-322	black	1-0	production	0.0	1.0	Checkmate (Production wins)	74	7400000	0	0	0
+646	open400-323	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	105	10500000	0	0	0
+647	open400-323	black	1/2-1/2		0.5	0.5	Insufficient material	110	11000000	0	0	0
+648	open400-324	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	130	13000000	0	0	0
+649	open400-324	black	1/2-1/2		0.5	0.5	Threefold repetition	22	2200000	0	0	0
+650	open400-325	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	85	8500000	0	0	0
+651	open400-325	black	1/2-1/2		0.5	0.5	Threefold repetition	19	1900000	0	0	0
+652	open400-326	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	112	11200000	0	0	0
+653	open400-326	black	1-0	production	0.0	1.0	Checkmate (Production wins)	118	11800000	0	0	0
+654	open400-327	white	0-1	production	0.0	1.0	Checkmate (Production wins)	102	10200000	0	0	0
+655	open400-327	black	1-0	production	0.0	1.0	Checkmate (Production wins)	109	10900000	0	0	0
+656	open400-328	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	121	12100000	0	0	0
+657	open400-328	black	1-0	production	0.0	1.0	Checkmate (Production wins)	107	10700000	0	0	0
+658	open400-329	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	120	12000000	0	0	0
+659	open400-329	black	1-0	production	0.0	1.0	Checkmate (Production wins)	102	10200000	0	0	0
+660	open400-330	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	101	10100000	0	0	0
+661	open400-330	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	112	11200000	0	0	0
+662	open400-331	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	97	9700000	0	0	0
+663	open400-331	black	1-0	production	0.0	1.0	Checkmate (Production wins)	107	10700000	0	0	0
+664	open400-332	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	160	16000000	0	0	0
+665	open400-332	black	1-0	production	0.0	1.0	Checkmate (Production wins)	94	9400000	0	0	0
+666	open400-333	white	0-1	production	0.0	1.0	Checkmate (Production wins)	212	21200000	0	0	0
+667	open400-333	black	1-0	production	0.0	1.0	Checkmate (Production wins)	99	9900000	0	0	0
+668	open400-334	white	1/2-1/2		0.5	0.5	Threefold repetition	38	3800000	0	0	0
+669	open400-334	black	1/2-1/2		0.5	0.5	Threefold repetition	59	5900000	0	0	0
+670	open400-335	white	1/2-1/2		0.5	0.5	Threefold repetition	151	15100000	0	0	0
+671	open400-335	black	1/2-1/2		0.5	0.5	Insufficient material	94	9400000	0	0	0
+672	open400-336	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	94	9400000	0	0	0
+673	open400-336	black	1/2-1/2		0.5	0.5	Threefold repetition	38	3800000	0	0	0
+674	open400-337	white	0-1	production	0.0	1.0	Checkmate (Production wins)	74	7400000	0	0	0
+675	open400-337	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	96	9600000	0	0	0
+676	open400-338	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	111	11100000	0	0	0
+677	open400-338	black	1/2-1/2		0.5	0.5	Threefold repetition	55	5500000	0	0	0
+678	open400-339	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	91	9100000	0	0	0
+679	open400-339	black	1-0	production	0.0	1.0	Checkmate (Production wins)	123	12300000	0	0	0
+680	open400-340	white	0-1	production	0.0	1.0	Checkmate (Production wins)	95	9500000	0	0	0
+681	open400-340	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	69	6900000	0	0	0
+682	open400-341	white	0-1	production	0.0	1.0	Checkmate (Production wins)	92	9200000	0	0	0
+683	open400-341	black	1/2-1/2		0.5	0.5	Threefold repetition	69	6900000	0	0	0
+684	open400-342	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	99	9900000	0	0	0
+685	open400-342	black	1/2-1/2		0.5	0.5	Threefold repetition	64	6400000	0	0	0
+686	open400-343	white	1/2-1/2		0.5	0.5	Threefold repetition	92	9200000	0	0	0
+687	open400-343	black	1/2-1/2		0.5	0.5	Threefold repetition	57	5700000	0	0	0
+688	open400-344	white	1/2-1/2		0.5	0.5	Threefold repetition	59	5900000	0	0	0
+689	open400-344	black	1/2-1/2		0.5	0.5	Threefold repetition	110	11000000	0	0	0
+690	open400-345	white	1/2-1/2		0.5	0.5	Stalemate	136	13600000	0	0	0
+691	open400-345	black	1/2-1/2		0.5	0.5	Threefold repetition	62	6200000	0	0	0
+692	open400-346	white	0-1	production	0.0	1.0	Checkmate (Production wins)	146	14600000	0	0	0
+693	open400-346	black	1-0	production	0.0	1.0	Checkmate (Production wins)	69	6900000	0	0	0
+694	open400-347	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	58	5800000	0	0	0
+695	open400-347	black	1-0	production	0.0	1.0	Checkmate (Production wins)	134	13400000	0	0	0
+696	open400-348	white	0-1	production	0.0	1.0	Checkmate (Production wins)	105	10500000	0	0	0
+697	open400-348	black	1-0	production	0.0	1.0	Checkmate (Production wins)	96	9600000	0	0	0
+698	open400-349	white	1/2-1/2		0.5	0.5	Threefold repetition	74	7400000	0	0	0
+699	open400-349	black	1/2-1/2		0.5	0.5	Threefold repetition	24	2400000	0	0	0
+700	open400-350	white	1/2-1/2		0.5	0.5	Threefold repetition	109	10900000	0	0	0
+701	open400-350	black	1-0	production	0.0	1.0	Checkmate (Production wins)	128	12800000	0	0	0
+702	open400-351	white	1/2-1/2		0.5	0.5	Threefold repetition	24	2400000	0	0	0
+703	open400-351	black	1-0	production	0.0	1.0	Checkmate (Production wins)	165	16500000	0	0	0
+704	open400-352	white	0-1	production	0.0	1.0	Checkmate (Production wins)	89	8900000	0	0	0
+705	open400-352	black	1/2-1/2		0.5	0.5	50-move rule	276	27600000	0	0	0
+706	open400-353	white	0-1	production	0.0	1.0	Checkmate (Production wins)	105	10500000	0	0	0
+707	open400-353	black	1-0	production	0.0	1.0	Checkmate (Production wins)	112	11200000	0	0	0
+708	open400-354	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	123	12300000	0	0	0
+709	open400-354	black	1/2-1/2		0.5	0.5	Threefold repetition	177	17700000	0	0	0
+710	open400-355	white	1/2-1/2		0.5	0.5	Threefold repetition	27	2700000	0	0	0
+711	open400-355	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	220	22000000	0	0	0
+712	open400-356	white	1/2-1/2		0.5	0.5	50-move rule	198	19800000	0	0	0
+713	open400-356	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	131	13100000	0	0	0
+714	open400-357	white	0-1	production	0.0	1.0	Checkmate (Production wins)	128	12800000	0	0	0
+715	open400-357	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	94	9400000	0	0	0
+716	open400-358	white	0-1	production	0.0	1.0	Checkmate (Production wins)	90	9000000	0	0	0
+717	open400-358	black	1/2-1/2		0.5	0.5	Threefold repetition	118	11800000	0	0	0
+718	open400-359	white	0-1	production	0.0	1.0	Checkmate (Production wins)	165	16500000	0	0	0
+719	open400-359	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	99	9900000	0	0	0
+720	open400-360	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	96	9600000	0	0	0
+721	open400-360	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	185	18500000	0	0	0
+722	open400-361	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	80	8000000	0	0	0
+723	open400-361	black	1-0	production	0.0	1.0	Checkmate (Production wins)	96	9600000	0	0	0
+724	open400-362	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	46	4600000	0	0	0
+725	open400-362	black	1-0	production	0.0	1.0	Checkmate (Production wins)	86	8600000	0	0	0
+726	open400-363	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	73	7300000	0	0	0
+727	open400-363	black	1/2-1/2		0.5	0.5	Threefold repetition	80	8000000	0	0	0
+728	open400-364	white	1/2-1/2		0.5	0.5	Threefold repetition	115	11500000	0	0	0
+729	open400-364	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	109	10900000	0	0	0
+730	open400-365	white	0-1	production	0.0	1.0	Checkmate (Production wins)	105	10500000	0	0	0
+731	open400-365	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	63	6300000	0	0	0
+732	open400-366	white	0-1	production	0.0	1.0	Checkmate (Production wins)	107	10700000	0	0	0
+733	open400-366	black	1/2-1/2		0.5	0.5	Threefold repetition	86	8600000	0	0	0
+734	open400-367	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	99	9900000	0	0	0
+735	open400-367	black	1/2-1/2		0.5	0.5	Insufficient material	112	11200000	0	0	0
+736	open400-368	white	1/2-1/2		0.5	0.5	Threefold repetition	152	15200000	0	0	0
+737	open400-368	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	105	10500000	0	0	0
+738	open400-369	white	1/2-1/2		0.5	0.5	Threefold repetition	84	8400000	0	0	0
+739	open400-369	black	1/2-1/2		0.5	0.5	Threefold repetition	49	4900000	0	0	0
+740	open400-370	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	135	13500000	0	0	0
+741	open400-370	black	1/2-1/2		0.5	0.5	Threefold repetition	34	3400000	0	0	0
+742	open400-371	white	1/2-1/2		0.5	0.5	Threefold repetition	40	4000000	0	0	0
+743	open400-371	black	1-0	production	0.0	1.0	Checkmate (Production wins)	75	7500000	0	0	0
+744	open400-372	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	92	9200000	0	0	0
+745	open400-372	black	1/2-1/2		0.5	0.5	Threefold repetition	16	1600000	0	0	0
+746	open400-373	white	0-1	production	0.0	1.0	Checkmate (Production wins)	124	12400000	0	0	0
+747	open400-373	black	1-0	production	0.0	1.0	Checkmate (Production wins)	115	11500000	0	0	0
+748	open400-374	white	1/2-1/2		0.5	0.5	Insufficient material	90	9000000	0	0	0
+749	open400-374	black	1-0	production	0.0	1.0	Checkmate (Production wins)	91	9100000	0	0	0
+750	open400-375	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	124	12400000	0	0	0
+751	open400-375	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	95	9500000	0	0	0
+752	open400-376	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	107	10700000	0	0	0
+753	open400-376	black	1-0	production	0.0	1.0	Checkmate (Production wins)	107	10700000	0	0	0
+754	open400-377	white	1/2-1/2		0.5	0.5	Threefold repetition	50	5000000	0	0	0
+755	open400-377	black	1-0	production	0.0	1.0	Checkmate (Production wins)	139	13900000	0	0	0
+756	open400-378	white	1/2-1/2		0.5	0.5	Threefold repetition	66	6600000	0	0	0
+757	open400-378	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	134	13400000	0	0	0
+758	open400-379	white	1/2-1/2		0.5	0.5	Threefold repetition	41	4100000	0	0	0
+759	open400-379	black	1-0	production	0.0	1.0	Checkmate (Production wins)	102	10200000	0	0	0
+760	open400-380	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	123	12300000	0	0	0
+761	open400-380	black	1/2-1/2		0.5	0.5	Threefold repetition	99	9900000	0	0	0
+762	open400-381	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	106	10600000	0	0	0
+763	open400-381	black	1/2-1/2		0.5	0.5	Threefold repetition	104	10400000	0	0	0
+764	open400-382	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	123	12300000	0	0	0
+765	open400-382	black	1/2-1/2		0.5	0.5	Threefold repetition	70	7000000	0	0	0
+766	open400-383	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	81	8100000	0	0	0
+767	open400-383	black	1-0	production	0.0	1.0	Checkmate (Production wins)	105	10500000	0	0	0
+768	open400-384	white	0-1	production	0.0	1.0	Checkmate (Production wins)	131	13100000	0	0	0
+769	open400-384	black	1-0	production	0.0	1.0	Checkmate (Production wins)	86	8600000	0	0	0
+770	open400-385	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	97	9700000	0	0	0
+771	open400-385	black	1/2-1/2		0.5	0.5	Threefold repetition	110	11000000	0	0	0
+772	open400-386	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	122	12200000	0	0	0
+773	open400-386	black	1-0	production	0.0	1.0	Checkmate (Production wins)	118	11800000	0	0	0
+774	open400-387	white	0-1	production	0.0	1.0	Checkmate (Production wins)	105	10500000	0	0	0
+775	open400-387	black	1/2-1/2		0.5	0.5	Threefold repetition	39	3900000	0	0	0
+776	open400-388	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	49	4900000	0	0	0
+777	open400-388	black	1-0	production	0.0	1.0	Checkmate (Production wins)	65	6500000	0	0	0
+778	open400-389	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	143	14300000	0	0	0
+779	open400-389	black	1/2-1/2		0.5	0.5	Threefold repetition	89	8900000	0	0	0
+780	open400-390	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	83	8300000	0	0	0
+781	open400-390	black	1-0	production	0.0	1.0	Checkmate (Production wins)	61	6100000	0	0	0
+782	open400-391	white	0-1	production	0.0	1.0	Checkmate (Production wins)	261	26100000	0	0	0
+783	open400-391	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	105	10500000	0	0	0
+784	open400-392	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	103	10300000	0	0	0
+785	open400-392	black	1/2-1/2		0.5	0.5	Threefold repetition	59	5900000	0	0	0
+786	open400-393	white	0-1	production	0.0	1.0	Checkmate (Production wins)	110	11000000	0	0	0
+787	open400-393	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	112	11200000	0	0	0
+788	open400-394	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	93	9300000	0	0	0
+789	open400-394	black	1/2-1/2		0.5	0.5	Threefold repetition	82	8200000	0	0	0
+790	open400-395	white	1/2-1/2		0.5	0.5	Threefold repetition	74	7400000	0	0	0
+791	open400-395	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	80	8000000	0	0	0
+792	open400-396	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	56	5600000	0	0	0
+793	open400-396	black	1/2-1/2		0.5	0.5	Threefold repetition	21	2100000	0	0	0
+794	open400-397	white	1/2-1/2		0.5	0.5	Threefold repetition	84	8400000	0	0	0
+795	open400-397	black	1/2-1/2		0.5	0.5	Threefold repetition	54	5400000	0	0	0
+796	open400-398	white	0-1	production	0.0	1.0	Checkmate (Production wins)	99	9900000	0	0	0
+797	open400-398	black	1/2-1/2		0.5	0.5	Threefold repetition	46	4600000	0	0	0
+798	open400-399	white	1-0	candidate	1.0	0.0	Checkmate (Candidate wins)	74	7400000	0	0	0
+799	open400-399	black	0-1	candidate	1.0	0.0	Checkmate (Candidate wins)	117	11700000	0	0	0

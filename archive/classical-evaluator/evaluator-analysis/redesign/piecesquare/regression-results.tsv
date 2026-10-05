@@ -1,0 +1,12 @@
+test_suite	case_name	production_nodes	candidate_nodes	production_move	candidate_move	production_score	candidate_score	status
+Perft	start_pos_depth1_to_3	8902	8902	-	-	-	-	PASS (exact match)
+Perft	kiwipete_depth1_to_2	2039	2039	-	-	-	-	PASS (exact match)
+Benchmark	Quiet middlegame	451	451	d6d5	d6d5	2	2	PASS (identical PV and score)
+Benchmark	Kiwipete	1447	1447	e2a6	e2a6	71	71	PASS (identical PV and score)
+Benchmark	King safety	496	496	c3d5	c3d5	455	455	PASS (identical PV and score)
+Benchmark	Endgame	343	343	b4f4	b4f4	257	257	PASS (identical PV and score)
+Benchmark	Promotion tactic	214	214	d7c8q	d7c8q	559	559	PASS (identical PV and score)
+Benchmark	Advanced pawns/evasion	803	803	c4c5	c4c5	-664	-664	PASS (identical PV and score)
+Aggregate	Benchmark 6 positions	3754	3754	-	-	-	-	PASS (3754 nodes, 576.8k NPS)
+Mate / Tactical	Kiwipete e2a6 / c3d5	1943	1943	e2a6 / c3d5	e2a6 / c3d5	-	-	PASS (tactics fully preserved)
+Endgame blockades	Passed pawn king race	343	343	b4f4	b4f4	257	257	PASS (exact path preserved)

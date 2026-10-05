@@ -1,0 +1,58 @@
+{
+  "active_position_weight": 0.0011366317073537072,
+  "anchor_active": 96,
+  "anchor_distribution": {
+    "material": {
+      "high": 0.448,
+      "low": 0.244,
+      "middle": 0.308
+    },
+    "phase": {
+      "high": 0.436,
+      "low": 0.332,
+      "middle": 0.232
+    },
+    "queen": {
+      "both": 0.564,
+      "none": 0.404,
+      "one": 0.032
+    },
+    "result": {
+      "draw": 0.2,
+      "loss": 0.388,
+      "win": 0.412
+    }
+  },
+  "anchor_positions": 250,
+  "effective_weighted_prevalence": 0.3932745707443827,
+  "eligible_training_positions": 98135,
+  "enriched_active": 250,
+  "enriched_positions": 250,
+  "full_distribution": {
+    "material": {
+      "high": 0.4486167014826514,
+      "low": 0.24770978753757578,
+      "middle": 0.30367351097977274
+    },
+    "phase": {
+      "high": 0.4346563407550823,
+      "low": 0.3348652366637795,
+      "middle": 0.23047842258113824
+    },
+    "queen": {
+      "both": 0.5636724919753401,
+      "none": 0.3989911856116574,
+      "one": 0.0373363224130025
+    },
+    "result": {
+      "draw": 0.20501350180873287,
+      "loss": 0.39009527691445456,
+      "win": 0.40489122127681254
+    }
+  },
+  "full_training_active_positions": 38594,
+  "full_training_active_rate": 0.3932745707443827,
+  "inactive_position_weight": 0.0039397755146468654,
+  "sample_active": 346,
+  "sample_inactive": 154
+}

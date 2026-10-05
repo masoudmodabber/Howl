@@ -1,0 +1,10 @@
+metric	production_attack	candidate_attack	improvement
+parameter_count	60	10	-50 (-83.3%)
+effective_rank	44	10	Full rank (10/10)
+rank_parameter_ratio	0.733	1.000	+0.267 (No redundant degrees of freedom)
+condition_number	rank_deficient (inf)	4.12	Well-conditioned (< 5.0)
+null_dimensions	16	0	-16 (100% eliminated)
+low_support_parameters	57 (95.0%)	2 (20.0%)	-55 (-75.0% reduction)
+max_internal_correlation	0.707	0.482	-0.225
+cross_family_r_kingsafety	0.707	0.412	-0.295 (Decoupled convergence)
+scaling_architecture	Dual 60-cell unconstrained	Tiered Matrix + Phase Taper	Structured
