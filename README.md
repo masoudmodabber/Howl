@@ -57,8 +57,10 @@ The current production network is Structured NNUE V3.
 Historical weights are kept separately so trained generations can be tested against each other:
 archive/nnue/structured-v3-epoch1.weights
 weights/structured-v3-epoch5.weights
-The current default production weights are:
+The versioned production model is stored at:
 weights/structured-v3-epoch5.weights
+The active production alias is:
+nnue.weights
 A normal UCI session does not require selecting an evaluator or providing a weights path. Howl loads the production NNUE automatically.
 StructuredNNUEWeights can still be used to load another saved network for experiments or matches.
 Training Data

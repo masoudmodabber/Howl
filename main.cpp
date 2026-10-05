@@ -44,7 +44,7 @@ int main(int argc, char* argv[])
 
     // belt-and-braces (some libcs ignore unitbuf when piped):
     setvbuf(stdout, nullptr, _IONBF, 0);    // fully unbuffer stdout
-    const auto defaultWeights = (std::filesystem::path(argv[0]).parent_path().parent_path() / "weights" / "structured-v3-epoch5.weights").lexically_normal().string();
+    const auto defaultWeights = (std::filesystem::path(argv[0]).parent_path().parent_path() / "nnue.weights").lexically_normal().string();
     StructuredNNUE::SetWeightsPath(defaultWeights);
     UCI uci;
     uci.MainAsync();

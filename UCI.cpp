@@ -219,7 +219,7 @@ void UCI::Run(std::istream& in, std::ostream& out)
             out << "option name Hash type spin min 8 max 1024 default 40\n";
             out << "option name SyzygyPath type string default <empty>\n";
             out << "option name SyzygyProbeLimit type spin default 5 min 0 max 7\n";
-            out << "option name StructuredNNUEWeights type string default weights/structured-v3-epoch5.weights\n";
+            out << "option name StructuredNNUEWeights type string default nnue.weights\n";
             out << "uciok\n" << std::flush;
         }
         else if (order == "isready")
