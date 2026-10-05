@@ -1819,7 +1819,8 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
                           int ply,bool cutNode)
 {
     if (Search::stopRequested.load(std::memory_order_relaxed)) return {0,{}};
-    if (ply > 0 && RepetitionHistory::IsRepetition(b.ZobristHashCode)) return {0,{}};
+    if (ply > 0 && RepetitionHistory::IsRepetition(b.ZobristHashCode))
+        return {0,{},static_cast<uint16_t>(SearchProvenance::Repetition),true};
     if (depth <= 0) {
         std::unique_ptr<MovePrintValue> q(QSearcher::QSearch(pv,alpha,beta,prev,ply,0,false,depth,m1,m2,m3,b,false,ply,beta-alpha==1));
         return {q->value,q->printString,q->provenance,q->selective};
@@ -1923,7 +1924,7 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
 
     if(!pv&&!inCheck&&ss.excludedMove==0&&alpha>-MateScore::Threshold&&beta<MateScore::Threshold){
         if(depth<SearchParameters::Razoring::MaxDepth&&
-           eval<=alpha-SearchParameters::Razoring::Margin){std::unique_ptr<MovePrintValue>q(QSearcher::QSearch(false,alpha,beta,prev,ply,0,false,0,m1,m2,m3,b,false,ply,true));if(q->value<=alpha)return {q->value,q->printString};}
+           eval<=alpha-SearchParameters::Razoring::Margin){std::unique_ptr<MovePrintValue>q(QSearcher::QSearch(false,alpha,beta,prev,ply,0,false,0,m1,m2,m3,b,false,ply,true));if(q->value<=alpha)return {q->value,q->printString,q->provenance,q->selective};}
         if(depth<SearchParameters::ReverseFutility::MaxDepth&&
            eval-SearchParameters::ReverseFutility::DepthMargin*(depth-int(improving))>=beta&&
            eval<MateScore::Threshold)return {eval,{}};
@@ -1942,12 +1943,12 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
         StackFrame(ply+1).staticEval=-rawStaticEval+2*TempoForPosition(b);
         TargetResult nr=TargetSearch(false,-beta,-beta+1,depth-R,n,m2,m3,prev,b,false,ply+1,!cutNode);
         int score=-nr.value; GameLogic::UndoMove(b,n,u);
-        if(score>=beta){if(MateScore::IsMate(score))score=beta;if(depth<SearchParameters::NullMove::VerificationDepth)return {score,{}};
+        if(score>=beta){if(MateScore::IsMate(score))score=beta;if(depth<SearchParameters::NullMove::VerificationDepth)return {score,{},nr.provenance,nr.selective};
             int os=nullSuppressedSide,ou=nullSuppressedUntilPly;nullSuppressedSide=side;nullSuppressedUntilPly=ply+
                 SearchParameters::NullMove::SuppressionNumerator*(depth-R)/
                 SearchParameters::NullMove::SuppressionDenominator;
             TargetResult vr=TargetSearch(false,beta-1,beta,depth-R,prev,m1,m2,m3,b,false,ply,false);
-            nullSuppressedSide=os;nullSuppressedUntilPly=ou;if(vr.value>=beta)return {score,{}};}
+            nullSuppressedSide=os;nullSuppressedUntilPly=ou;if(vr.value>=beta)return {score,{},vr.provenance,vr.selective};}
     }
     if(ss.excludedMove==0&&depth>=5&&!pv&&!inCheck&&std::abs(beta)<MateScore::Threshold){
         const int raised=beta+SearchParameters::ProbCut::BetaMargin-
@@ -1960,8 +1961,9 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
             MissingInfoAboutPrevStateFromMove u(b,*c);GameLogic::DoMove(b,*c,prev,depth,ply,&u);
             if(BoardLogic::UnderAttack(b,PositionCorePieceListsView{b.positionCore}[side*8+6].front(),b.sideToMove)){GameLogic::UndoMove(b,*c,u);continue;}++tried;
             std::unique_ptr<MovePrintValue>q(QSearcher::QSearch(false,-raised,-raised+1,*c,ply+1,0,false,0,m2,m3,prev,b,false,ply+1,true));int qs=-q->value;
-            if(qs>=raised){PrepareChildStack(ply+1,*c,moved,0);TargetResult pc=TargetSearch(false,-raised,-raised+1,depth-4,*c,m2,m3,prev,b,true,ply+1,!cutNode);qs=-pc.value;}
-            GameLogic::UndoMove(b,*c,u);if(qs>=raised)return {qs,{}};}
+            uint16_t probProvenance=q->provenance; bool probSelective=q->selective;
+            if(qs>=raised){PrepareChildStack(ply+1,*c,moved,0);TargetResult pc=TargetSearch(false,-raised,-raised+1,depth-4,*c,m2,m3,prev,b,true,ply+1,!cutNode);qs=-pc.value;probProvenance=pc.provenance;probSelective=pc.selective;}
+            GameLogic::UndoMove(b,*c,u);if(qs>=raised)return {qs,{},probProvenance,probSelective};}
     }
     if(ss.excludedMove==0&&depth>=7&&(!hit||tt.bestMove==0)){
         TargetSearch(pv,alpha,beta,depth-7,prev,m1,m2,m3,b,nullAllowed,ply,cutNode);
@@ -2083,7 +2085,8 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
     best=std::min(best,tablebaseMaxValue);
     const uint8_t flag=best>=beta?TT_LOWER_BOUND:(best<=oldAlpha?TT_UPPER_BOUND:TT_EXACT);
     if(ss.excludedMove==0&&!Search::stopRequested.load(std::memory_order_relaxed))
-        TranspositionTable::Store(key,MateScore::ToTranspositionTable(best,ply),depth,flag,bestPacked,rawStaticEval,pv||ttPv);
+        if ((bestProvenance & static_cast<uint16_t>(SearchProvenance::Repetition)) == 0)
+            TranspositionTable::Store(key,MateScore::ToTranspositionTable(best,ply),depth,flag,bestPacked,rawStaticEval,pv||ttPv);
     return {best,bestPv,bestProvenance,bestSelective};
 }
 }
