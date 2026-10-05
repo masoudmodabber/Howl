@@ -2086,9 +2086,11 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
 
 MovePrintValue *PVSSearch::PVS(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool selectiveSearch, bool cutNode)
 {
-    (void)MAtESearch;(void)previousMoveWasCheck;(void)nullWindowSearch;(void)selectiveSearch;
+    (void)MAtESearch;(void)previousMoveWasCheck;(void)selectiveSearch;
     TargetResult r=TargetSearch(isPVNode,alpha,beta,depth,prevMove,move1,move2,move3,board4,isNullMoveAllowed,depthGone,cutNode);
-    auto*out=new MovePrintValue();out->value=r.value;out->printString=r.pv;out->bound=r.value>=beta?SearchBound::Lower:(r.value<=alpha?SearchBound::Upper:SearchBound::Exact);out->proof=ExactProof;out->selective=false;return out;
+    auto*out=new MovePrintValue();out->value=r.value;out->printString=r.pv;out->bound=r.value>=beta?SearchBound::Lower:(r.value<=alpha?SearchBound::Upper:SearchBound::Exact);out->proof=ExactProof;
+    if(nullWindowSearch) out->AddProvenance(SearchProvenance::NullVerification);
+    return out;
 }
 
 MovePrintValue *PVSSearch::SearchNode(bool isPVNode, int alpha, int beta, int depth, Move &prevMove, Move &move1, Move &move2, Move &move3, Board &board4, bool MAtESearch, bool isNullMoveAllowed, int depthGone, bool previousMoveWasCheck, bool nullWindowSearch, bool selectiveSearch, bool cutNode)

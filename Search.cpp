@@ -659,7 +659,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 }
 
                 Move *move = &moveList[counter];
-                bool rootMoveReceivedFullSearch = false;
                 bool rootMoveExactMate = false;
                 bool rootMoveAuthoritativeResult = false;
                 bool rootMoveRepetitionResult = false;
@@ -679,7 +678,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     {
                         delete MPValue;
                         MPValue = PVSSearch::PVS(true, -beta, -alpha, recDepth - 1, *move, move2, move3, move4, board4, false, true, 1, false, false);
-                        rootMoveReceivedFullSearch = true;
                         rootMoveExactMate = MPValue->bound == SearchBound::Exact &&
                             !MPValue->selective && IsMateScore(-MPValue->value);
                         rootMoveAuthoritativeResult = true;
@@ -698,7 +696,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 if (value > alpha)
                 {
                     alpha = value;
-                    iterationSelective = rootMoveReceivedFullSearch && MPValue->selective;
+                    iterationSelective = MPValue->selective;
                     bestMove = ChessStringManipulation::PVToString(*move, 0, false, board4);
                     if (MPValue->printString.length() > 1)
                     {
@@ -715,7 +713,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 movePrint->bound = rootMoveRepetitionResult
                     ? SearchBound::Exact
                     : InvertBound(MPValue->bound);
-                movePrint->selective = rootMoveReceivedFullSearch && MPValue->selective;
+                movePrint->selective = MPValue->selective;
                 movePrint->proof = rootMoveRepetitionResult ? NoProof : InvertProof(MPValue->proof);
                 movePrint->provenance = rootMoveRepetitionResult
                     ? static_cast<uint16_t>(SearchProvenance::Repetition) : MPValue->provenance;
@@ -779,7 +777,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     {
                         MPValue = PVSSearch::PVS(tempPVNode, -KthBestValue - Option::nullWindowSize, -KthBestValue, recDepth - 1, *move, move2, move3, move4, board4, false, true, 1, false, true);
                     }
-                    rootMoveReceivedFullSearch = true;
                     const int initialRootValue = -MPValue->value;
                     value = initialRootValue;
                     move->value = value;
@@ -789,7 +786,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                         {
                             delete MPValue;
                             MPValue = PVSSearch::PVS(true, -200000, 200000, recDepth - 1, *move, move2, move3, move4, board4, false, true, 1, false, false);
-                            rootMoveReceivedFullSearch = true;
                             rootMoveExactMate = MPValue->bound == SearchBound::Exact &&
                                 !MPValue->selective && IsMateScore(-MPValue->value);
                             value = -MPValue->value;
@@ -800,7 +796,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     {
                         delete MPValue;
                         MPValue = PVSSearch::PVS(true, -beta, -alpha, recDepth - 1, *move, move2, move3, move4, board4, false, true, 1, false, false);
-                        rootMoveReceivedFullSearch = true;
                         rootMoveExactMate = MPValue->bound == SearchBound::Exact &&
                             !MPValue->selective && IsMateScore(-MPValue->value);
                         value = -MPValue->value;
@@ -840,7 +835,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 movePrint->bound = rootMoveRepetitionResult
                     ? SearchBound::Exact
                     : InvertBound(MPValue->bound);
-                movePrint->selective = rootMoveReceivedFullSearch && MPValue->selective;
+                movePrint->selective = MPValue->selective;
                 movePrint->proof = rootMoveRepetitionResult ? NoProof : InvertProof(MPValue->proof);
                 movePrint->provenance = rootMoveRepetitionResult
                     ? static_cast<uint16_t>(SearchProvenance::Repetition) : MPValue->provenance;
@@ -862,7 +857,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 if (value > alpha)
                 {
                     alpha = value;
-                    iterationSelective = rootMoveReceivedFullSearch && MPValue->selective;
+                    iterationSelective = MPValue->selective;
                     bestMove = ChessStringManipulation::PVToString(*move, 0, false, board4);
                     bestPVString = movePrint->printString;
                     if (MPValue->printString.length() > 7)
