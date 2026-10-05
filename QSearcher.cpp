@@ -233,7 +233,13 @@ Result SearchQ(Board& b,Move& prev,int alpha,int beta,int ply,int qDepth,bool pv
             best>MateScore::MatedAtPly(PVSSearch::MaxKillerPly-1)&&!capture;
         if((!check||evasionPrunable)&&!MoveLogic::SEE_GE(b,*m,0))continue;
         MissingInfoAboutPrevStateFromMove u(b,*m);GameLogic::DoMove(b,*m,prev,qDepth,ply,&u);bool ok=!BoardLogic::UnderAttack(b,PositionCorePieceListsView{b.positionCore}[side*8+6].front(),b.sideToMove);if(!ok){GameLogic::UndoMove(b,*m,u);--moveCount;continue;}++legal;Result child=SearchQ(b,*m,-beta,-alpha,ply+1,qDepth-1,pv);int value=-child.value;GameLogic::UndoMove(b,*m,u);if(Search::stopRequested.load(std::memory_order_relaxed))break;if(value>best){best=value;bestMove=TTMoveHelper::PackMove(*m);bestPv=ChessStringManipulation::PVToString(*m,0,false,b)+(child.pv.empty()?"":" "+child.pv);if(value>alpha){alpha=value;if(value>=beta)break;}}}
-    if(check&&legal==0)best=MateScore::MatedAtPly(ply);
+    if (legal == 0)
+    {
+        if (check)
+            best = MateScore::MatedAtPly(ply);
+        else if (!MoveLogic::HasAnyLegalMove(b, prev, ply))
+            best = 0;
+    }
     uint8_t flag=best>=beta?TT_LOWER_BOUND:(best<=oldAlpha?TT_UPPER_BOUND:TT_EXACT);
     TranspositionTable::Store(b.ZobristHashCode,MateScore::ToTranspositionTable(best,ply),ttDepth,flag,bestMove,staticEval,pv);return {best,bestPv};
 }
