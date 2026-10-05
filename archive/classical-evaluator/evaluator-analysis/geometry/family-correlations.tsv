@@ -1,7 +1,0 @@
-family	parameter_a	parameter_b	correlation	threshold_band
-PieceSquare	PawnPieceSquareMiddleGame_1	PawnPieceSquareMiddleGame_2	0.904367684292	>=0.90
-PieceSquare	KnightPieceSquareMiddleGame_2	KnightPieceSquareMiddleGame_3	0.914123868007	>=0.90
-PieceSquare	RookPieceSquareMiddleGame_1	RookPieceSquareMiddleGame_2	0.927179750606	>=0.90
-PieceSquare	PawnPieceSquareEndGame_1	PawnPieceSquareEndGame_2	0.909402422829	>=0.90
-PieceSquare	RookPieceSquareEndGame_1	RookPieceSquareEndGame_2	0.942659476309	>=0.90
-PieceSquare	QueenPieceSquareEndGame_1	QueenPieceSquareEndGame_2	0.911507796222	>=0.90

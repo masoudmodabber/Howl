@@ -1,5 +1,0 @@
-corpus_split	positions	production_mean_regret	candidate_mean_regret	regret_delta	status
-train_split	800	0.031110	0.031110	0.000000	neutral (unimpaired)
-validation_split	200	0.026102	0.026102	0.000000	neutral (unimpaired)
-frozen_total_corpus	1000	0.030108	0.030108	0.000000	neutral (unimpaired)
-sampled_reference_slice	100	0.042255	0.042255	0.000000	neutral (unimpaired)

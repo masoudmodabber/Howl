@@ -1,9 +1,0 @@
-test_motif	fen	baseline_attack	candidate_attack	baseline_total	candidate_total	preserved
-Pawn-on-Queen threat (d4 pawn vs e5 queen)	7k/8/8/4q3/3P4/8/8/7K w - - 0 1	226	218	-968	-976	yes
-Pawn-on-Rook threat (d4 pawn vs e5 rook)	7k/8/8/4r3/3P4/8/8/7K w - - 0 1	199	230	-384	-353	yes
-Pawn-on-Minor threat (d4 pawn vs e5 bishop)	7k/8/8/4b3/3P4/8/8/7K w - - 0 1	20	37	-305	-288	yes
-Minor-on-Queen threat (d3 knight vs e5 queen)	7k/8/8/4q3/8/3N4/8/7K w - - 0 1	98	106	-801	-793	yes
-Minor-on-Rook threat (d3 knight vs e5 rook)	7k/8/8/4r3/8/3N4/8/7K w - - 0 1	98	110	-187	-175	yes
-Minor-on-Minor threat (d3 knight vs e5 bishop)	7k/8/8/4b3/8/3N4/8/7K w - - 0 1	78	64	58	44	yes
-Rook-on-Queen skewer (d1 rook vs d5 queen)	7k/8/8/3q4/8/8/8/3R3K w - - 0 1	37	35	-545	-547	yes
-Queen-on-Rook pin (d4 queen vs g7 rook diagonal)	7k/6r1/8/8/3Q4/8/8/7K w - - 0 1	40	17	680	657	yes

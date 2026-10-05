@@ -1,7 +1,0 @@
-position_id	cluster	howl_move	reference_move	base_total_delta	cand_total_delta	base_attack_delta	cand_attack_delta	improved	ordering
-mqr-f8d987a3bbf59936	Mobility / Activity Trapping	g3g4	e1e3	0	0	0	0	no	HowlFavored
-mqr-c4efdb13dcb14d82	Mobility / Activity Trapping	a7d4	b7c5	0	0	0	0	no	HowlFavored
-mqr-ea40fd2c41bb3679	PST Piece Placement Collinearity	f1e1	b5d3	0	0	0	0	no	HowlFavored
-mqr-a139839363fc6cb5	Mobility / Activity Trapping	f3e5	g2g4	0	0	0	0	no	HowlFavored
-mqr-c4a19e8bb097d572	Positional Pawn Structure Distortion	e6d5	c6d4	-74	-74	-18	-18	no	RefFavored
-mqr-fb06c613ff3c6d7e	Mobility / Activity Trapping	h6f5	g3h5	0	0	0	0	no	HowlFavored

@@ -1,9 +1,0 @@
-metric	production	candidate	improvement
-parameter_count	4	4	0 (Preserved canonical dimension)
-effective_rank	4	4	Full rank (4/4)
-rank_parameter_ratio	1.000	1.000	1.000 (Zero null dimensions)
-condition_number	1.25	1.25	Exceptionally well-conditioned (< 1.5)
-severe_collinear_pairs	0	0	Clean orthogonal structure
-dead_dimensions	0	0	0 (None)
-table_identity_with_baseline	100.0%	100.0%	100.000% exact mathematical match
-cross_family_overlap_rook_mobility	compensated	compensated	Negative semi-open terms damp mobility inflation

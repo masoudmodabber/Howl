@@ -1,9 +1,0 @@
-{
-  "node_budget": 200000,
-  "positions_processed": 200,
-  "total_nodes": 40000000,
-  "weight_sum": 200.0,
-  "weighted_mse": 0.0722410796477137,
-  "weighted_rmse": 0.2687770072898977,
-  "workers": 10
-}
