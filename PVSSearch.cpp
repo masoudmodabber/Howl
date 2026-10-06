@@ -48,6 +48,7 @@ int PVSSearch::moveOrderingDepth[20] = {
     10};
 
 PVSSearch::KillerMove PVSSearch::killers[PVSSearch::MaxKillerPly][2] = {};
+static bool verificationIsolation = false;
 
 namespace
 {
@@ -266,6 +267,7 @@ namespace
 
     void UpdateHistory(int side, const Move &move, int depth, bool improvedAlpha)
     {
+        if (verificationIsolation) return;
         const int magnitude = StatBonus(depth);
         const int bonus = improvedAlpha ? magnitude : -magnitude;
         int &score = mainHistory[side][move.beginPlace][move.endPlace];
@@ -274,6 +276,7 @@ namespace
 
     void UpdateHistoryByBonus(int side, const Move& move, int bonus)
     {
+        if (verificationIsolation) return;
         int& score = mainHistory[side][move.beginPlace][move.endPlace];
         score += bonus - score * std::abs(bonus) / MainHistoryLimit;
     }
@@ -294,6 +297,7 @@ namespace
     void UpdateContinuationHistories(int ply, int currentPiece, const Move& move,
                                      int depth, bool success)
     {
+        if (verificationIsolation) return;
         for (int offset : {1, 2, 4, 6})
         {
             const SearchStackFrame& previous = StackFrame(ply - (offset - 1));
@@ -308,6 +312,7 @@ namespace
     void UpdateContinuationHistoriesByBonus(int ply, int currentPiece,
                                              const Move& move, int bonus)
     {
+        if (verificationIsolation) return;
         for (int offset : {1, 2, 4, 6})
         {
             const SearchStackFrame& previous = StackFrame(ply - (offset - 1));
@@ -349,6 +354,7 @@ namespace
     void UpdateCaptureHistory(const Board& board, const Move& move, int depth,
                               bool success)
     {
+        if (verificationIsolation) return;
         const int movingPiece = std::clamp(static_cast<int>(board.positionCore.pieceAt[move.beginPlace]), 0, 14);
         const int capturedPiece = std::clamp(move.endPiece % 8, 0, 6);
         int& score = captureHistory[movingPiece][move.endPlace][capturedPiece];
@@ -369,6 +375,7 @@ namespace
 
     void StoreCounterMove(const Board& board, int ply, const Move& move)
     {
+        if (verificationIsolation) return;
         const Move* previous = StackMove(ply);
         if (!previous || previous->endPlace < 0 || previous->endPlace >= 64)
             return;
@@ -1142,6 +1149,12 @@ void PVSSearch::ResetKillers()
     }
 }
 
+void PVSSearch::SetVerificationIsolation(bool enabled)
+{
+    verificationIsolation = enabled;
+    TranspositionTable::SetVerificationIsolation(enabled);
+}
+
 #if HOWL_CORRECTNESS_TESTING
 bool PVSSearch::NullMoveMaterialEligibleForTesting(const Board &board)
 {
@@ -1151,6 +1164,7 @@ bool PVSSearch::NullMoveMaterialEligibleForTesting(const Board &board)
 
 void PVSSearch::RecordKiller(int ply, const Move &move)
 {
+    if (verificationIsolation) return;
     if (ply < 0 || ply >= MaxKillerPly)
         return;
     if (move.endPiece > 0 || move.promotionPiece > 0)
@@ -1972,12 +1986,23 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
             ttBound=TTBaseFlag(tt.flag);ttPv=pv||(tt.metadata&TT_META_PV);}
     }
 
+    bool cycleFloor = false;
+    if (ply > 0 && alpha < 0 && ss.excludedMove == 0 &&
+        RepetitionHistory::HasGameCycle(b))
+    {
+        cycleFloor = true;
+        alpha = 0;
+        if (alpha >= beta)
+            return {alpha, {}, static_cast<uint16_t>(SearchProvenance::Repetition), true};
+    }
+
     const bool ttCapture=hit&&PackedMoveIsTactical(b,tt.bestMove);
     MovePicker picker(b,depth,ply,side,prev,hit?tt.bestMove:0);
-    int oldAlpha=alpha,best=-200000,legal=0; uint16_t bestPacked=0;
+    int oldAlpha=alpha,best=cycleFloor?0:-200000,legal=0; uint16_t bestPacked=0;
     Move* bestMove=nullptr; std::string bestPv;
-    uint16_t bestProvenance = 0;
-    bool bestSelective = false;
+    uint16_t bestProvenance = cycleFloor
+        ? static_cast<uint16_t>(SearchProvenance::Repetition) : 0;
+    bool bestSelective = cycleFloor;
     bool pruneQuiets=false;
     while(Move* move=picker.Next(pruneQuiets)){
         if(TTMoveHelper::PackMove(*move)==ss.excludedMove)continue;
@@ -2083,7 +2108,8 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
         UpdateContinuationHistoriesByBonus(
             ply-1,ss.currentMovedPiece,prev,StatBonus(depth));
     best=std::min(best,tablebaseMaxValue);
-    const uint8_t flag=best>=beta?TT_LOWER_BOUND:(best<=oldAlpha?TT_UPPER_BOUND:TT_EXACT);
+    const uint8_t flag=cycleFloor&&best<=0?TT_LOWER_BOUND:
+        (best>=beta?TT_LOWER_BOUND:(best<=oldAlpha?TT_UPPER_BOUND:TT_EXACT));
     if(ss.excludedMove==0&&!Search::stopRequested.load(std::memory_order_relaxed))
         if ((bestProvenance & static_cast<uint16_t>(SearchProvenance::Repetition)) == 0)
             TranspositionTable::Store(key,MateScore::ToTranspositionTable(best,ply),depth,flag,bestPacked,rawStaticEval,pv||ttPv);

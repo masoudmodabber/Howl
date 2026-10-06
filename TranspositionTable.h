@@ -250,6 +250,7 @@ public:
 
     static void SetCutoffsEnabled(bool enabled);
     static bool CutoffsEnabled();
+    static void SetVerificationIsolation(bool enabled);
 
 #if HOWL_CORRECTNESS_TESTING
     static void SetAllocationFailureThresholdForTesting(std::size_t thresholdBytes);

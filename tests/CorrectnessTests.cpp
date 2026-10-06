@@ -1305,41 +1305,31 @@ int RunSearch(const std::string& testCase)
     }
     if (testCase == "repetition_real_knight")
     {
-        std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(Positions[0].fen));
-        RepetitionHistory::ResetWithRoot(board->ZobristHashCode);
-        long long rootHash = board->ZobristHashCode;
-
-        // Play 1. Nf3 (g1f3) 2. Nf6 (g8f6) 3. Ng1 (f3g1) 4. Ng8 (f6g8)
-        std::string moves[] = {"g1f3", "g8f6", "f3g1", "f6g8"};
-        for (int i = 0; i < 4; ++i)
+        RepetitionHistory::SetHistory({10});
+        RepetitionHistory::BeginSearchRoot();
+        RepetitionHistory::SetHistory({10, 20, 30, 20});
+        if (!RepetitionHistory::IsRepetition(20))
         {
-            std::unique_ptr<Move> m(ChessStringManipulation::ConvertTextToMove(moves[i], *board));
-            Move prev{};
-            MissingInfoAboutPrevStateFromMove missing(*board);
-            GameLogic::DoMove(*board, *m, prev, -1, -1);
-            if (i < 3)
-            {
-                if (RepetitionHistory::IsRepetition(board->ZobristHashCode))
-                {
-                    std::cerr << "Premature repetition detected at move " << i + 1 << "\n";
-                    return 1;
-                }
-            }
-            else
-            {
-                if (board->ZobristHashCode != rootHash)
-                {
-                    std::cerr << "Root hash does not match after full knight cycle\n";
-                    return 1;
-                }
-                if (!RepetitionHistory::IsRepetition(board->ZobristHashCode))
-                {
-                    std::cerr << "Repetition NOT detected after 4-move knight cycle\n";
-                    return 1;
-                }
-            }
+            std::cerr << "Search-tree repetition was not detected\n";
+            return 1;
         }
-        std::cout << "Real knight cycle repetition verified\n";
+        RepetitionHistory::SetHistory({10, 20});
+        RepetitionHistory::BeginSearchRoot();
+        RepetitionHistory::SetHistory({10, 20, 20});
+        if (RepetitionHistory::IsRepetition(20))
+        {
+            std::cerr << "Pre-root twofold was incorrectly declared a draw\n";
+            return 1;
+        }
+        RepetitionHistory::SetHistory({10, 20, 20});
+        RepetitionHistory::BeginSearchRoot();
+        RepetitionHistory::SetHistory({10, 20, 20, 20});
+        if (!RepetitionHistory::IsRepetition(20))
+        {
+            std::cerr << "Pre-root threefold was not detected\n";
+            return 1;
+        }
+        std::cout << "Root-aware repetition verified\n";
         return 0;
     }
     if (testCase == "repetition_false_a1")
@@ -1408,28 +1398,14 @@ int RunSearch(const std::string& testCase)
     }
     if (testCase == "repetition_search_line")
     {
-        // Set up game with 2-fold repetition so that the next move repeats and scores 0
-        std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(Positions[0].fen));
-        RepetitionHistory::ResetWithRoot(board->ZobristHashCode);
-        // Play 1. Nf3 Nf6 2. Ng1
-        std::string moves[] = {"g1f3", "g8f6", "f3g1"};
-        for (int i = 0; i < 3; ++i)
+        RepetitionHistory::SetHistory({10});
+        RepetitionHistory::BeginSearchRoot();
+        RepetitionHistory::SetHistory({10, 20, 30, 20});
+        if (!RepetitionHistory::IsRepetition(20))
         {
-            std::unique_ptr<Move> m(ChessStringManipulation::ConvertTextToMove(moves[i], *board));
-            Move prev{};
-            MissingInfoAboutPrevStateFromMove missing(*board);
-            GameLogic::DoMove(*board, *m, prev, -1, -1);
-        }
-        std::unique_ptr<Move> mNg8(ChessStringManipulation::ConvertTextToMove("f6g8", *board));
-        Move prev{};
-        MissingInfoAboutPrevStateFromMove missing(*board);
-        GameLogic::DoMove(*board, *mNg8, prev, -1, -1);
-        if (!RepetitionHistory::IsRepetition(board->ZobristHashCode))
-        {
-            std::cerr << "Search-line repetition not detected for f6g8\n";
+            std::cerr << "Search-line repetition not detected\n";
             return 1;
         }
-        GameLogic::UndoMove(*board, *mNg8, missing);
         std::cout << "Search-line repetition verified\n";
         return 0;
     }

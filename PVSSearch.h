@@ -33,6 +33,7 @@ public:
     static KillerMove killers[MaxKillerPly][2];
 
     static void ResetKillers();
+    static void SetVerificationIsolation(bool enabled);
     static void ResetHistory();
     static void RecordKiller(int ply, const Move& move);
     static int QCaptureOrderingScore(const Board& board, const Move& move);

@@ -180,6 +180,7 @@ void Search::PrintBestMove()
 
 void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Board &board4)
 {
+    RepetitionHistory::InitializeGameCycleTable();
     TranspositionTable::NewSearch();
     PVSSearch::ResetHistory();
     bestMove = "";
@@ -199,6 +200,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
     {
         RepetitionHistory::ResetWithRoot(board4.ZobristHashCode);
     }
+    RepetitionHistory::BeginSearchRoot();
     int MultiPV = Option::MultiPV;
     MoveList moveList = MoveLogic::MoveGenerator(board4, -1, -1);
     if (moveList.count == 0)
@@ -305,6 +307,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         std::string ponderMove;
         std::string scoreText;
         bool mated = false;
+        uint16_t provenance = 0;
     } lastCompletedRootResult;
     lastCompletedRootResult.score = prevCompletedScore;
     lastCompletedRootResult.pv = bestMove;
@@ -782,7 +785,9 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     move->value = value;
                     if (Option::MultiPV > 1)
                     {
-                        if (value > KthBestValue)
+                        if (value > KthBestValue ||
+                            (value == KthBestValue &&
+                             InvertBound(MPValue->bound) != SearchBound::Upper))
                         {
                             delete MPValue;
                             MPValue = PVSSearch::PVS(true, -200000, 200000, recDepth - 1, *move, move2, move3, move4, board4, false, true, 1, false, false);
@@ -792,7 +797,9 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                             move->value = value;
                         }
                     }
-                    else if (value > KthBestValue)
+                    else if (value > KthBestValue ||
+                             (value == KthBestValue &&
+                              InvertBound(MPValue->bound) != SearchBound::Upper))
                     {
                         delete MPValue;
                         MPValue = PVSSearch::PVS(true, -beta, -alpha, recDepth - 1, *move, move2, move3, move4, board4, false, true, 1, false, false);
@@ -933,6 +940,18 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             int iterScore = iterationHasAuthoritativeResult
                 ? authoritativeIterationScore
                 : moveList[0].value;
+            SearchBound selectedRootBound = SearchBound::Exact;
+            uint16_t selectedRootProvenance = 0;
+            for (const MovePrintValue *rootResult : movesPrintValue)
+            {
+                if (rootResult->value == iterScore &&
+                    Parse(rootResult->pv, 1) == bestMove)
+                {
+                    selectedRootBound = rootResult->bound;
+                    selectedRootProvenance = rootResult->provenance;
+                    break;
+                }
+            }
             bool iterationMateExact = IsMateScore(iterScore);
             bool exactBestMoveFound = false;
             for (const MovePrintValue *rootResult : movesPrintValue)
@@ -1041,7 +1060,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             lastCompletedRootResult.score = emittedScore;
             lastCompletedRootResult.bound = committedMateResult.available && !currentMateAccepted
                 ? committedMateResult.bound
-                : SearchBound::Exact;
+                : selectedRootBound;
             lastCompletedRootResult.selective = emittedSelective;
             lastCompletedRootResult.exactMate = emittedExactMate;
             lastCompletedRootResult.pv = extractPv(completedInfo);
@@ -1049,6 +1068,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             lastCompletedRootResult.ponderMove = ponderMove;
             lastCompletedRootResult.scoreText = Score;
             lastCompletedRootResult.mated = mated;
+            lastCompletedRootResult.provenance = selectedRootProvenance;
             deleteMovesPrintValue(movesPrintValue);
 
             prevCompletedScore = emittedScore;
@@ -1103,6 +1123,53 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         recDepth++;
     }
 
+    if (lastCompletedRootResult.provenance & static_cast<uint16_t>(SearchProvenance::Repetition))
+    {
+        const std::string& requested = lastCompletedRootResult.bestMove;
+        const int requestedFrom = (requested[1] - '1') * 8 + requested[0] - 'a';
+        const int requestedTo = (requested[3] - '1') * 8 + requested[2] - 'a';
+        int requestedPromotion = 0;
+        if (requested.size() == 5)
+        {
+            const int promotionBase = requestedTo > requestedFrom ? 8 : 0;
+            requestedPromotion = promotionBase +
+                (requested[4] == 'q' ? 5 : requested[4] == 'r' ? 4 : requested[4] == 'b' ? 3 : 2);
+        }
+        Move* selectedMove = nullptr;
+        for (int i = 0; i < moveList.count; ++i)
+            if (moveList[i].beginPlace == requestedFrom &&
+                moveList[i].endPlace == requestedTo &&
+                moveList[i].promotionPiece == requestedPromotion)
+            { selectedMove = &moveList[i]; break; }
+        if (selectedMove)
+        {
+            MissingInfoAboutPrevStateFromMove undo(board4, *selectedMove);
+            GameLogic::DoMove(board4, *selectedMove, move4, -1, -1, &undo);
+            PVSSearch::SetVerificationIsolation(true);
+            RepetitionHistory::SetStrictThreefold(true);
+            MovePrintValue* verified = PVSSearch::PVS(true, FullSearchAlpha, FullSearchBeta,
+                lastCompletedRootResult.depth - 1, *selectedMove, move2, move3, move4,
+                board4, false, true, 1, false, false);
+            RepetitionHistory::SetStrictThreefold(false);
+            PVSSearch::SetVerificationIsolation(false);
+            const int verifiedScore = -verified->value;
+            lastCompletedRootResult.score = verifiedScore;
+            lastCompletedRootResult.bound = InvertBound(verified->bound);
+            lastCompletedRootResult.provenance = verified->provenance;
+            lastCompletedRootResult.selective = verified->selective;
+            lastCompletedRootResult.pv = lastCompletedRootResult.bestMove +
+                (verified->printString.empty() ? "" : " " + verified->printString);
+            CalculateAndDisplayScore(verifiedScore, lastCompletedRootResult.exactMate);
+            std::cout << "info depth " << lastCompletedRootResult.depth
+                      << " nodes " << searchNodeCount
+                      << " pv " << lastCompletedRootResult.pv
+                      << " score " << Score << '\n';
+            completedBestMove = lastCompletedRootResult.bestMove;
+            completedPonderMove = lastCompletedRootResult.ponderMove;
+            delete verified;
+            GameLogic::UndoMove(board4, *selectedMove, undo);
+        }
+    }
     PrintBestMove();
     finiteSearch = false;
     active = false;

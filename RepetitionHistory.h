@@ -4,6 +4,8 @@
 #include <vector>
 #include <cstddef>
 
+class Board;
+
 class RepetitionHistory
 {
 public:
@@ -12,6 +14,11 @@ public:
     static void Push(long long hash);
     static void Pop();
     static bool IsRepetition(long long hash);
+    static bool IsSearchTreeRepetition(long long hash);
+    static bool HasGameCycle(const ::Board& board);
+    static void InitializeGameCycleTable();
+    static void BeginSearchRoot();
+    static void SetStrictThreefold(bool enabled);
     static std::size_t Size();
     static long long Get(std::size_t index);
     static void SetHistory(const std::vector<long long>& hashes);
@@ -19,6 +26,7 @@ public:
 
 private:
     static std::vector<long long> history;
+    static std::size_t searchRootIndex;
 };
 
 #endif
