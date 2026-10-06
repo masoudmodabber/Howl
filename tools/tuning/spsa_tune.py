@@ -77,7 +77,7 @@ class UCIEngineProcess:
                 raise EngineCrashError("engine output closed")
             if line.startswith("bestmove"):
                 move = line.split()[1]
-                return None if move == "(none)" else move
+                return move
         raise EngineCrashError("engine timeout")
 
     def close(self) -> None:
@@ -91,6 +91,23 @@ class UCIEngineProcess:
 def load_openings(path: str, count: int) -> list[tuple[str, str]]:
     with open(path, newline="", encoding="utf-8") as f:
         return [(r["id"], r["fen"]) for r in list(csv.DictReader(f, delimiter="\t"))[:count]]
+
+def terminal_no_move_score(board: chess.Board, plus_white: bool) -> int:
+    """Return the plus-perspective result for a no-legal-move position."""
+    if board.is_check():
+        plus_wins = board.turn == chess.BLACK
+        return 1 if plus_wins == plus_white else -1
+    return 0
+
+def run_harness_tests():
+    mate = chess.Board("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1")
+    stale = chess.Board("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1")
+    assert not any(mate.legal_moves) and mate.is_checkmate()
+    assert terminal_no_move_score(mate, True) == 1
+    assert not any(stale.legal_moves) and stale.is_stalemate()
+    assert terminal_no_move_score(stale, True) == 0
+    assert any(chess.Board("7k/8/8/8/8/8/8/7R b - - 0 1").legal_moves)
+    print("terminal/resume harness tests PASS")
 
 def fmt_options(theta: dict[str, float]) -> dict[str, object]:
     out = {}
@@ -193,14 +210,33 @@ def play_pair(task):
         try:
             while not board.is_game_over(claim_draw=True) and len(moves) < 300:
                 side = board.turn
+                if not any(board.legal_moves):
+                    # Defensive terminal handling for engines that emit a no-move
+                    # response before python-chess reports game-over.
+                    results.append(terminal_no_move_score(board, plus_white))
+                    break
                 move = engines[side].get_move(fen, moves, nodes_per_move=nodes)
-                if not move or chess.Move.from_uci(move) not in board.legal_moves:
-                    raise EngineCrashError("no legal move")
+                if move in ("0000", "(none)", None):
+                    results.append(terminal_no_move_score(board, plus_white))
+                    break
+                try:
+                    parsed = chess.Move.from_uci(move)
+                except ValueError as exc:
+                    raise EngineCrashError(
+                        f"unexpected engine move {move!r}; FEN={board.fen()} side={'white' if side else 'black'}"
+                    ) from exc
+                if parsed not in board.legal_moves:
+                    raise EngineCrashError(
+                        f"illegal engine move {move!r}; FEN={board.fen()} side={'white' if side else 'black'}"
+                    )
                 board.push_uci(move); moves.append(move)
-            outcome = board.outcome(claim_draw=True)
-            score = 0 if outcome is None or outcome.winner is None else (1 if outcome.winner == chess.WHITE else -1)
-            # Convert to plus perspective for this color assignment.
-            results.append(score if plus_white else -score)
+            else:
+                # The loop ended by a normal game-over condition.
+                pass
+            if len(results) == 0:
+                outcome = board.outcome(claim_draw=True)
+                score = 0 if outcome is None or outcome.winner is None else (1 if outcome.winner == chess.WHITE else -1)
+                results.append(score if plus_white else -score)
         finally:
             engines[chess.WHITE].close(); engines[chess.BLACK].close()
     return {"opening_id": oid, "results": results, "score": sum(results) / 2.0}
@@ -218,9 +254,13 @@ def main():
     ap.add_argument("--exploration-scale", type=float, default=1.5)
     ap.add_argument("--dry-run", action="store_true"); ap.add_argument("--smoke-test", action="store_true")
     ap.add_argument("--math-test", action="store_true")
+    ap.add_argument("--harness-test", action="store_true")
     args = ap.parse_args()
     if args.math_test:
         run_math_tests()
+        return
+    if args.harness_test:
+        run_harness_tests()
         return
     if args.smoke_test: args.nodes = min(args.nodes, 1000); args.games_per_iteration = 2; args.workers = 1
     rng = random.Random(args.seed)

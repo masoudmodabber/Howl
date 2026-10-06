@@ -514,6 +514,67 @@ int RunZobrist(const std::string& testCase)
     throw std::runtime_error("Unknown Zobrist test case: " + testCase);
 }
 
+int RunPawnAttackTables()
+{
+    for (int target = 0; target < 64; ++target)
+    {
+        long long whiteExpected = 0;
+        long long blackExpected = 0;
+        const int file = target % 8;
+        const int rank = target / 8;
+        if (rank < 7)
+        {
+            if (file > 0) whiteExpected |= Option::PowerTwo[target + 7];
+            if (file < 7) whiteExpected |= Option::PowerTwo[target + 9];
+        }
+        if (rank > 0)
+        {
+            if (file < 7) blackExpected |= Option::PowerTwo[target - 7];
+            if (file > 0) blackExpected |= Option::PowerTwo[target - 9];
+        }
+        if (AttackPlaces::WhitePawnAttackPlaces[target] != whiteExpected ||
+            AttackPlaces::BlackPawnAttackPlaces[target] != blackExpected)
+        { std::cerr << "pawn table mismatch " << target << "\n";
+            return 1;
+        }
+    }
+
+    const auto bit = [](int square) { return Option::PowerTwo[square]; };
+    if (AttackPlaces::WhitePawnAttackPlaces[6] != (bit(13) | bit(15)) ||
+        AttackPlaces::WhitePawnAttackPlaces[0] != bit(9) ||
+        AttackPlaces::WhitePawnAttackPlaces[7] != bit(14) ||
+        AttackPlaces::BlackPawnAttackPlaces[62] != (bit(53) | bit(55)) ||
+        AttackPlaces::BlackPawnAttackPlaces[56] != bit(49) ||
+        AttackPlaces::BlackPawnAttackPlaces[63] != bit(54))
+    { std::cerr << "edge table mismatch " << AttackPlaces::WhitePawnAttackPlaces[6] << " " << AttackPlaces::WhitePawnAttackPlaces[0] << " " << AttackPlaces::WhitePawnAttackPlaces[7] << " " << AttackPlaces::BlackPawnAttackPlaces[62] << " " << AttackPlaces::BlackPawnAttackPlaces[56] << " " << AttackPlaces::BlackPawnAttackPlaces[63] << "\n";
+        return 1;
+    }
+
+    const char* fen = "4b1k1/2b2P2/2p4P/2PpN1B1/1P1K4/8/8/8 b - - 0 73";
+    std::unique_ptr<Board> board(BoardMaker::MakeInitialBoard(fen));
+    GeneratedMoves generated(*board, 1, 0);
+    std::vector<std::string> legal;
+    for (int i = 0; i < generated.moveList.count; ++i)
+    {
+        Move& move = generated.moveList[i];
+        MissingInfoAboutPrevStateFromMove undo(*board, move);
+        GameLogic::DoMove(*board, move, undo);
+        const bool isLegal = !BoardLogic::UnderAttack(
+            *board, PositionCorePieceListsView{board->positionCore}[1 * 8 + 6].front(),
+            board->sideToMove);
+        GameLogic::UndoMove(*board, move, undo);
+        if (isLegal) legal.push_back(MoveToString(move));
+    }
+    std::sort(legal.begin(), legal.end());
+    const std::vector<std::string> expected = {"e8f7", "g8f8", "g8h7", "g8h8"};
+    if (legal != expected)
+    { std::cerr << "legal:"; for (const auto& m : legal) std::cerr << ' ' << m; std::cerr << "\n";
+        return 1;
+    }
+    std::cout << "Pawn attack tables and checked-position legality passed\n";
+    return 0;
+}
+
 struct FixedDepthSearchResult
 {
     Move move{};
@@ -4252,7 +4313,10 @@ int main(int argc, char* argv[])
         }
         else if (testType == "zobrist")
         {
-            result = RunZobrist(argv[2]);
+            if (std::string(argv[2]) == "pawn_attack_tables")
+                result = RunPawnAttackTables();
+            else
+                result = RunZobrist(argv[2]);
         }
         else if (testType == "search")
         {

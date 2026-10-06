@@ -49,31 +49,22 @@ void AttackPlaces::Initialize()
 
 void AttackPlaces::SetPawnAttackPlaces()
 {
-    for (int counter = 8; counter < 56; counter++)
+    for (int counter = 0; counter < 64; counter++)
     {
-        if (counter % 8 == 0)
+        WhitePawnAttackPlaces[counter] = 0;
+        BlackPawnAttackPlaces[counter] = 0;
+        const int file = counter % 8;
+        const int rank = counter / 8;
+        // These are reverse attack tables for the engine's square indexing.
+        if (rank < 7)
         {
-            WhitePawnAttackPlaces[counter] = Option::PowerTwo[counter + 9];
+            if (file > 0) WhitePawnAttackPlaces[counter] |= Option::PowerTwo[counter + 7];
+            if (file < 7) WhitePawnAttackPlaces[counter] |= Option::PowerTwo[counter + 9];
         }
-        else if (counter % 8 == 7)
+        if (rank > 0)
         {
-            WhitePawnAttackPlaces[counter] = Option::PowerTwo[counter + 7];
-        }
-        else
-        {
-            WhitePawnAttackPlaces[counter] = Option::PowerTwo[counter + 9] + Option::PowerTwo[counter + 7];
-        }
-        if (counter % 8 == 0)
-        {
-            BlackPawnAttackPlaces[counter] = Option::PowerTwo[counter - 7];
-        }
-        else if (counter % 8 == 7)
-        {
-            BlackPawnAttackPlaces[counter] = Option::PowerTwo[counter - 9];
-        }
-        else
-        {
-            BlackPawnAttackPlaces[counter] = Option::PowerTwo[counter - 7] + Option::PowerTwo[counter - 9];
+            if (file < 7) BlackPawnAttackPlaces[counter] |= Option::PowerTwo[counter - 7];
+            if (file > 0) BlackPawnAttackPlaces[counter] |= Option::PowerTwo[counter - 9];
         }
     }
 }
