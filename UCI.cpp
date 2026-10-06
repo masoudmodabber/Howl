@@ -20,6 +20,7 @@
 #include "RepetitionHistory.h"
 #include "Option.h"
 #include "Tablebase.h"
+#include "SearchParameters.h"
 
 #include "DiagnosticLogger.h"
 
@@ -220,6 +221,25 @@ void UCI::Run(std::istream& in, std::ostream& out)
             out << "option name SyzygyPath type string default <empty>\n";
             out << "option name SyzygyProbeLimit type spin default 5 min 0 max 7\n";
             out << "option name StructuredNNUEWeights type string default nnue.weights\n";
+            out << "option name LMRLogarithmicScale type string default 24.8\n";
+            out << "option name LMRNonImprovingThreshold type spin default 1007 min 0 max 10000\n";
+            out << "option name LMRTtPvAdjustment type spin default 2 min 0 max 16\n";
+            out << "option name LMRPreviousMoveCountThreshold type spin default 14 min 0 max 64\n";
+            out << "option name LMRSingularAdjustment type spin default 2 min 0 max 16\n";
+            out << "option name LMRCutNodeAdjustment type spin default 2 min 0 max 16\n";
+            out << "option name LMRStatScoreDivisor type spin default 16384 min 1 max 65536\n";
+            out << "option name NullMoveBase type spin default 854 min 0 max 2000\n";
+            out << "option name NullMoveDepthSlope type spin default 68 min 0 max 200\n";
+            out << "option name NullMoveStatScoreLimit type spin default 23397 min -100000 max 100000\n";
+            out << "option name NullMoveVerificationDepth type spin default 13 min 0 max 64\n";
+            out << "option name ReverseFutilityDepthMargin type spin default 217 min 0 max 1000\n";
+            out << "option name ParentFutilityBaseMargin type spin default 235 min 0 max 1000\n";
+            out << "option name ParentFutilityDepthMargin type spin default 172 min 0 max 1000\n";
+            out << "option name ProbCutBetaMargin type spin default 189 min 0 max 1000\n";
+            out << "option name ProbCutImprovingMargin type spin default 45 min 0 max 500\n";
+            out << "option name SEETacticalDepthMargin type spin default 194 min 0 max 1000\n";
+            out << "option name SEEQuietBase type spin default 32 min 0 max 200\n";
+            out << "option name HistoryLmrStatOffset type spin default 4926 min -20000 max 20000\n";
             out << "uciok\n" << std::flush;
         }
         else if (order == "isready")
@@ -347,6 +367,14 @@ void UCI::Run(std::istream& in, std::ostream& out)
         }
         if (order.length() > 9 && order.substr(0, 10) == "setoption ")
         {
+            const std::size_t valueMarker = order.find(" value ", 15);
+            if (valueMarker != std::string::npos)
+            {
+                const std::string tuningName = order.substr(15, valueMarker - 15);
+                if (SearchParameters::SetRuntimeParameter(tuningName,
+                                                           order.substr(valueMarker + 7)))
+                    continue;
+            }
             if (order.compare(0, 19, "setoption name Hash") == 0)
             {
                 ApplyHashOptionCommand(order, out);

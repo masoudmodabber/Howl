@@ -69,6 +69,7 @@ namespace
     int captureHistory[15][64][7] = {};
     uint16_t counterMoves[15][64] = {};
     constexpr int TtHitAverageWindow = 4096;
+    constexpr int TtHitAverageResolution = 1024;
     int ttHitAverage = TtHitAverageWindow * 1024 / 2;
     int nullSuppressedSide = -1;
     int nullSuppressedUntilPly = -1;
@@ -76,7 +77,7 @@ namespace
     const std::array<int, MaxReductionIndex + 1> Reductions = [] {
         std::array<int, MaxReductionIndex + 1> values{};
         for (int i = 1; i <= MaxReductionIndex; ++i)
-            values[i] = static_cast<int>(SearchParameters::LMR::LogarithmicScale *
+            values[i] = static_cast<int>(SearchParameters::Runtime().lmrLogarithmicScale *
                 std::log(static_cast<double>(i)));
         return values;
     }();
@@ -88,10 +89,10 @@ namespace
         const int raw = Reductions[d] * Reductions[m];
         return (raw + SearchParameters::LMR::RoundingTerm) /
             SearchParameters::LMR::Divisor +
-            (!improving && raw > SearchParameters::LMR::NonImprovingThreshold);
+            (!improving && raw > SearchParameters::Runtime().lmrNonImprovingThreshold);
     }
 
-    int FutilityMargin(int depth, bool improving) { return SearchParameters::ReverseFutility::DepthMargin * (depth - int(improving)); }
+    int FutilityMargin(int depth, bool improving) { return SearchParameters::Runtime().reverseFutilityDepthMargin * (depth - int(improving)); }
     int FutilityMoveCount(bool improving, int depth)
     {
         return (SearchParameters::MoveCountPruning::Base +
@@ -248,7 +249,7 @@ namespace
         int combinedHistory() const { return main + c1 + c2 + c4; }
         int statScore() const
         {
-        int score = combinedHistory() - SearchParameters::History::LmrStatOffset;
+        int score = combinedHistory() - SearchParameters::Runtime().historyLmrStatOffset;
             if (score < 0 && c1 >= 0 && c2 >= 0 && main >= 0)
                 score = 0;
             return score;
@@ -345,7 +346,7 @@ namespace
         const int c2 = ContinuationHistoryScoreAt(ply, 2, currentPiece, move);
         int score = main + c1 + c2 +
             ContinuationHistoryScoreAt(ply, 4, currentPiece, move) -
-            SearchParameters::History::LmrStatOffset;
+            SearchParameters::Runtime().historyLmrStatOffset;
         if (score < 0 && c1 >= 0 && c2 >= 0 && main >= 0)
             score = 0;
         return score;
@@ -544,8 +545,8 @@ namespace
         if (moveNumber <= 2 && ttHitAverage / TtHitAverageWindow >=
             SearchParameters::LMR::TtHitLowThreshold)
             reduction = 0;
-        if (isPVNode || ttPvEvidence) reduction -= SearchParameters::LMR::TtPvAdjustment;
-        if (cutNode && IsQuietMove(move)) reduction += SearchParameters::LMR::CutNodeAdjustment;
+        if (isPVNode || ttPvEvidence) reduction -= SearchParameters::Runtime().lmrTtPvAdjustment;
+        if (cutNode && IsQuietMove(move)) reduction += SearchParameters::Runtime().lmrCutNodeAdjustment;
         const int currentPiece = 1;
         const int statScore = IsQuietMove(move)
             ? QuietStatScore(side, ply, currentPiece, move) : 0;
@@ -556,8 +557,8 @@ namespace
         else if (previousStatScore >= SearchParameters::LMR::GoodPreviousStatScore &&
                  statScore < SearchParameters::LMR::BadStatScore)
             ++reduction;
-        reduction -= statScore / SearchParameters::LMR::StatScoreDivisor;
-        if (singularLMR) reduction -= SearchParameters::LMR::SingularAdjustment;
+        reduction -= statScore / SearchParameters::Runtime().lmrStatScoreDivisor;
+        if (singularLMR) reduction -= SearchParameters::Runtime().lmrSingularAdjustment;
         if (ttHitAverage / TtHitAverageWindow > SearchParameters::LMR::TtHitHighThreshold) --reduction;
         if (!IsQuietMove(move) && depth < SearchParameters::LMR::ShallowCaptureDepth &&
             moveNumber > SearchParameters::LMR::LateCaptureMoveCount) ++reduction;
@@ -1940,15 +1941,15 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
         if(depth<SearchParameters::Razoring::MaxDepth&&
            eval<=alpha-SearchParameters::Razoring::Margin){std::unique_ptr<MovePrintValue>q(QSearcher::QSearch(false,alpha,beta,prev,ply,0,false,0,m1,m2,m3,b,false,ply,true));if(q->value<=alpha)return {q->value,q->printString,q->provenance,q->selective};}
         if(depth<SearchParameters::ReverseFutility::MaxDepth&&
-           eval-SearchParameters::ReverseFutility::DepthMargin*(depth-int(improving))>=beta&&
+           eval-SearchParameters::Runtime().reverseFutilityDepthMargin*(depth-int(improving))>=beta&&
            eval<MateScore::Threshold)return {eval,{}};
     }
     const bool suppressed=nullSuppressedSide==side&&ply<=nullSuppressedUntilPly;
     if(!pv&&!inCheck&&nullAllowed&&!suppressed&&ss.excludedMove==0&&prev.promotionPiece!=-1&&
-       ss.statScore<SearchParameters::NullMove::StatScoreLimit&&NullMoveMaterialEligible(b,side)&&eval>=beta&&eval>=rawStaticEval&&
+       ss.statScore<SearchParameters::Runtime().nullMoveStatScoreLimit&&NullMoveMaterialEligible(b,side)&&eval>=beta&&eval>=rawStaticEval&&
        rawStaticEval>=beta-SearchParameters::NullMove::StaticEvalDepthSlope*depth+
            SearchParameters::NullMove::StaticEvalBase-int(improving)*SearchParameters::NullMove::ImprovingMargin){
-        int R=(SearchParameters::NullMove::Base+SearchParameters::NullMove::DepthSlope*depth)/
+        int R=(SearchParameters::Runtime().nullMoveBase+SearchParameters::Runtime().nullMoveDepthSlope*depth)/
             SearchParameters::NullMove::Divisor+
             std::min((eval-beta)/SearchParameters::NullMove::EvalDivisor,
                      SearchParameters::NullMove::MaxEvalBonus); R=std::clamp(R,1,depth);
@@ -1957,7 +1958,7 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
         StackFrame(ply+1).staticEval=-rawStaticEval+2*TempoForPosition(b);
         TargetResult nr=TargetSearch(false,-beta,-beta+1,depth-R,n,m2,m3,prev,b,false,ply+1,!cutNode);
         int score=-nr.value; GameLogic::UndoMove(b,n,u);
-        if(score>=beta){if(MateScore::IsMate(score))score=beta;if(depth<SearchParameters::NullMove::VerificationDepth)return {score,{},nr.provenance,nr.selective};
+        if(score>=beta){if(MateScore::IsMate(score))score=beta;if(depth<SearchParameters::Runtime().nullMoveVerificationDepth)return {score,{},nr.provenance,nr.selective};
             int os=nullSuppressedSide,ou=nullSuppressedUntilPly;nullSuppressedSide=side;nullSuppressedUntilPly=ply+
                 SearchParameters::NullMove::SuppressionNumerator*(depth-R)/
                 SearchParameters::NullMove::SuppressionDenominator;
@@ -1965,8 +1966,8 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
             nullSuppressedSide=os;nullSuppressedUntilPly=ou;if(vr.value>=beta)return {score,{},vr.provenance,vr.selective};}
     }
     if(ss.excludedMove==0&&depth>=5&&!pv&&!inCheck&&std::abs(beta)<MateScore::Threshold){
-        const int raised=beta+SearchParameters::ProbCut::BetaMargin-
-            SearchParameters::ProbCut::ImprovingMargin*int(improving);
+        const int raised=beta+SearchParameters::Runtime().probCutBetaMargin-
+            SearchParameters::Runtime().probCutImprovingMargin*int(improving);
         ProbCutPicker probCutPicker(b,depth,ply,hit?tt.bestMove:0,
                                     raised-rawStaticEval);
         int tried=0;
@@ -2031,7 +2032,7 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
         const int childDepth=depth-1+extension;
         const bool lmr=depth>=3&&ss.moveCount>1&&
             (quiet||pruneQuiets||rawStaticEval+CapturedEndgameValue(*move)<=alpha||cutNode||
-             ttHitAverage/TtHitAverageWindow<SearchParameters::LMR::TtHitLowThreshold);
+             ttHitAverage < SearchParameters::LMR::TtHitLowThreshold * TtHitAverageResolution);
         const QuietHistoryValues quietHistory=quiet
             ? ReadQuietHistory(side,ply,movingPiece,*move) : QuietHistoryValues{};
         const int currentStat=quiet?quietHistory.statScore():0;
@@ -2040,13 +2041,13 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
         int lmrDepth=childDepth;
         if(lmr){
             int r=Reduction(improving,depth,ss.moveCount);
-            if(ttPv)r-=SearchParameters::LMR::TtPvAdjustment;
-            if(ttHitAverage/TtHitAverageWindow>SearchParameters::LMR::TtHitHighThreshold)--r;
-            if(StackFrame(ply-1).moveCount>SearchParameters::LMR::PreviousMoveCountThreshold)--r;
-            if(singularLMR)r-=SearchParameters::LMR::SingularAdjustment;
+            if(ttPv)r-=SearchParameters::Runtime().lmrTtPvAdjustment;
+            if(ttHitAverage > SearchParameters::LMR::TtHitHighThreshold * TtHitAverageResolution)--r;
+            if(StackFrame(ply-1).moveCount>SearchParameters::Runtime().lmrPreviousMoveCountThreshold)--r;
+            if(singularLMR)r-=SearchParameters::Runtime().lmrSingularAdjustment;
             if(quiet){
                 if(ttCapture)r+=SearchParameters::LMR::TtCaptureAdjustment;
-                if(cutNode)r+=SearchParameters::LMR::CutNodeAdjustment;
+                if(cutNode)r+=SearchParameters::Runtime().lmrCutNodeAdjustment;
                 else if(movingPiece%8!=6 || std::abs(move->endPlace-move->beginPlace)!=2){
                     Move reverse=*move;std::swap(reverse.beginPlace,reverse.endPlace);
                     reverse.PublicFlag=0;reverse.promotionPiece=0;
@@ -2056,7 +2057,7 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
                    previousStat<SearchParameters::LMR::BadPreviousStatScore)--r;
                 else if(previousStat>=SearchParameters::LMR::GoodPreviousStatScore&&
                         currentStat<SearchParameters::LMR::BadStatScore)++r;
-                r-=currentStat/SearchParameters::LMR::StatScoreDivisor;
+                r-=currentStat/SearchParameters::Runtime().lmrStatScoreDivisor;
             } else if(depth<SearchParameters::LMR::ShallowCaptureDepth&&
                       ss.moveCount>SearchParameters::LMR::LateCaptureMoveCount) ++r;
             r=std::clamp(r,0,std::max(0,childDepth-1));lmrDepth=childDepth-r;
@@ -2070,14 +2071,14 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
                    quietHistory.c1<SearchParameters::CounterMovePruning::ContinuationThreshold&&
                    quietHistory.c2<SearchParameters::CounterMovePruning::ContinuationThreshold)continue;
                 if(lmrDepth<SearchParameters::ParentFutility::MaxReducedDepth&&!inCheck&&
-                   rawStaticEval+SearchParameters::ParentFutility::BaseMargin+
-                   SearchParameters::ParentFutility::DepthMargin*lmrDepth<=alpha&&
+                   rawStaticEval+SearchParameters::Runtime().parentFutilityBaseMargin+
+                   SearchParameters::Runtime().parentFutilityDepthMargin*lmrDepth<=alpha&&
                    combined<SearchParameters::History::ParentFutilityLimit)continue;
-                const int see=-(SearchParameters::SEE::QuietBase-
+                const int see=-(SearchParameters::Runtime().seeQuietBase-
                     std::min(lmrDepth,SearchParameters::SEE::QuietDepthCap))*lmrDepth*lmrDepth;
                 if(!MoveLogic::SEE_GE(b,*move,see))continue;
             } else if(!MoveLogic::SEE_GE(b,*move,
-                       -SearchParameters::SEE::TacticalDepthMargin*depth))continue;
+                       -SearchParameters::Runtime().seeTacticalDepthMargin*depth))continue;
         }
         MissingInfoAboutPrevStateFromMove u(b,*move);GameLogic::DoMove(b,*move,prev,depth,ply,&u);
         if(BoardLogic::UnderAttack(b,PositionCorePieceListsView{b.positionCore}[side*8+6].front(),b.sideToMove)){GameLogic::UndoMove(b,*move,u);--ss.moveCount;continue;}

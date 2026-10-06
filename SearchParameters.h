@@ -1,8 +1,36 @@
 #ifndef SEARCH_PARAMETERS_H
 #define SEARCH_PARAMETERS_H
 
+#include <string>
+
 struct SearchParameters
 {
+    struct RuntimeValues
+    {
+        double lmrLogarithmicScale = 24.8;
+        int lmrNonImprovingThreshold = 1007;
+        int lmrTtPvAdjustment = 2;
+        int lmrPreviousMoveCountThreshold = 14;
+        int lmrSingularAdjustment = 2;
+        int lmrCutNodeAdjustment = 2;
+        int lmrStatScoreDivisor = 16384;
+        int nullMoveBase = 854;
+        int nullMoveDepthSlope = 68;
+        int nullMoveStatScoreLimit = 23397;
+        int nullMoveVerificationDepth = 13;
+        int reverseFutilityDepthMargin = 217;
+        int parentFutilityBaseMargin = 235;
+        int parentFutilityDepthMargin = 172;
+        int probCutBetaMargin = 189;
+        int probCutImprovingMargin = 45;
+        int seeTacticalDepthMargin = 194;
+        int seeQuietBase = 32;
+        int historyLmrStatOffset = 4926;
+    };
+
+    static RuntimeValues runtimeValues;
+    static RuntimeValues& Runtime();
+    static bool SetRuntimeParameter(const std::string& name, const std::string& value);
     struct NullMove
     {
         static constexpr int Base = 854;

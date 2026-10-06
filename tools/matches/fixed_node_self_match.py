@@ -53,6 +53,8 @@ def play_game(
     cpu_core: int,
     candidate_weights: Optional[str],
     production_weights: Optional[str],
+    candidate_options: dict[str, str],
+    production_options: dict[str, str],
 ) -> dict[str, Any]:
     if hasattr(os, "sched_setaffinity"):
         try:
@@ -67,9 +69,11 @@ def play_game(
 
     engine_procs = {}
     candidate_opts = {"Hash": 32}
+    candidate_opts.update(candidate_options)
     if candidate_weights:
         candidate_opts["StructuredNNUEWeights"] = candidate_weights
     production_opts = {"Hash": 32}
+    production_opts.update(production_options)
     if production_weights:
         production_opts["StructuredNNUEWeights"] = production_weights
 
@@ -286,7 +290,21 @@ def main():
     parser.add_argument("--out-dir", default="/tmp/howl-fixed-node-matches", help="Output directory")
     parser.add_argument("--candidate-weights", help="StructuredNNUE candidate weights path")
     parser.add_argument("--production-weights", help="StructuredNNUE production weights path")
+    parser.add_argument("--candidate-option", action="append", default=[], metavar="NAME=VALUE")
+    parser.add_argument("--production-option", action="append", default=[], metavar="NAME=VALUE")
     args = parser.parse_args()
+
+    def parse_options(items):
+        result = {}
+        for item in items:
+            if "=" not in item:
+                parser.error(f"option must be NAME=VALUE: {item}")
+            name, value = item.split("=", 1)
+            result[name] = value
+        return result
+
+    candidate_options = parse_options(args.candidate_option)
+    production_options = parse_options(args.production_option)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -317,7 +335,7 @@ def main():
 
     with ProcessPoolExecutor(max_workers=args.concurrency) as pool:
         futures = {
-            pool.submit(play_game, t[0], t[1], t[2], t[3], args.candidate, args.production, args.nodes, t[4], args.candidate_weights, args.production_weights): t[0]
+            pool.submit(play_game, t[0], t[1], t[2], t[3], args.candidate, args.production, args.nodes, t[4], args.candidate_weights, args.production_weights, candidate_options, production_options): t[0]
             for t in tasks
         }
         for future in as_completed(futures):
