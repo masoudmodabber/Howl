@@ -1,6 +1,6 @@
 # Howl Chess Engine
 
-Howl is a chess engine written in C++. It features an alpha-beta search (PVS, iterative deepening, aspiration windows, late move reductions, null move pruning, history heuristics) combined with a learned Structured NNUE evaluator.
+Howl is a chess engine written in C++. It features an alpha-beta search (PVS, iterative deepening, aspiration windows, late move reductions, null move pruning, history heuristics) combined with a learned NNUE evaluator.
 
 ## Requirements
 
@@ -55,10 +55,9 @@ setoption name SyzygyProbeLimit value 5
 
 ## NNUE Training
 
-The tools required to prepare datasets, train a compatible Structured NNUE V3 network, and export weights are located in `nnue-training/`. See [`nnue-training/README.md`](file:///home/masoud/Code/Howl/nnue-training/README.md) for instructions.
+The tools required to prepare datasets, train a compatible NNUE network, and export weights are located in `nnue-training/`. See [`nnue-training/README.md`](file:///home/masoud/Code/Howl/nnue-training/README.md) for instructions.
 
 ## Acknowledgements
 
-- [Stockfish](https://github.com/official-stockfish/Stockfish): An invaluable reference for modern chess search design.
 - [Lichess](https://huggingface.co/datasets/Lichess/chess-position-evaluations): Position evaluation dataset used to train Howl's NNUE network.
 - [Fathom](https://github.com/jdart1/Fathom): Syzygy tablebase probing library (vendored under `third_party/fathom`).

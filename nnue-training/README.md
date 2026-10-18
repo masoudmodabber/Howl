@@ -1,6 +1,6 @@
 # Howl NNUE Training Pipeline
 
-This folder contains the complete toolchain to train and export a Structured NNUE V3 compatible network for the Howl chess engine.
+This folder contains the complete toolchain to train and export an NNUE network for the Howl chess engine.
 
 ## Requirements
 
@@ -26,7 +26,7 @@ This deduplicates positions and retains evaluations backed by at least 3M search
 
 ## 2. Train the Network
 
-Train the Structured NNUE V3 architecture:
+Train the NNUE architecture:
 
 ```bash
 python3 train.py \
@@ -40,7 +40,7 @@ python3 train.py \
 
 ## 3. Export Weights for Howl
 
-Convert the PyTorch checkpoint to Howl's binary weight file (`HOWLSTRC` v2):
+Convert the PyTorch checkpoint to Howl's binary weight file (`HOWLSTRC` format):
 
 ```bash
 python3 export.py checkpoints/best.pt ../nnue.weights

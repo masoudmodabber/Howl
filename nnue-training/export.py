@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export PyTorch Structured NNUE checkpoint to Howl production binary format."""
+"""Export PyTorch NNUE checkpoint to Howl binary format."""
 import argparse
 from pathlib import Path
 import struct
@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 MAGIC = b'HOWLSTRC'
-VERSION = 2
+VERSION = 2  # Binary weight file format version
 ORDER = ('ft.weight', 'ft_bias', 'f1.weight', 'f1.bias', 'f2.weight', 'f2.bias', 'out.weight', 'out.bias')
 
 
@@ -28,7 +28,7 @@ def read(path):
     with open(path, 'rb') as f:
         magic, version, count = struct.unpack('<8sII', f.read(16))
         if magic != MAGIC or version != VERSION or count != len(ORDER):
-            raise ValueError('invalid structured NNUE header')
+            raise ValueError('invalid NNUE weight file header')
         for _ in range(count):
             n, nd = struct.unpack('<II', f.read(8))
             name = f.read(n).decode()

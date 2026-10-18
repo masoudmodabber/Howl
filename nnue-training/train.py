@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Structured NNUE V3 training pipeline for Howl chess engine."""
+"""NNUE training pipeline for Howl chess engine."""
 import argparse
 import glob
 import math
@@ -68,8 +68,8 @@ def target_wdl(cp, mate, black):
     return 1.0 / (1.0 + math.exp(-cp / WDL_SCALE))
 
 
-class StructuredNNUEV3(nn.Module):
-    """Structured NNUE V3 architecture with unclipped ReLU hidden layers."""
+class NNUE(nn.Module):
+    """NNUE architecture with unclipped ReLU hidden layers."""
     def __init__(self, seed=1):
         super().__init__()
         torch.manual_seed(seed)
@@ -516,7 +516,7 @@ def evaluate_sanity(n):
 
 
 def main():
-    p = argparse.ArgumentParser(description="Train Structured NNUE V3 for Howl.")
+    p = argparse.ArgumentParser(description="Train NNUE for Howl.")
     p.add_argument('--train', nargs='+', help="Training parquet file(s)")
     p.add_argument('--validation', dest='validation_paths', nargs='+', help="Validation parquet file(s)")
     p.add_argument('--output', help="Output checkpoint directory")
@@ -546,7 +546,7 @@ def main():
 
     if a.evaluate_checkpoint:
         ck = torch.load(a.evaluate_checkpoint, map_location='cpu', weights_only=False)
-        n = StructuredNNUEV3(a.seed)
+        n = NNUE(a.seed)
         n.load_state_dict(ck['model'])
         n.eval()
         evaluate_stream(n, stream_paths(a.validation_paths), a)
@@ -557,7 +557,7 @@ def main():
         p.error('--train, --validation, and --output are required for training')
 
     os.makedirs(a.output, exist_ok=True)
-    n = StructuredNNUEV3(a.seed).to(d)
+    n = NNUE(a.seed).to(d)
     opt = torch.optim.Adam(n.parameters(), lr=a.lr)
 
     if not a.stream:

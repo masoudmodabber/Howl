@@ -133,7 +133,7 @@ void Prepare(Board& board)
     if (!board.nnueState.initialized)
     {
         if (weightsPath.empty())
-            throw std::runtime_error("StructuredNNUE weights path was not supplied");
+            throw std::runtime_error("NNUE weights path was not supplied");
         evaluator.Load(std::filesystem::absolute(weightsPath).string());
         loaded = true;
         evaluator.Rebuild(board);

@@ -13,8 +13,8 @@ def main():
     p = argparse.ArgumentParser(description="Extract and deduplicate positions from Lichess shards.")
     p.add_argument('--input', nargs='+', required=True, help="Input parquet shard glob/paths")
     p.add_argument('--output', required=True, help="Output directory for train.parquet and validation.parquet")
-    p.add_argument('--db', default='/tmp/howl-lichess-v2.sqlite', help="Path to temporary SQLite database")
-    p.add_argument('--min-knodes', type=int, default=3000, help="Minimum Stockfish analysis search nodes (in thousands)")
+    p.add_argument('--db', default='/tmp/howl-lichess.sqlite', help="Path to temporary SQLite database")
+    p.add_argument('--min-knodes', type=int, default=3000, help="Minimum teacher analysis search nodes (in thousands)")
     p.add_argument('--validation-fraction', type=float, default=0.05, help="Fraction of positions reserved for validation")
     a = p.parse_args()
 
