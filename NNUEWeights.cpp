@@ -4,9 +4,23 @@
 #include <cstring>
 #include <array>
 
-namespace { template<class T> T read(std::ifstream& f){ T x{}; f.read(reinterpret_cast<char*>(&x),sizeof(x)); if(!f) throw std::runtime_error("truncated NNUE weight file"); return x; } }
+#include <istream>
+#include <streambuf>
+
+namespace { template<class T> T read(std::istream& f){ T x{}; f.read(reinterpret_cast<char*>(&x),sizeof(x)); if(!f) throw std::runtime_error("truncated NNUE weight file"); return x; } }
 void NNUEWeights::Load(const std::string& path){
     std::ifstream f(path,std::ios::binary); if(!f) throw std::runtime_error("cannot open NNUE weight file: " + path);
+    Load(f);
+}
+void NNUEWeights::LoadFromMemory(const void* data, std::size_t size){
+    struct membuf : std::streambuf {
+        membuf(char* base, std::size_t n) { setg(base, base, base + n); }
+    };
+    membuf buf(const_cast<char*>(static_cast<const char*>(data)), size);
+    std::istream stream(&buf);
+    Load(stream);
+}
+void NNUEWeights::Load(std::istream& f){
     std::array<char,8> magic{}; f.read(magic.data(),8); if(std::string(magic.data(),8)!="HOWLSTRC") throw std::runtime_error("bad NNUE magic header");
     if(read<std::uint32_t>(f)!=2) throw std::runtime_error("unsupported NNUE file format version");
     const std::uint32_t count=read<std::uint32_t>(f); if(count!=8) throw std::runtime_error("bad NNUE tensor count");

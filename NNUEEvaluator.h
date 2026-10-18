@@ -7,6 +7,7 @@ class Move;
 class NNUEEvaluator {
 public:
     void Load(const std::string& path);
+    void LoadFromMemory(const void* data, std::size_t size);
     float Evaluate(Board& board) const;
     void Rebuild(Board& board) const;
     void UpdateAfterMove(Board& board, const Move& move, const NNUEState& previous) const;

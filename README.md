@@ -138,12 +138,14 @@ I am extremely grateful to Lichess and to everyone whose distributed analysis co
 
 ## Building
 
-Requirements include a C++17 compiler and CMake.
+Requirements include a C++17 compiler and CMake (and Python 3 for standalone embedded builds).
 
-Build the Release version with:
+### 1. Normal Developer Build
+
+Loads external `nnue.weights` from the parent directory of the executable:
 
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
@@ -151,6 +153,36 @@ Run:
 
 ```bash
 ./build/howl
+```
+
+### 2. Standalone Linux Build
+
+Embeds the production `nnue.weights` directly into the binary with zero runtime filesystem dependency:
+
+```bash
+cmake -S . -B build-standalone -DCMAKE_BUILD_TYPE=Release -DHOWL_EMBED_NNUE=ON
+cmake --build build-standalone -j
+```
+
+Produces:
+
+```bash
+build-standalone/howl-v11.0-linux-x86_64
+```
+
+### 3. Standalone Windows Cross Build
+
+Cross-compiles for x86_64 Windows using MinGW with embedded `nnue.weights` and static runtime linking:
+
+```bash
+cmake -S . -B build-win -DCMAKE_TOOLCHAIN_FILE=cmake/x86_64-w64-mingw32.cmake -DCMAKE_BUILD_TYPE=Release -DHOWL_EMBED_NNUE=ON
+cmake --build build-win -j
+```
+
+Produces:
+
+```bash
+build-win/howl-v11.0-windows-x86_64.exe
 ```
 
 Howl speaks UCI and can be used directly from the command line or through compatible chess GUIs such as Arena.

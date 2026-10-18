@@ -1,5 +1,6 @@
 # Build output and CMake
 build/
+build-*/
 bin/
 *.o
 *.a
@@ -7,6 +8,7 @@ bin/
 *.dylib
 *.exe
 howl
+howl-*
 CMakeUserPresets.json
 Testing/
 CTestTestfile.cmake

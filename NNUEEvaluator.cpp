@@ -6,8 +6,10 @@
 #include <algorithm>
 #include <string>
 #include <filesystem>
+#if !defined(HOWL_EMBED_NNUE) || !HOWL_EMBED_NNUE
 #include <unistd.h>
 #include <linux/limits.h>
+#endif
 #if defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
 #include <immintrin.h>
 #endif
@@ -54,6 +56,7 @@ void FirstLayerOrdered(const float* input, const float* transposedWeights, const
 }
 }
 void NNUEEvaluator::Load(const std::string& p){weights.Load(p);const float* f1=tensor("f1.weight");for(int i=0;i<32;++i)for(int j=0;j<512;++j)transposedF1Weights[j*32+i]=f1[i*512+j];}
+void NNUEEvaluator::LoadFromMemory(const void* data, std::size_t size){weights.LoadFromMemory(data, size);const float* f1=tensor("f1.weight");for(int i=0;i<32;++i)for(int j=0;j<512;++j)transposedF1Weights[j*32+i]=f1[i*512+j];}
 float* NNUEEvaluator::tensor(const char* n) const { for(const auto& t:weights.tensors)if(t.name==n)return const_cast<float*>(t.data.data()); throw std::runtime_error("missing NNUE tensor"); }
 int NNUEEvaluator::cls(int p,bool w){int c=-1;switch(p){case 1:c=0;break;case 2:c=1;break;case 3:c=2;break;case 4:c=3;break;case 5:c=4;break;case 9:c=0;break;case 10:c=1;break;case 11:c=2;break;case 12:c=3;break;case 13:c=4;break;default:return -1;}bool own=w?p<9:p>8;return c+(own?0:5);}
 void NNUEEvaluator::AddPiece(Board& b,int piece,int square) const {
@@ -122,6 +125,10 @@ namespace
 NNUEEvaluator evaluator;
 bool loaded = false;
 
+#if defined(HOWL_EMBED_NNUE) && HOWL_EMBED_NNUE
+extern "C" const unsigned char* GetEmbeddedNNUEData();
+extern "C" std::size_t GetEmbeddedNNUESize();
+#else
 std::string ResolveProductionWeightsPath()
 {
     char buffer[PATH_MAX];
@@ -145,13 +152,18 @@ const std::string& ProductionWeightsPath()
     static const std::string path = ResolveProductionWeightsPath();
     return path;
 }
+#endif
 }
 
 void Prepare(Board& board)
 {
     if (!board.nnueState.initialized)
     {
+#if defined(HOWL_EMBED_NNUE) && HOWL_EMBED_NNUE
+        evaluator.LoadFromMemory(GetEmbeddedNNUEData(), GetEmbeddedNNUESize());
+#else
         evaluator.Load(ProductionWeightsPath());
+#endif
         loaded = true;
         evaluator.Rebuild(board);
     }
