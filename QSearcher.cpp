@@ -1,11 +1,11 @@
 #include "QSearcher.h"
 #include "BoardLogic.h"
 #include "ChessStringManipulation.h"
-#include "StructuredNNUEEvaluator.h"
+#include "NNUEEvaluator.h"
 #include "GameLogic.h"
 #include "MateScore.h"
 #include "MissingInfoAboutPrevStateFromMove.h"
-#include "Option.h"
+#include "EngineInitializer.h"
 #include "PVSSearch.h"
 #include "RepetitionHistory.h"
 #include "Search.h"
@@ -69,7 +69,7 @@ private:
     enum class Stage { TT, Evasions, Tacticals, Checks, Done };
     bool EligibleTactical(const Move& m) const {
         if (m.endPiece % 8 == 6) return false;
-        const bool capture = m.endPiece > 0 || (m.PublicFlag & Option::PowerTwo[6]);
+        const bool capture = m.endPiece > 0 || (m.PublicFlag & EngineInitializer::PowerTwo[6]);
         const bool promotion = m.promotionPiece > 0;
         return (capture || promotion) &&
             (qDepth > QRecaptures || m.endPlace == previous.endPlace);
@@ -78,7 +78,7 @@ private:
         return PVSSearch::QCaptureOrderingScore(board, m);
     }
     int EvasionScore(const Move& m) const {
-        const bool capture = m.endPiece > 0 || (m.PublicFlag & Option::PowerTwo[6]);
+        const bool capture = m.endPiece > 0 || (m.PublicFlag & EngineInitializer::PowerTwo[6]);
         if (capture) return PieceValue[Type(m.endPiece)] - Type(board.positionCore.pieceAt[m.beginPlace]);
         return PVSSearch::QQuietEvasionOrderingScore(
             board.sideToMove ? 1 : 0, ply, board, m) - (1 << 28);
@@ -141,7 +141,7 @@ private:
         for (int i = 0; i < checkMoves.count; ++i) {
             Move& m = checkMoves[i];
             if (m.endPiece % 8 == 6) continue;
-            const bool tactical = m.endPiece > 0 || m.promotionPiece > 0 || (m.PublicFlag & Option::PowerTwo[6]);
+            const bool tactical = m.endPiece > 0 || m.promotionPiece > 0 || (m.PublicFlag & EngineInitializer::PowerTwo[6]);
             if (!tactical) {
                 m.givesCheck = MoveLogic::MoveGivesCheck(board, m);
                 m.givesCheckComputed = true;
@@ -217,16 +217,16 @@ Result SearchQ(Board& b,Move& prev,int alpha,int beta,int ply,int qDepth,bool pv
     int side=b.sideToMove?1:0;
     bool check=BoardLogic::UnderAttack(b,PositionCorePieceListsView{b.positionCore}[side*8+6].front(),!b.sideToMove);
     if(ply>=PVSSearch::MaxKillerPly-1)
-        return {check?0:StructuredNNUE::Evaluate(b),{}};
+        return {check?0:NNUE::Evaluate(b),{}};
     int ttDepth=check||qDepth>=QChecks?QChecks:QNoChecks;
     int oldAlpha=alpha,staticEval=TT_NO_STATIC_EVAL,best=-Infinity;
     TTEntry tt{};bool hit=TranspositionTable::Probe(b.ZobristHashCode,tt);int ttValue=0;
     if(hit){ttValue=MateScore::FromTranspositionTable(tt.score,ply);uint8_t f=TTBaseFlag(tt.flag);if(!pv&&tt.depth>=ttDepth&&(f==TT_EXACT||(f==TT_LOWER_BOUND&&ttValue>=beta)||(f==TT_UPPER_BOUND&&ttValue<=alpha)))return {ttValue,{}};}
-    if(!check){staticEval=hit&&tt.staticEval!=TT_NO_STATIC_EVAL?tt.staticEval:StructuredNNUE::Evaluate(b);best=staticEval;if(hit){uint8_t f=TTBaseFlag(tt.flag);if(f==TT_LOWER_BOUND&&ttValue>best)best=ttValue;else if(f==TT_UPPER_BOUND&&ttValue<best)best=ttValue;}if(best>=beta){TranspositionTable::Store(b.ZobristHashCode,MateScore::ToTranspositionTable(best,ply),ttDepth,TT_LOWER_BOUND,0,staticEval,pv);return {best,{}};}if(best>alpha)alpha=best;}
+    if(!check){staticEval=hit&&tt.staticEval!=TT_NO_STATIC_EVAL?tt.staticEval:NNUE::Evaluate(b);best=staticEval;if(hit){uint8_t f=TTBaseFlag(tt.flag);if(f==TT_LOWER_BOUND&&ttValue>best)best=ttValue;else if(f==TT_UPPER_BOUND&&ttValue<best)best=ttValue;}if(best>=beta){TranspositionTable::Store(b.ZobristHashCode,MateScore::ToTranspositionTable(best,ply),ttDepth,TT_LOWER_BOUND,0,staticEval,pv);return {best,{}};}if(best>alpha)alpha=best;}
     bool includeChecks=qDepth>=QChecks;
     QMovePicker picker(b,qDepth,ply,check,prev,hit?tt.bestMove:0);
     int futilityBase=best+SearchParameters::QSearch::FutilityMargin,legal=0,moveCount=0;uint16_t bestMove=0;std::string bestPv;uint16_t bestProvenance=0;bool bestSelective=false;
-    while(Move*m=picker.Next()){++moveCount;bool capture=m->endPiece>0||(m->PublicFlag&Option::PowerTwo[6]);bool promo=m->promotionPiece>0;if(!m->givesCheckComputed){m->givesCheck=MoveLogic::MoveGivesCheck(b,*m);m->givesCheckComputed=true;}bool givesCheck=m->givesCheck;if(!check&&!capture&&!promo&&!(includeChecks&&givesCheck))continue;
+    while(Move*m=picker.Next()){++moveCount;bool capture=m->endPiece>0||(m->PublicFlag&EngineInitializer::PowerTwo[6]);bool promo=m->promotionPiece>0;if(!m->givesCheckComputed){m->givesCheck=MoveLogic::MoveGivesCheck(b,*m);m->givesCheckComputed=true;}bool givesCheck=m->givesCheck;if(!check&&!capture&&!promo&&!(includeChecks&&givesCheck))continue;
         const bool advancedPawn=Type(b.positionCore.pieceAt[m->beginPlace])==1&&
             ((side==0&&m->endPlace/8>=5)||(side==1&&m->endPlace/8<=2));
         if(!check&&!givesCheck&&futilityBase>-MateScore::Threshold&&!advancedPawn){int victim=capture?PieceValue[Type(m->endPiece)]:0;int gain=promo?PieceValue[Type(m->promotionPiece)]-PieceValue[1]:0;if(futilityBase+victim+gain<=alpha){best=std::max(best,futilityBase+victim+gain);continue;}if(futilityBase<=alpha&&!MoveLogic::SEE_GE(b,*m,1)){best=std::max(best,futilityBase);continue;}}
@@ -246,14 +246,7 @@ Result SearchQ(Board& b,Move& prev,int alpha,int beta,int ply,int qDepth,bool pv
         TranspositionTable::Store(b.ZobristHashCode,MateScore::ToTranspositionTable(best,ply),ttDepth,flag,bestMove,staticEval,pv);
     return {best,bestPv,bestProvenance,bestSelective};
 }
-#ifdef HOWL_CORRECTNESS_TESTING
-QSearchTestStatistics stats;
-#endif
 }
 
 int QSearcher::pieceValue100[15]={0,100,350,350,550,975,2500,0,0,100,350,350,550,975,2500};
 MovePrintValue* QSearcher::QSearch(bool pv,int alpha,int beta,Move&prev,int ply,int,bool,int depth,Move&,Move&,Move&,Board&b,bool,int,bool){Result r=SearchQ(b,prev,alpha,beta,ply,depth,pv);auto*out=new MovePrintValue();out->value=r.value;out->printString=r.pv;out->provenance=r.provenance;out->selective=r.selective;out->bound=r.value>=beta?SearchBound::Lower:(r.value<=alpha?SearchBound::Upper:SearchBound::Exact);out->proof=ExactProof;return out;}
-#ifdef HOWL_CORRECTNESS_TESTING
-void QSearcher::ResetTestStatistics(){stats={};}
-QSearchTestStatistics QSearcher::TestStatistics(){return stats;}
-#endif

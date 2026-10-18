@@ -5,7 +5,6 @@
 // Search.cpp
 #include "Search.h"
 #include "MoveLogic.h"
-#include "Option.h"
 #include "BoardLogic.h"
 #include <iostream>
 #include "UCI.h"
@@ -22,7 +21,6 @@
 #include "KingSetup.h"
 #include "PassedPawnSetup.h"
 #include "PieceMoves.h"
-#include "DiagnosticLogger.h"
 #include "MateScore.h"
 #include "TranspositionTable.h"
 
@@ -39,6 +37,7 @@ std::string Search::completedPonderMove{""};
 std::string Search::emergencyMove{""};
 bool Search::finiteSearch{false};
 
+int Search::MultiPV = 1;
 int Search::maxDepth{-1};
 int64_t Search::maxNodes{-1};
 bool Search::strictNodeLimit{false};
@@ -133,48 +132,23 @@ namespace
     }
 }
 
-#if HOWL_CORRECTNESS_TESTING
-std::vector<std::pair<int, int>> Search::AspirationWindowsForTesting(
-    int previousScore, const std::vector<int>& searchScores)
-{
-    int delta = InitialAspirationDelta(previousScore);
-    int alpha = std::max(FullSearchAlpha, previousScore - delta);
-    int beta = std::min(FullSearchBeta, previousScore + delta);
-    int retriesUsed = 0;
-    std::vector<std::pair<int, int>> windows;
-    for (int score : searchScores)
-    {
-        windows.emplace_back(alpha, beta);
-        if (!AdvanceAspirationWindow(score, false, retriesUsed, alpha, beta, delta))
-            break;
-    }
-    return windows;
-}
-#endif
-
 void Search::PrintBestMove()
 {
     const std::string& outBest = !completedBestMove.empty() ? completedBestMove : (!bestMove.empty() ? bestMove : emergencyMove);
     const std::string& outPonder = !completedBestMove.empty() ? completedPonderMove : ponderMove;
 
-    uint64_t sId = DiagnosticLogger::currentSearchId.load();
     if (outBest.empty())
     {
-        DiagnosticLogger::Log("EMIT_BESTMOVE", "bestmove (none)", sId);
         std::cout << "bestmove (none)\n" << std::flush;
         return;
     }
     if (!outPonder.empty())
     {
-        std::string bmStr = "bestmove " + outBest + " ponder " + outPonder;
-        DiagnosticLogger::Log("EMIT_BESTMOVE", bmStr, sId);
-        std::cout << bmStr << '\n' << std::flush;
+        std::cout << "bestmove " << outBest << " ponder " << outPonder << '\n' << std::flush;
     }
     else
     {
-        std::string bmStr = "bestmove " + outBest;
-        DiagnosticLogger::Log("EMIT_BESTMOVE", bmStr, sId);
-        std::cout << bmStr << '\n' << std::flush;
+        std::cout << "bestmove " << outBest << '\n' << std::flush;
     }
 }
 
@@ -201,7 +175,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         RepetitionHistory::ResetWithRoot(board4.ZobristHashCode);
     }
     RepetitionHistory::BeginSearchRoot();
-    int MultiPV = Option::MultiPV;
+    int MultiPV = Search::MultiPV;
     MoveList moveList = MoveLogic::MoveGenerator(board4, -1, -1);
     if (moveList.count == 0)
     {
@@ -386,7 +360,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
         int aspAlpha = FullSearchAlpha;
         int aspBeta = FullSearchBeta;
         int aspirationDelta = InitialAspirationDelta(prevCompletedScore);
-        if (recDepth >= 4 && Option::MultiPV <= 1 && prevCompletedScore > -MateScore::Threshold &&
+        if (recDepth >= 4 && Search::MultiPV <= 1 && prevCompletedScore > -MateScore::Threshold &&
             prevCompletedScore < MateScore::Threshold)
         {
             aspAlpha = std::max(FullSearchAlpha, prevCompletedScore - aspirationDelta);
@@ -401,9 +375,9 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
 
         while (active.load(std::memory_order_relaxed))
         {
-            if (Option::MultiPV > 1)
+            if (Search::MultiPV > 1)
             {
-                int K = std::min(Option::MultiPV, moveList.count);
+                int K = std::min(Search::MultiPV, moveList.count);
                 std::vector<MovePrintValue *> topMoves;
                 int KthBestValue = -200000;
                 bool allRootMovesCompleted = true;
@@ -439,7 +413,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     bool rootMoveRepetitionResult = false;
                     int value = -200000;
 
-                    Board *boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
                     MissingInfoAboutPrevStateFromMove *missingInfo = new MissingInfoAboutPrevStateFromMove(board4, *move);
                     GameLogic::DoMove(board4, *move, move4, -1, -1, missingInfo);
 
@@ -464,12 +437,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                         GameLogic::UndoMove(board4, *move, *missingInfo);
                         delete missingInfo;
                         missingInfo = nullptr;
-                        if (UCI::IsTest())
-                        {
-                            Board::AreBoardsEqual(board4, *boardCopy);
-                            delete boardCopy;
-                            boardCopy = nullptr;
-                        }
 
                         CalculateAndDisplayScore(move->value, rootMoveExactMate);
                         MovePrintValue *movePrint = new MovePrintValue();
@@ -523,7 +490,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                         else
                         {
                             delete MPValue;
-                            MPValue = PVSSearch::PVS(false, -KthBestValue - Option::nullWindowSize, -KthBestValue, recDepth - 1, *move, move2, move3, move4, board4, false, true, 1, false, true);
+                            MPValue = PVSSearch::PVS(false, -KthBestValue - Search::nullWindowSize, -KthBestValue, recDepth - 1, *move, move2, move3, move4, board4, false, true, 1, false, true);
                             value = -MPValue->value;
                             move->value = value;
                             if (value > KthBestValue)
@@ -545,12 +512,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                         GameLogic::UndoMove(board4, *move, *missingInfo);
                         delete missingInfo;
                         missingInfo = nullptr;
-                        if (UCI::IsTest())
-                        {
-                            Board::AreBoardsEqual(board4, *boardCopy);
-                            delete boardCopy;
-                            boardCopy = nullptr;
-                        }
 
                         if (needFullSearch && move->value > KthBestValue)
                         {
@@ -628,7 +589,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             beta = aspBeta;
             value = -200000;
             std::vector<MovePrintValue *> movesPrintValue;
-            int KthBestValue = (Option::MultiPV <= 1) ? aspAlpha : -200000;
+            int KthBestValue = (Search::MultiPV <= 1) ? aspAlpha : -200000;
             std::string bestPVString = "";
             bool iterationSelective = false;
             bool iterationHasAuthoritativeResult = false;
@@ -667,7 +628,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 bool rootMoveRepetitionResult = false;
                 if (counter < MultiPV)
                 {
-                    Board *boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
                     MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
                     GameLogic::DoMove(board4, *move, move4, -1, -1, missingInfoAboutPrevStateFromMove);
                     if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
@@ -690,12 +650,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
                 delete missingInfoAboutPrevStateFromMove;
                 missingInfoAboutPrevStateFromMove = nullptr;
-                if (UCI::IsTest())
-                {
-                    Board::AreBoardsEqual(board4, *boardCopy);
-                    delete boardCopy;
-                    boardCopy = nullptr;
-                }
                 if (value > alpha)
                 {
                     alpha = value;
@@ -724,7 +678,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 int64_t safeNodeCount = searchNodeCount;
                 int64_t nps = (elapsed_ms > 0) ? (safeNodeCount * 1000LL / elapsed_ms) : 0;
                 if (nps < 0) {
-                    std::cerr << "[DEBUG] Negative nps detected! searchNodeCount=" << safeNodeCount << ", elapsed_ms=" << elapsed_ms << std::endl;
+                    std::cerr << "Negative NPS detected! searchNodeCount=" << safeNodeCount << ", elapsed_ms=" << elapsed_ms << std::endl;
                 }
                 movePrint->depth = recDepth;
                 movePrint->elapsed_ms = elapsed_ms;
@@ -742,7 +696,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     bestPVString = movePrint->printString;
                 }
                 movesPrintValue.push_back(movePrint);
-                if (Option::MultiPV > 1)
+                if (Search::MultiPV > 1)
                 {
                     KthBestValue = PrintKBest(movesPrintValue, MultiPV, finiteSearch);
                 }
@@ -757,7 +711,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             }
             else
             {
-                Board *boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
                 MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
                 GameLogic::DoMove(board4, *move, move4, -1, -1, missingInfoAboutPrevStateFromMove);
                 if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
@@ -778,12 +731,12 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     }
                     else
                     {
-                        MPValue = PVSSearch::PVS(tempPVNode, -KthBestValue - Option::nullWindowSize, -KthBestValue, recDepth - 1, *move, move2, move3, move4, board4, false, true, 1, false, true);
+                        MPValue = PVSSearch::PVS(tempPVNode, -KthBestValue - Search::nullWindowSize, -KthBestValue, recDepth - 1, *move, move2, move3, move4, board4, false, true, 1, false, true);
                     }
                     const int initialRootValue = -MPValue->value;
                     value = initialRootValue;
                     move->value = value;
-                    if (Option::MultiPV > 1)
+                    if (Search::MultiPV > 1)
                     {
                         if (value > KthBestValue ||
                             (value == KthBestValue &&
@@ -815,12 +768,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
                 delete missingInfoAboutPrevStateFromMove;
                 missingInfoAboutPrevStateFromMove = nullptr;
-                if (UCI::IsTest())
-                {
-                    Board::AreBoardsEqual(board4, *boardCopy);
-                    delete boardCopy;
-                    boardCopy = nullptr;
-                }
                 mated = false;
                 Score = "";
                 if (rootMoveExactMate && move->value > MateScore::Threshold)
@@ -876,7 +823,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                         ponderMove = "";
                     }
                 }
-                if (Option::MultiPV > 1)
+                if (Search::MultiPV > 1)
                 {
                     if (move->value > KthBestValue)
                     {
@@ -929,7 +876,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             deleteMovesPrintValue(movesPrintValue);
             break;
         }
-        if (!stopRequested && Option::MultiPV > 1)
+        if (!stopRequested && Search::MultiPV > 1)
         {
             if (!movesPrintValue.empty())
             {
@@ -973,7 +920,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
             iterationMateExact = iterationMateExact && exactBestMoveFound &&
                 movesPrintValue.size() == static_cast<std::size_t>(moveList.count);
 
-            if (Option::MultiPV <= 1 && !iterationMateExact)
+            if (Search::MultiPV <= 1 && !iterationMateExact)
             {
                 if (AdvanceAspirationWindow(iterScore, false,
                                             aspirationRetriesUsed,
@@ -1044,7 +991,7 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                     " score " + Score;
             }
 
-            if (Option::MultiPV <= 1)
+            if (Search::MultiPV <= 1)
             {
                 completedInfo += " tbhits " + std::to_string(
                     tablebaseHits.load(std::memory_order_relaxed));
@@ -1052,7 +999,6 @@ void Search::MainSearch(Move &move1, Move &move2, Move &move3, Move &move4, Boar
                 completedInfo += " qttprobes " + std::to_string(qTTStats.probes) +
                     " qttcutoffs " + std::to_string(qTTStats.usableCutoffs) +
                     " qttstores " + std::to_string(qTTStats.stores);
-                DiagnosticLogger::Log("EMIT_INFO", completedInfo, DiagnosticLogger::currentSearchId.load());
                 std::cout << completedInfo << '\n';
             }
 
@@ -1204,7 +1150,6 @@ bool Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
             break;
         }
         Move *move = &moveList[i];
-        auto boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
         MissingInfoAboutPrevStateFromMove *missingInfoAboutPrevStateFromMove = new MissingInfoAboutPrevStateFromMove(board4, *move);
         GameLogic::DoMove(board4, *move, move4, -2, -2, missingInfoAboutPrevStateFromMove);
         if (!BoardLogic::UnderAttack(board4, PositionCorePieceListsView{board4.positionCore}[turn * 8 + 6].front(), board4.sideToMove))
@@ -1215,7 +1160,7 @@ bool Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
                 firstAssign = true;
             }
 
-            int curAlpha = (Option::MultiPV > 1) ? -200000 : alpha;
+            int curAlpha = (Search::MultiPV > 1) ? -200000 : alpha;
             if (RepetitionHistory::IsRepetition(board4.ZobristHashCode))
             {
                 move->value = 0;
@@ -1235,7 +1180,7 @@ bool Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
                 tempRetValLocal = nullptr;
             }
 
-            if (Option::MultiPV <= 1 && move->value > alpha)
+            if (Search::MultiPV <= 1 && move->value > alpha)
             {
                 alpha = move->value;
             }
@@ -1248,12 +1193,6 @@ bool Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
         GameLogic::UndoMove(board4, *move, *missingInfoAboutPrevStateFromMove);
         delete missingInfoAboutPrevStateFromMove;
         missingInfoAboutPrevStateFromMove = nullptr;
-        if (UCI::IsTest())
-        {
-            Board::AreBoardsEqual(board4, *boardCopy);
-            delete boardCopy;
-            boardCopy = nullptr;
-        }
         if (!active.load(std::memory_order_relaxed))
         {
             completedAll = false;
@@ -1290,9 +1229,9 @@ bool Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
     int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
     int64_t safeNodeCount = searchNodeCount;
     int64_t nps = (elapsed_ms > 0) ? (safeNodeCount * 1000LL / elapsed_ms) : 0;
-    if (Option::MultiPV > 1)
+    if (Search::MultiPV > 1)
     {
-        int K = std::min(Option::MultiPV, moveList.count);
+        int K = std::min(Search::MultiPV, moveList.count);
         for (int i = 0; i < K; i++)
         {
             CalculateAndDisplayScore(moveList[i].value, false);
@@ -1308,7 +1247,6 @@ bool Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
     else
     {
         std::string infoStr = "info depth 1 time " + std::to_string(elapsed_ms) + " nodes " + std::to_string(searchNodeCount) + " tbhits " + std::to_string(tablebaseHits.load(std::memory_order_relaxed)) + " nps " + std::to_string(nps) + " pv " + ChessStringManipulation::PVToString(moveList[0], 1, mated, board4) + " score " + Score;
-        DiagnosticLogger::Log("EMIT_INFO", infoStr, DiagnosticLogger::currentSearchId.load());
         std::cout << infoStr << '\n';
     }
     return true;
@@ -1316,20 +1254,6 @@ bool Search::SearchDepthZero(MoveList &moveList, bool &firstAssign, int &recDept
 
 void Search::SearchForCheckUpdate()
 {
-    /*
-    if (recDepth >= 12)
-    {
-        Option::checkExtension = tempCheckExtension;
-        Option::safetyMarginSet(tempSafetyMargin);
-    }
-    else
-    {
-        double nowCheckExtension = (tempCheckExtension / 12.0) * recDepth;
-        double nowSafetyMargin = (tempSafetyMargin / 12.0) * recDepth;
-        Option::checkExtension = static_cast<int>(std::floor(nowCheckExtension + .999));
-        Option::safetyMarginSet(static_cast<int>(std::floor(nowSafetyMargin + .999)));
-    }
-    */
 }
 
 void Search::CalculateAndDisplayScore(int value, bool exactMate)

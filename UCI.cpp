@@ -4,7 +4,6 @@
 #endif
 
 #include "UCI.h"
-#include "StructuredNNUEEvaluator.h"
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -18,21 +17,7 @@
 #include "BoardMaker.h"
 #include "HashMemoryBudget.h"
 #include "RepetitionHistory.h"
-#include "Option.h"
 #include "Tablebase.h"
-#include "SearchParameters.h"
-
-#include "DiagnosticLogger.h"
-
-// Correctness tests retain the make/undo board-copy assertions. Normal engine
-// execution starts in production mode and avoids those diagnostic allocations.
-#if HOWL_CORRECTNESS_TESTING
-bool UCI::IsRelease = false;
-#else
-bool UCI::IsRelease = true;
-#endif
-bool UCI::TestOrderAvailable = false;
-bool UCI::StartPosForTest = false;
 
 std::thread UCI::searchThread;
 Move *UCI::move1 = nullptr;
@@ -40,21 +25,13 @@ Move *UCI::move2 = nullptr;
 Move *UCI::move3 = nullptr;
 Move *UCI::move4 = nullptr;
 Board *UCI::thisBoard = nullptr;
-std::string UCI::order = ""; // std::string(7, 'c');
-
-#if HOWL_CORRECTNESS_TESTING
-std::size_t UCI::releasedBoards = 0;
-std::size_t UCI::releasedHistoryMoves = 0;
-#endif
+std::string UCI::order = "";
 
 void UCI::ReplaceCurrentBoard(Board *replacementBoard)
 {
     if (thisBoard != nullptr)
     {
         delete thisBoard;
-#if HOWL_CORRECTNESS_TESTING
-        releasedBoards++;
-#endif
     }
     thisBoard = replacementBoard;
 }
@@ -67,9 +44,6 @@ void UCI::ReleaseMoveHistory()
         if (*historyMove != nullptr)
         {
             delete *historyMove;
-#if HOWL_CORRECTNESS_TESTING
-            releasedHistoryMoves++;
-#endif
         }
         *historyMove = nullptr;
     }
@@ -98,43 +72,19 @@ void UCI::ReleaseCurrentPosition()
     ReleaseMoveHistory();
 }
 
-#if HOWL_CORRECTNESS_TESTING
-void UCI::ResetPositionOwnershipStatistics()
-{
-    releasedBoards = 0;
-    releasedHistoryMoves = 0;
-}
-
-std::size_t UCI::ReleasedBoardCount()
-{
-    return releasedBoards;
-}
-
-std::size_t UCI::ReleasedHistoryMoveCount()
-{
-    return releasedHistoryMoves;
-}
-#endif
-
 void UCI::MainSearchStart()
 {
-    uint64_t prevId = DiagnosticLogger::currentSearchId.load();
     if (searchThread.joinable())
     {
-        DiagnosticLogger::Log("JOIN_BEGIN", "MainSearchStart joining previous searchThread", prevId);
         Search::stopRequested = true;
         Search::active = false;
         searchThread.join();
-        DiagnosticLogger::Log("JOIN_END", "MainSearchStart joined previous searchThread", prevId);
     }
     HashMemoryBudget::EnsureDefaultConfigured(std::cout);
     HashMemoryBudget::MarkSearchStarted();
     Search::startTime = std::chrono::high_resolution_clock::now();
     Search::stopRequested = false;
     Search::active = true;
-    uint64_t searchId = ++DiagnosticLogger::currentSearchId;
-    std::string fenBeforeGo = DiagnosticLogger::BoardToFen(thisBoard);
-    DiagnosticLogger::Log("SEARCH_START", "Spawning search thread with FEN: " + fenBeforeGo, searchId);
     searchThread = std::thread(Search::MainSearch, std::ref(*move1), std::ref(*move2), std::ref(*move3), std::ref(*move4), std::ref(*thisBoard));
 }
 
@@ -156,11 +106,6 @@ bool UCI::ApplyHashOptionCommand(const std::string& command,
     return false;
 }
 
-bool UCI::IsTest()
-{
-    return !IsRelease;
-}
-
 void UCI::MainAsync()
 {
     Run(std::cin, std::cout);
@@ -174,43 +119,24 @@ void UCI::Run(std::istream& in, std::ostream& out)
         oldCoutBuf = std::cout.rdbuf(out.rdbuf());
     }
 
-    int savedOrdersCount = 3;
-    int savedOrderToProcessNo = 0;
     bool threadContinue = true;
-    TestOrderAvailable = !IsRelease;
     while (threadContinue)
     {
-        if (IsRelease || !TestOrderAvailable)
+        if (!std::getline(in, order))
         {
-            if (!std::getline(in, order))
+            if (searchThread.joinable())
             {
-                if (searchThread.joinable())
-                {
-                    DiagnosticLogger::Log("JOIN_BEGIN", "EOF on stdin, joining searchThread", DiagnosticLogger::currentSearchId.load());
-                    Search::stopRequested = true;
-                    Search::active = false;
-                    searchThread.join();
-                    DiagnosticLogger::Log("JOIN_END", "EOF on stdin, joined searchThread", DiagnosticLogger::currentSearchId.load());
-                }
-                break;
+                Search::stopRequested = true;
+                Search::active = false;
+                searchThread.join();
             }
-        }
-        else
-        {
-            SetAutomaticOrders(savedOrderToProcessNo);
-            savedOrderToProcessNo++;
-            if (savedOrderToProcessNo == savedOrdersCount)
-            {
-                TestOrderAvailable = false;
-            }
+            break;
         }
 
         if (order.empty())
         {
             continue;
         }
-
-        DiagnosticLogger::Log("UCI_CMD", order, DiagnosticLogger::currentSearchId.load());
 
         if (order == "uci")
         {
@@ -220,35 +146,13 @@ void UCI::Run(std::istream& in, std::ostream& out)
             out << "option name Hash type spin min 8 max 1024 default 40\n";
             out << "option name SyzygyPath type string default <empty>\n";
             out << "option name SyzygyProbeLimit type spin default 5 min 0 max 7\n";
-            out << "option name StructuredNNUEWeights type string default nnue.weights\n";
-            out << "option name LMRLogarithmicScale type string default 24.8\n";
-            out << "option name LMRNonImprovingThreshold type spin default 1007 min 0 max 10000\n";
-            out << "option name LMRTtPvAdjustment type spin default 2 min 0 max 16\n";
-            out << "option name LMRPreviousMoveCountThreshold type spin default 14 min 0 max 64\n";
-            out << "option name LMRSingularAdjustment type spin default 2 min 0 max 16\n";
-            out << "option name LMRCutNodeAdjustment type spin default 2 min 0 max 16\n";
-            out << "option name LMRStatScoreDivisor type spin default 16384 min 1 max 65536\n";
-            out << "option name NullMoveBase type spin default 854 min 0 max 2000\n";
-            out << "option name NullMoveDepthSlope type spin default 68 min 0 max 200\n";
-            out << "option name NullMoveStatScoreLimit type spin default 23397 min -100000 max 100000\n";
-            out << "option name NullMoveVerificationDepth type spin default 13 min 0 max 64\n";
-            out << "option name ReverseFutilityDepthMargin type spin default 217 min 0 max 1000\n";
-            out << "option name ParentFutilityBaseMargin type spin default 235 min 0 max 1000\n";
-            out << "option name ParentFutilityDepthMargin type spin default 172 min 0 max 1000\n";
-            out << "option name ProbCutBetaMargin type spin default 189 min 0 max 1000\n";
-            out << "option name ProbCutImprovingMargin type spin default 45 min 0 max 500\n";
-            out << "option name SEETacticalDepthMargin type spin default 194 min 0 max 1000\n";
-            out << "option name SEEQuietBase type spin default 32 min 0 max 200\n";
-            out << "option name HistoryLmrStatOffset type spin default 4926 min -20000 max 20000\n";
             out << "uciok\n" << std::flush;
         }
         else if (order == "isready")
         {
             if (searchThread.joinable())
             {
-                DiagnosticLogger::Log("JOIN_BEGIN", "isready joining searchThread", DiagnosticLogger::currentSearchId.load());
                 searchThread.join();
-                DiagnosticLogger::Log("JOIN_END", "isready joined searchThread", DiagnosticLogger::currentSearchId.load());
             }
             HashMemoryBudget::EnsureDefaultConfigured(out);
             out << "readyok\n" << std::flush;
@@ -257,24 +161,18 @@ void UCI::Run(std::istream& in, std::ostream& out)
         {
             if (searchThread.joinable())
             {
-                DiagnosticLogger::Log("STOP_REQUEST", "ucinewgame stopping search", DiagnosticLogger::currentSearchId.load());
                 Search::stopRequested = true;
                 Search::active = false;
-                DiagnosticLogger::Log("JOIN_BEGIN", "ucinewgame joining searchThread", DiagnosticLogger::currentSearchId.load());
                 searchThread.join();
-                DiagnosticLogger::Log("JOIN_END", "ucinewgame joined searchThread", DiagnosticLogger::currentSearchId.load());
             }
         }
         else if (order == "quit")
         {
             if (searchThread.joinable())
             {
-                DiagnosticLogger::Log("STOP_REQUEST", "quit stopping search", DiagnosticLogger::currentSearchId.load());
                 Search::stopRequested = true;
                 Search::active = false;
-                DiagnosticLogger::Log("JOIN_BEGIN", "quit joining searchThread", DiagnosticLogger::currentSearchId.load());
                 searchThread.join();
-                DiagnosticLogger::Log("JOIN_END", "quit joined searchThread", DiagnosticLogger::currentSearchId.load());
             }
             threadContinue = false;
         }
@@ -282,12 +180,9 @@ void UCI::Run(std::istream& in, std::ostream& out)
         {
             if (searchThread.joinable())
             {
-                DiagnosticLogger::Log("STOP_REQUEST", "stop command received", DiagnosticLogger::currentSearchId.load());
                 Search::stopRequested = true;
                 Search::active = false;
-                DiagnosticLogger::Log("JOIN_BEGIN", "stop joining searchThread", DiagnosticLogger::currentSearchId.load());
                 searchThread.join();
-                DiagnosticLogger::Log("JOIN_END", "stop joined searchThread", DiagnosticLogger::currentSearchId.load());
             }
         }
         if (!threadContinue)
@@ -297,14 +192,10 @@ void UCI::Run(std::istream& in, std::ostream& out)
         {
             if (searchThread.joinable())
             {
-                DiagnosticLogger::Log("STOP_REQUEST", "position stopping search", DiagnosticLogger::currentSearchId.load());
                 Search::stopRequested = true;
                 Search::active = false;
-                DiagnosticLogger::Log("JOIN_BEGIN", "position joining searchThread", DiagnosticLogger::currentSearchId.load());
                 searchThread.join();
-                DiagnosticLogger::Log("JOIN_END", "position joined searchThread", DiagnosticLogger::currentSearchId.load());
             }
-            DiagnosticLogger::Log("POSITION_BEGIN", order, DiagnosticLogger::currentSearchId.load());
             if (order.length() > 8 && order.substr(0, 9) == "position ")
             {
                 if (order.substr(9, 8) == "startpos")
@@ -357,7 +248,6 @@ void UCI::Run(std::istream& in, std::ostream& out)
                 }
             }
             thisBoard->nnueHistory->snapshotCount = 0;
-            DiagnosticLogger::Log("POSITION_END", "Final FEN: " + DiagnosticLogger::BoardToFen(thisBoard), DiagnosticLogger::currentSearchId.load());
         }
         if (order == "ponderhit")
         {
@@ -367,32 +257,19 @@ void UCI::Run(std::istream& in, std::ostream& out)
         }
         if (order.length() > 9 && order.substr(0, 10) == "setoption ")
         {
-            const std::size_t valueMarker = order.find(" value ", 15);
-            if (valueMarker != std::string::npos)
-            {
-                const std::string tuningName = order.substr(15, valueMarker - 15);
-                if (SearchParameters::SetRuntimeParameter(tuningName,
-                                                           order.substr(valueMarker + 7)))
-                    continue;
-            }
             if (order.compare(0, 19, "setoption name Hash") == 0)
             {
                 ApplyHashOptionCommand(order, out);
-                continue;
-            }
-            if (order.rfind("setoption name StructuredNNUEWeights value ", 0) == 0)
-            {
-                StructuredNNUE::SetWeightsPath(order.substr(43));
                 continue;
             }
             if (order.rfind("setoption name SyzygyPath", 0) == 0)
             {
                 const std::string marker = " value ";
                 const std::size_t valueAt = order.find(marker);
-                Option::SyzygyPath = valueAt == std::string::npos
+                Tablebase::Path = valueAt == std::string::npos
                     ? std::string() : order.substr(valueAt + marker.size());
-                if (!Tablebase::Initialize(Option::SyzygyPath) &&
-                    !Option::SyzygyPath.empty())
+                if (!Tablebase::Initialize(Tablebase::Path) &&
+                    !Tablebase::Path.empty())
                     out << "info string no Syzygy tablebases found at path\n";
                 continue;
             }
@@ -404,7 +281,7 @@ void UCI::Run(std::istream& in, std::ostream& out)
                 {
                     try
                     {
-                        Option::SyzygyProbeLimit = std::clamp(
+                        Tablebase::ProbeLimit = std::clamp(
                             std::stoi(order.substr(valueAt + marker.size())), 0, 7);
                     }
                     catch (const std::exception &)
@@ -414,25 +291,23 @@ void UCI::Run(std::istream& in, std::ostream& out)
                 }
                 continue;
             }
-            std::string tempString = order.substr(15);
-            int counter = 0;
-            std::string option = "";
-            while (counter < tempString.size() && tempString[counter] != ' ')
+            if (order.rfind("setoption name MultiPV", 0) == 0)
             {
-                option += tempString[counter];
-                counter++;
-            }
-            if (option == "nullWindowSize")
-            {
-                Option::nullWindowSize = std::stoi(tempString.substr(counter + 7));
-            }
-            else if (option == "checkExtension")
-            {
-                Option::checkExtension = std::stoi(tempString.substr(counter + 7));
-            }
-            else if (option == "MultiPV")
-            {
-                Option::MultiPV = std::stoi(tempString.substr(counter + 7));
+                const std::string marker = " value ";
+                const std::size_t valueAt = order.find(marker);
+                if (valueAt != std::string::npos)
+                {
+                    try
+                    {
+                        Search::MultiPV = std::clamp(
+                            std::stoi(order.substr(valueAt + marker.size())), 1, 99);
+                    }
+                    catch (const std::exception &)
+                    {
+                        out << "info string invalid MultiPV value\n";
+                    }
+                }
+                continue;
             }
         }
         if (order == "go" || (order.length() > 2 && order.substr(0, 3) == "go "))
@@ -579,69 +454,6 @@ void UCI::Run(std::istream& in, std::ostream& out)
     if (oldCoutBuf != nullptr)
     {
         std::cout.rdbuf(oldCoutBuf);
-    }
-}
-
-void UCI::SetAutomaticOrders(int savedOrderToProcessNo)
-{
-    if (!IsRelease)
-    {
-        if (savedOrderToProcessNo == 0)
-        {
-            order = "setoption name MultiPV value 1";
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-        else if (savedOrderToProcessNo == 1)
-        {
-            if (StartPosForTest)
-            {
-                order = "position startpos";
-            }
-            else
-            {
-                order = "position rnbqk2r/ppp1pp1p/7B/3P4/2PP2n1/8/PP3PPP/RN1QKBNR b - - 1 0";
-            }
-        }
-        else if (savedOrderToProcessNo == 2)
-        {
-            order = "go infinite";
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-        else if (savedOrderToProcessNo == 3)
-        {
-            order = "ucinewgame";
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        }
-        else if (savedOrderToProcessNo == 4)
-        {
-            order = "position startpos";
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-        else if (savedOrderToProcessNo == 5)
-        {
-            order = "go infinite";
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-        else if (savedOrderToProcessNo == 6)
-        {
-            order = "stop";
-            std::this_thread::sleep_for(std::chrono::milliseconds(8000));
-        }
-        else if (savedOrderToProcessNo == 7)
-        {
-            order = "isready";
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-        else if (savedOrderToProcessNo == 8)
-        {
-            order = "position startpos moves d2d4 g8f6 c2c4 e7e5 d4e5";
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-        else if (savedOrderToProcessNo == 9)
-        {
-            order = "go infinite";
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
     }
 }
 

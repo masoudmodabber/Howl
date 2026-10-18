@@ -1,10 +1,10 @@
 #pragma once
 #include "Board.h"
-#include "StructuredNNUEWeights.h"
+#include "NNUEWeights.h"
 #include <string>
 #include <array>
 class Move;
-class StructuredNNUEEvaluator {
+class NNUEEvaluator {
 public:
     void Load(const std::string& path);
     float Evaluate(Board& board) const;
@@ -12,7 +12,7 @@ public:
     void UpdateAfterMove(Board& board, const Move& move, const NNUEState& previous) const;
     std::size_t ParameterCount() const { return weights.ParameterCount(); }
 private:
-    StructuredNNUEWeights weights;
+    NNUEWeights weights;
     std::array<float, 32 * 512> transposedF1Weights{};
     static int cls(int piece, bool whitePerspective);
     float* tensor(const char* name) const;
@@ -23,9 +23,8 @@ private:
     void RebuildBlack(Board& board) const;
 };
 
-namespace StructuredNNUE
+namespace NNUE
 {
-void SetWeightsPath(const std::string& path);
 void Prepare(Board& board);
 void UpdateAfterMove(Board& board, const Move& move, const NNUEState& previous);
 int Evaluate(Board& board);

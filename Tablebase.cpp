@@ -6,6 +6,9 @@
 
 #include <cstdint>
 
+std::string Tablebase::Path = "";
+int Tablebase::ProbeLimit = 5;
+
 namespace
 {
     bool initialized = false;

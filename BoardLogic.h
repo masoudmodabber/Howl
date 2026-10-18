@@ -4,7 +4,7 @@
 #include <vector>
 #include "Board.h"
 #include "AttackPlaces.h"
-#include "Option.h"
+#include "EngineInitializer.h"
 
 class BoardLogic {
 public:

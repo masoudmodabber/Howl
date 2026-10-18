@@ -4,7 +4,7 @@
 #endif
 
 #include "AttackPlaces.h"
-#include "Option.h"
+#include "EngineInitializer.h"
 #include <cmath>
 
 long long AttackPlaces::WhitePawnAttackPlaces[64] = {0};
@@ -38,8 +38,8 @@ void AttackPlaces::Initialize()
             RookPseudoAttacks[i] = 0;
             for (int j = 0; j < 64; ++j)
             {
-                if (BishopAttack[i][j] != 0) BishopPseudoAttacks[i] |= Option::PowerTwo[j];
-                if (RookAttack[i][j] != 0) RookPseudoAttacks[i] |= Option::PowerTwo[j];
+                if (BishopAttack[i][j] != 0) BishopPseudoAttacks[i] |= EngineInitializer::PowerTwo[j];
+                if (RookAttack[i][j] != 0) RookPseudoAttacks[i] |= EngineInitializer::PowerTwo[j];
             }
             QueenPseudoAttacks[i] = BishopPseudoAttacks[i] | RookPseudoAttacks[i];
         }
@@ -58,13 +58,13 @@ void AttackPlaces::SetPawnAttackPlaces()
         // These are reverse attack tables for the engine's square indexing.
         if (rank < 7)
         {
-            if (file > 0) WhitePawnAttackPlaces[counter] |= Option::PowerTwo[counter + 7];
-            if (file < 7) WhitePawnAttackPlaces[counter] |= Option::PowerTwo[counter + 9];
+            if (file > 0) WhitePawnAttackPlaces[counter] |= EngineInitializer::PowerTwo[counter + 7];
+            if (file < 7) WhitePawnAttackPlaces[counter] |= EngineInitializer::PowerTwo[counter + 9];
         }
         if (rank > 0)
         {
-            if (file < 7) BlackPawnAttackPlaces[counter] |= Option::PowerTwo[counter - 7];
-            if (file > 0) BlackPawnAttackPlaces[counter] |= Option::PowerTwo[counter - 9];
+            if (file < 7) BlackPawnAttackPlaces[counter] |= EngineInitializer::PowerTwo[counter - 7];
+            if (file > 0) BlackPawnAttackPlaces[counter] |= EngineInitializer::PowerTwo[counter - 9];
         }
     }
 }
@@ -75,35 +75,35 @@ void AttackPlaces::SetKingAttackPlaces()
     {
         if (counter % 8 != 7)
         {
-            KingAttackPlaces[counter] += Option::PowerTwo[counter + 1];
+            KingAttackPlaces[counter] += EngineInitializer::PowerTwo[counter + 1];
         }
         if (counter % 8 != 0)
         {
-            KingAttackPlaces[counter] += Option::PowerTwo[counter - 1];
+            KingAttackPlaces[counter] += EngineInitializer::PowerTwo[counter - 1];
         }
         if (counter / 8 != 0)
         {
-            KingAttackPlaces[counter] += Option::PowerTwo[counter - 8];
+            KingAttackPlaces[counter] += EngineInitializer::PowerTwo[counter - 8];
         }
         if (counter / 8 != 7)
         {
-            KingAttackPlaces[counter] += Option::PowerTwo[counter + 8];
+            KingAttackPlaces[counter] += EngineInitializer::PowerTwo[counter + 8];
         }
         if (counter % 8 != 7 && counter / 8 != 7)
         {
-            KingAttackPlaces[counter] += Option::PowerTwo[counter + 9];
+            KingAttackPlaces[counter] += EngineInitializer::PowerTwo[counter + 9];
         }
         if (counter % 8 != 0 && counter / 8 != 7)
         {
-            KingAttackPlaces[counter] += Option::PowerTwo[counter + 7];
+            KingAttackPlaces[counter] += EngineInitializer::PowerTwo[counter + 7];
         }
         if (counter % 8 != 7 && counter / 8 != 0)
         {
-            KingAttackPlaces[counter] += Option::PowerTwo[counter - 7];
+            KingAttackPlaces[counter] += EngineInitializer::PowerTwo[counter - 7];
         }
         if (counter % 8 != 0 && counter / 8 != 0)
         {
-            KingAttackPlaces[counter] += Option::PowerTwo[counter - 9];
+            KingAttackPlaces[counter] += EngineInitializer::PowerTwo[counter - 9];
         }
     }
 }
@@ -114,35 +114,35 @@ void AttackPlaces::SetKnightAttackPlaces()
     {
         if (counter % 8 < 7 && counter / 8 < 6)
         {
-            KnightAttackPlaces[counter] += Option::PowerTwo[counter + 17];
+            KnightAttackPlaces[counter] += EngineInitializer::PowerTwo[counter + 17];
         }
         if (counter % 8 < 6 && counter / 8 < 7)
         {
-            KnightAttackPlaces[counter] += Option::PowerTwo[counter + 10];
+            KnightAttackPlaces[counter] += EngineInitializer::PowerTwo[counter + 10];
         }
         if (counter % 8 < 6 && counter / 8 > 0)
         {
-            KnightAttackPlaces[counter] += Option::PowerTwo[counter - 6];
+            KnightAttackPlaces[counter] += EngineInitializer::PowerTwo[counter - 6];
         }
         if (counter % 8 < 7 && counter / 8 > 1)
         {
-            KnightAttackPlaces[counter] += Option::PowerTwo[counter - 15];
+            KnightAttackPlaces[counter] += EngineInitializer::PowerTwo[counter - 15];
         }
         if (counter % 8 > 0 && counter / 8 > 1)
         {
-            KnightAttackPlaces[counter] += Option::PowerTwo[counter - 17];
+            KnightAttackPlaces[counter] += EngineInitializer::PowerTwo[counter - 17];
         }
         if (counter % 8 > 1 && counter / 8 > 0)
         {
-            KnightAttackPlaces[counter] += Option::PowerTwo[counter - 10];
+            KnightAttackPlaces[counter] += EngineInitializer::PowerTwo[counter - 10];
         }
         if (counter % 8 > 1 && counter / 8 < 7)
         {
-            KnightAttackPlaces[counter] += Option::PowerTwo[counter + 6];
+            KnightAttackPlaces[counter] += EngineInitializer::PowerTwo[counter + 6];
         }
         if (counter % 8 > 0 && counter / 8 < 6)
         {
-            KnightAttackPlaces[counter] += Option::PowerTwo[counter + 15];
+            KnightAttackPlaces[counter] += EngineInitializer::PowerTwo[counter + 15];
         }
     }
 }
@@ -159,14 +159,14 @@ void AttackPlaces::SetBishopAttackPlaces()
                 {
                     for (int counter = 1; counter <= (endPlace / 8 - beginPlace / 8); counter++)
                     {
-                        BishopAttack[beginPlace][endPlace] += Option::PowerTwo[beginPlace + 7 * counter];
+                        BishopAttack[beginPlace][endPlace] += EngineInitializer::PowerTwo[beginPlace + 7 * counter];
                     }
                 }
                 else if (endPlace % 8 > beginPlace % 8 && (endPlace / 8 - beginPlace / 8) == (endPlace % 8 - beginPlace % 8))
                 {
                     for (int counter = 1; counter <= (endPlace / 8 - beginPlace / 8); counter++)
                     {
-                        BishopAttack[beginPlace][endPlace] += Option::PowerTwo[beginPlace + 9 * counter];
+                        BishopAttack[beginPlace][endPlace] += EngineInitializer::PowerTwo[beginPlace + 9 * counter];
                     }
                 }
             }
@@ -176,14 +176,14 @@ void AttackPlaces::SetBishopAttackPlaces()
                 {
                     for (int counter = 1; counter <= (beginPlace / 8 - endPlace / 8); counter++)
                     {
-                        BishopAttack[beginPlace][endPlace] += Option::PowerTwo[beginPlace - 9 * counter];
+                        BishopAttack[beginPlace][endPlace] += EngineInitializer::PowerTwo[beginPlace - 9 * counter];
                     }
                 }
                 else if (endPlace % 8 > beginPlace % 8 && (beginPlace / 8 - endPlace / 8) == (endPlace % 8 - beginPlace % 8))
                 {
                     for (int counter = 1; counter <= (beginPlace / 8 - endPlace / 8); counter++)
                     {
-                        BishopAttack[beginPlace][endPlace] += Option::PowerTwo[beginPlace - 7 * counter];
+                        BishopAttack[beginPlace][endPlace] += EngineInitializer::PowerTwo[beginPlace - 7 * counter];
                     }
                 }
             }
@@ -201,28 +201,28 @@ void AttackPlaces::SetRookAttackPlaces()
             {
                 for (int counter = 1; counter <= (endPlace / 8 - beginPlace / 8); counter++)
                 {
-                    RookAttack[beginPlace][endPlace] += Option::PowerTwo[beginPlace + 8 * counter];
+                    RookAttack[beginPlace][endPlace] += EngineInitializer::PowerTwo[beginPlace + 8 * counter];
                 }
             }
             if (endPlace > beginPlace && endPlace / 8 == beginPlace / 8)
             {
                 for (int counter = 1; counter <= (endPlace % 8 - beginPlace % 8); counter++)
                 {
-                    RookAttack[beginPlace][endPlace] += Option::PowerTwo[beginPlace + 1 * counter];
+                    RookAttack[beginPlace][endPlace] += EngineInitializer::PowerTwo[beginPlace + 1 * counter];
                 }
             }
             if (endPlace < beginPlace && endPlace % 8 == beginPlace % 8)
             {
                 for (int counter = 1; counter <= (beginPlace / 8 - endPlace / 8); counter++)
                 {
-                    RookAttack[beginPlace][endPlace] += Option::PowerTwo[beginPlace - 8 * counter];
+                    RookAttack[beginPlace][endPlace] += EngineInitializer::PowerTwo[beginPlace - 8 * counter];
                 }
             }
             if (endPlace < beginPlace && endPlace / 8 == beginPlace / 8)
             {
                 for (int counter = 1; counter <= (beginPlace % 8 - endPlace % 8); counter++)
                 {
-                    RookAttack[beginPlace][endPlace] += Option::PowerTwo[beginPlace - 1 * counter];
+                    RookAttack[beginPlace][endPlace] += EngineInitializer::PowerTwo[beginPlace - 1 * counter];
                 }
             }
         }
@@ -241,14 +241,14 @@ void AttackPlaces::SetQueenAttackPlaces()
                 {
                     for (int counter = 1; counter <= (endPlace / 8 - beginPlace / 8); counter++)
                     {
-                        QueenAttack[beginPlace][endPlace] += Option::PowerTwo[beginPlace + 7 * counter];
+                        QueenAttack[beginPlace][endPlace] += EngineInitializer::PowerTwo[beginPlace + 7 * counter];
                     }
                 }
                 else if (endPlace % 8 > beginPlace % 8 && (endPlace / 8 - beginPlace / 8) == (endPlace % 8 - beginPlace % 8))
                 {
                     for (int counter = 1; counter <= (endPlace / 8 - beginPlace / 8); counter++)
                     {
-                        QueenAttack[beginPlace][endPlace] += Option::PowerTwo[beginPlace + 9 * counter];
+                        QueenAttack[beginPlace][endPlace] += EngineInitializer::PowerTwo[beginPlace + 9 * counter];
                     }
                 }
             }
@@ -258,14 +258,14 @@ void AttackPlaces::SetQueenAttackPlaces()
                 {
                     for (int counter = 1; counter <= (beginPlace / 8 - endPlace / 8); counter++)
                     {
-                        QueenAttack[beginPlace][endPlace] += Option::PowerTwo[beginPlace - 9 * counter];
+                        QueenAttack[beginPlace][endPlace] += EngineInitializer::PowerTwo[beginPlace - 9 * counter];
                     }
                 }
                 else if (endPlace % 8 > beginPlace % 8 && (beginPlace / 8 - endPlace / 8) == (endPlace % 8 - beginPlace % 8))
                 {
                     for (int counter = 1; counter <= (beginPlace / 8 - endPlace / 8); counter++)
                     {
-                        QueenAttack[beginPlace][endPlace] += Option::PowerTwo[beginPlace - 7 * counter];
+                        QueenAttack[beginPlace][endPlace] += EngineInitializer::PowerTwo[beginPlace - 7 * counter];
                     }
                 }
             }
@@ -273,28 +273,28 @@ void AttackPlaces::SetQueenAttackPlaces()
             {
                 for (int counter = 1; counter <= (endPlace / 8 - beginPlace / 8); counter++)
                 {
-                    QueenAttack[beginPlace][endPlace] += Option::PowerTwo[beginPlace + 8 * counter];
+                    QueenAttack[beginPlace][endPlace] += EngineInitializer::PowerTwo[beginPlace + 8 * counter];
                 }
             }
             if (endPlace > beginPlace && endPlace / 8 == beginPlace / 8)
             {
                 for (int counter = 1; counter <= (endPlace % 8 - beginPlace % 8); counter++)
                 {
-                    QueenAttack[beginPlace][endPlace] += Option::PowerTwo[beginPlace + 1 * counter];
+                    QueenAttack[beginPlace][endPlace] += EngineInitializer::PowerTwo[beginPlace + 1 * counter];
                 }
             }
             if (endPlace < beginPlace && endPlace % 8 == beginPlace % 8)
             {
                 for (int counter = 1; counter <= (beginPlace / 8 - endPlace / 8); counter++)
                 {
-                    QueenAttack[beginPlace][endPlace] += Option::PowerTwo[beginPlace - 8 * counter];
+                    QueenAttack[beginPlace][endPlace] += EngineInitializer::PowerTwo[beginPlace - 8 * counter];
                 }
             }
             if (endPlace < beginPlace && endPlace / 8 == beginPlace / 8)
             {
                 for (int counter = 1; counter <= (beginPlace % 8 - endPlace % 8); counter++)
                 {
-                    QueenAttack[beginPlace][endPlace] += Option::PowerTwo[beginPlace - 1 * counter];
+                    QueenAttack[beginPlace][endPlace] += EngineInitializer::PowerTwo[beginPlace - 1 * counter];
                 }
             }
         }
@@ -328,7 +328,7 @@ void AttackPlaces::SetLineMasks()
                 int currR = r1 + stepR, currC = c1 + stepC;
                 while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8)
                 {
-                    mask |= Option::PowerTwo[currR * 8 + currC];
+                    mask |= EngineInitializer::PowerTwo[currR * 8 + currC];
                     currR += stepR;
                     currC += stepC;
                 }
@@ -337,11 +337,11 @@ void AttackPlaces::SetLineMasks()
                 currC = c1 - stepC;
                 while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8)
                 {
-                    mask |= Option::PowerTwo[currR * 8 + currC];
+                    mask |= EngineInitializer::PowerTwo[currR * 8 + currC];
                     currR -= stepR;
                     currC -= stepC;
                 }
-                mask |= Option::PowerTwo[sq1];
+                mask |= EngineInitializer::PowerTwo[sq1];
                 LineMask[sq1][sq2] = mask;
 
                 // Compute BetweenMask: strictly between sq1 and sq2 (exclusive of both)
@@ -349,7 +349,7 @@ void AttackPlaces::SetLineMasks()
                 int bR = r1 + stepR, bC = c1 + stepC;
                 while (bR != r2 || bC != c2)
                 {
-                    between |= Option::PowerTwo[bR * 8 + bC];
+                    between |= EngineInitializer::PowerTwo[bR * 8 + bC];
                     bR += stepR;
                     bC += stepC;
                 }

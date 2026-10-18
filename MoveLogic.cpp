@@ -8,7 +8,7 @@
 #include "Move.h"
 #include "Board.h"
 #include "Search.h"
-#include "Option.h"
+#include "EngineInitializer.h"
 #include "PieceMoves.h"
 #include "AttackPlaces.h"
 #include "GameLogic.h"
@@ -155,7 +155,7 @@ int NormalizeExchangePiece(int piece)
 bool PieceAttacksKing(int pieceType, bool whitePiece, int pieceSquare,
                       int kingSquare, long long occupancy)
 {
-    const long long kingBit = Option::PowerTwo[kingSquare];
+    const long long kingBit = EngineInitializer::PowerTwo[kingSquare];
     switch (pieceType)
     {
     case 1:
@@ -176,80 +176,6 @@ bool PieceAttacksKing(int pieceType, bool whitePiece, int pieceSquare,
     }
 }
 
-#if defined(HOWL_MOVE_WOULD_GIVE_CHECK_VERIFY) && HOWL_MOVE_WOULD_GIVE_CHECK_VERIFY
-bool LegacyMoveWouldGiveCheck(Board& board, const Move& move)
-{
-    const bool movingWhite = !board.sideToMove;
-    const int enemyKingIndex = movingWhite ? 14 : 6;
-    if (board.pieces[enemyKingIndex].count == 0)
-        return false;
-
-    const int enemyKingSquare = board.pieces[enemyKingIndex].front();
-    long long occupancy = board.whitePieces | board.blackPieces;
-    occupancy &= ~Option::PowerTwo[move.beginPlace];
-    occupancy |= Option::PowerTwo[move.endPlace];
-
-    if ((move.PublicFlag & Option::PowerTwo[6]) != 0)
-    {
-        const int capturedPawnSquare = move.endPlace + (movingWhite ? -8 : 8);
-        occupancy &= ~Option::PowerTwo[capturedPawnSquare];
-    }
-
-    int rookFrom = -1;
-    int rookTo = -1;
-    if ((move.CastleFlag & Option::PowerTwo[3]) != 0)
-    {
-        rookFrom = move.beginPlace + 3;
-        rookTo = move.beginPlace + 1;
-    }
-    else if ((move.CastleFlag & Option::PowerTwo[2]) != 0)
-    {
-        rookFrom = move.beginPlace - 4;
-        rookTo = move.beginPlace - 1;
-    }
-    else if ((move.CastleFlag & Option::PowerTwo[1]) != 0)
-    {
-        rookFrom = move.beginPlace + 3;
-        rookTo = move.beginPlace + 1;
-    }
-    else if ((move.CastleFlag & Option::PowerTwo[0]) != 0)
-    {
-        rookFrom = move.beginPlace - 4;
-        rookTo = move.beginPlace - 1;
-    }
-    if (rookFrom >= 0)
-    {
-        occupancy &= ~Option::PowerTwo[rookFrom];
-        occupancy |= Option::PowerTwo[rookTo];
-    }
-
-    const int pieceOffset = movingWhite ? 0 : 8;
-    for (int pieceType = 1; pieceType <= 6; ++pieceType)
-    {
-        for (int originalSquare : board.pieces[pieceType + pieceOffset])
-        {
-            int virtualSquare = originalSquare;
-            int virtualPieceType = pieceType;
-            if (originalSquare == move.beginPlace)
-            {
-                virtualSquare = move.endPlace;
-                if (move.promotionPiece > 0)
-                    virtualPieceType = NormalizeExchangePiece(move.promotionPiece);
-            }
-            else if (pieceType == 4 && originalSquare == rookFrom)
-            {
-                virtualSquare = rookTo;
-            }
-
-            if (PieceAttacksKing(virtualPieceType, movingWhite, virtualSquare,
-                                 enemyKingSquare, occupancy))
-                return true;
-        }
-    }
-    return false;
-}
-#endif
-
 bool PositionCoreMoveWouldGiveCheck(const Board& board, const Move& move)
 {
     const PositionCore& core = board.positionCore;
@@ -261,35 +187,35 @@ bool PositionCoreMoveWouldGiveCheck(const Board& board, const Move& move)
         return false;
 
     Bitboard occupancy = core.colourOccupancy[0] | core.colourOccupancy[1];
-    const Bitboard beginBit = static_cast<Bitboard>(Option::PowerTwo[move.beginPlace]);
-    const Bitboard endBit = static_cast<Bitboard>(Option::PowerTwo[move.endPlace]);
+    const Bitboard beginBit = static_cast<Bitboard>(EngineInitializer::PowerTwo[move.beginPlace]);
+    const Bitboard endBit = static_cast<Bitboard>(EngineInitializer::PowerTwo[move.endPlace]);
     occupancy &= ~beginBit;
     occupancy |= endBit;
 
-    if ((move.PublicFlag & Option::PowerTwo[6]) != 0)
+    if ((move.PublicFlag & EngineInitializer::PowerTwo[6]) != 0)
     {
         const int capturedPawnSquare = move.endPlace + (movingWhite ? -8 : 8);
-        occupancy &= ~static_cast<Bitboard>(Option::PowerTwo[capturedPawnSquare]);
+        occupancy &= ~static_cast<Bitboard>(EngineInitializer::PowerTwo[capturedPawnSquare]);
     }
 
     int rookFrom = -1;
     int rookTo = -1;
-    if ((move.CastleFlag & Option::PowerTwo[3]) != 0 ||
-        (move.CastleFlag & Option::PowerTwo[1]) != 0)
+    if ((move.CastleFlag & EngineInitializer::PowerTwo[3]) != 0 ||
+        (move.CastleFlag & EngineInitializer::PowerTwo[1]) != 0)
     {
         rookFrom = move.beginPlace + 3;
         rookTo = move.beginPlace + 1;
     }
-    else if ((move.CastleFlag & Option::PowerTwo[2]) != 0 ||
-             (move.CastleFlag & Option::PowerTwo[0]) != 0)
+    else if ((move.CastleFlag & EngineInitializer::PowerTwo[2]) != 0 ||
+             (move.CastleFlag & EngineInitializer::PowerTwo[0]) != 0)
     {
         rookFrom = move.beginPlace - 4;
         rookTo = move.beginPlace - 1;
     }
     if (rookFrom >= 0)
     {
-        occupancy &= ~static_cast<Bitboard>(Option::PowerTwo[rookFrom]);
-        occupancy |= static_cast<Bitboard>(Option::PowerTwo[rookTo]);
+        occupancy &= ~static_cast<Bitboard>(EngineInitializer::PowerTwo[rookFrom]);
+        occupancy |= static_cast<Bitboard>(EngineInitializer::PowerTwo[rookTo]);
     }
 
     Bitboard piecesAfterMove[6];
@@ -312,9 +238,9 @@ bool PositionCoreMoveWouldGiveCheck(const Board& board, const Move& move)
     if (rookFrom >= 0)
     {
         piecesAfterMove[3] &=
-            ~static_cast<Bitboard>(Option::PowerTwo[rookFrom]);
+            ~static_cast<Bitboard>(EngineInitializer::PowerTwo[rookFrom]);
         piecesAfterMove[3] |=
-            static_cast<Bitboard>(Option::PowerTwo[rookTo]);
+            static_cast<Bitboard>(EngineInitializer::PowerTwo[rookTo]);
     }
 
     for (int pieceType = 1; pieceType <= 6; ++pieceType)
@@ -333,35 +259,9 @@ bool PositionCoreMoveWouldGiveCheck(const Board& board, const Move& move)
     return false;
 }
 
-#if defined(HOWL_MOVE_WOULD_GIVE_CHECK_VERIFY) && HOWL_MOVE_WOULD_GIVE_CHECK_VERIFY
-[[noreturn]] void ReportMoveWouldGiveCheckMismatch(
-    const Board& board, const Move& move, bool legacyResult,
-    bool positionCoreResult)
-{
-    std::cerr << "MoveWouldGiveCheck mismatch: move="
-              << static_cast<char>('a' + move.beginPlace % 8)
-              << static_cast<char>('1' + move.beginPlace / 8)
-              << static_cast<char>('a' + move.endPlace % 8)
-              << static_cast<char>('1' + move.endPlace / 8)
-              << " from=" << int(move.beginPlace)
-              << " to=" << int(move.endPlace)
-              << " movingPiece=" << int(board.positionCore.pieceAt[move.beginPlace])
-              << " legacy=" << legacyResult
-              << " positionCore=" << positionCoreResult << '\n';
-    std::abort();
-}
-#endif
-
 bool MoveWouldGiveCheck(Board& board, const Move& move)
 {
-    const bool positionCoreResult = PositionCoreMoveWouldGiveCheck(board, move);
-#if defined(HOWL_MOVE_WOULD_GIVE_CHECK_VERIFY) && HOWL_MOVE_WOULD_GIVE_CHECK_VERIFY
-    const bool legacyResult = LegacyMoveWouldGiveCheck(board, move);
-    if (legacyResult != positionCoreResult)
-        ReportMoveWouldGiveCheckMismatch(
-            board, move, legacyResult, positionCoreResult);
-#endif
-    return positionCoreResult;
+    return PositionCoreMoveWouldGiveCheck(board, move);
 }
 
 std::uint64_t MakeExchangeKey(std::uint32_t attacker, std::uint32_t defender,
@@ -436,1747 +336,6 @@ MoveList MoveLogic::MoveGenerator(Board &thisBoard, int depth, int depthGone, bo
     return moveList;
 }
 
-#if defined(HOWL_MOVE_GENERATOR_INTO_VERIFY) && HOWL_MOVE_GENERATOR_INTO_VERIFY
-void MoveLogic::LegacyMoveGeneratorInto(Board &thisBoard, int depth, int depthGone, bool onlyCapturesAndChecks, bool scoreAndSort, const AttackerState& whiteAttacker, const AttackerState& blackAttacker, MoveList& moveList, bool includeQuietChecks)
-{
-    moveList.Clear();
-    if (Search::moveCount == 14962)
-    {
-        int x = 1;
-    }
-    long long whitePieces = thisBoard.whitePieces;
-    long long blackPieces = thisBoard.blackPieces;
-    int *mainBoard = thisBoard.mainBoard;
-    long long wholeBoard = whitePieces | blackPieces;
-
-    auto castleSquaresSafe = [&](bool white, int start, int transit, int destination)
-    {
-        const AttackerState opponentAttacks = white
-            ? SetBlackAttacker(thisBoard)
-            : SetWhiteAttacker(thisBoard);
-        return opponentAttacks.pieceCounts[start] == 0 &&
-               opponentAttacks.pieceCounts[transit] == 0 &&
-               opponentAttacks.pieceCounts[destination] == 0;
-    };
-
-    int enemyKingPos = -1;
-    long long enemyKingBit = 0;
-    long long friendlySliderRayMask = 0;
-    if (onlyCapturesAndChecks && includeQuietChecks)
-    {
-        int enemyKingIndex = (!thisBoard.sideToMove ? 14 : 6);
-        if (thisBoard.pieces[enemyKingIndex].count > 0)
-        {
-            enemyKingPos = thisBoard.pieces[enemyKingIndex].front();
-            enemyKingBit = Option::PowerTwo[enemyKingPos];
-            int offset = (!thisBoard.sideToMove ? 0 : 8);
-            for (int p = 3; p <= 5; ++p)
-            {
-                for (int pos : thisBoard.pieces[p + offset])
-                {
-                    friendlySliderRayMask |= AttackPlaces::LineMask[pos][enemyKingPos];
-                }
-            }
-        }
-    }
-
-    if (!thisBoard.sideToMove)
-    {
-        for (int pieceCounter = 1; pieceCounter < 7; pieceCounter++)
-        {
-            int piece = pieceMoveStack[pieceCounter];
-            switch (piece)
-            {
-            case 1:
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
-                    if (PieceMoves::WhitePawnMoves[piecePosition][0] != nullptr)
-                    {
-                        int endPlace = piecePosition + 16;
-                        if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || ((AttackPlaces::WhitePawnAttackPlaces[endPlace] & enemyKingBit) != 0 && (whiteAttacker.pieceCounts[endPlace] != 0 || endPlace >= 40)))))
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][0]);
-                            if ((PieceMoves::pawnTwoMove[piecePosition] & wholeBoard) == 0)
-                            {
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                                newMove->value = ExchangeWithoutBeginPiece(whiteAttacker.pieceCounts[newMove->endPlace], blackAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                    }
-                    if (PieceMoves::WhitePawnMoves[piecePosition][1] != nullptr && (Option::PowerTwo[piecePosition + 8] & wholeBoard) == 0)
-                    {
-                        int endPlace = piecePosition + 8;
-                        if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || ((AttackPlaces::WhitePawnAttackPlaces[endPlace] & enemyKingBit) != 0 && (whiteAttacker.pieceCounts[endPlace] != 0 || endPlace >= 40)))))
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][1]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            newMove->value = ExchangeWithoutBeginPiece(whiteAttacker.pieceCounts[newMove->endPlace], blackAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
-                        }
-                    }
-                    if (PieceMoves::WhitePawnMoves[piecePosition][2] != nullptr && (Option::PowerTwo[piecePosition + 8] & wholeBoard) == 0)
-                    {
-                        for (int i = 2; i <= 5; i++)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][i]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            newMove->value = ExchangeWithoutBeginPiece(whiteAttacker.pieceCounts[newMove->endPlace], blackAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 5 - (i - 2));
-                        }
-                    }
-                    if (PieceMoves::WhitePawnMoves[piecePosition][6] != nullptr && piecePosition + 7 == thisBoard.unpassentPlace)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][6]);
-                        newMove->endPiece = 9;
-                    }
-                    if (PieceMoves::WhitePawnMoves[piecePosition][7] != nullptr && piecePosition + 9 == thisBoard.unpassentPlace)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][7]);
-                        newMove->endPiece = 9;
-                    }
-                    if (PieceMoves::WhitePawnMoves[piecePosition][8] != nullptr && (Option::PowerTwo[piecePosition + 7] & blackPieces) != 0)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][8]);
-                        newMove->endPiece = mainBoard[newMove->endPlace];
-                    }
-                    if (PieceMoves::WhitePawnMoves[piecePosition][9] != nullptr && (Option::PowerTwo[piecePosition + 7] & blackPieces) != 0)
-                    {
-                        for (int i = 9; i <= 12; i++)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][i]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    if (PieceMoves::WhitePawnMoves[piecePosition][13] != nullptr && (Option::PowerTwo[piecePosition + 9] & blackPieces) != 0)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][13]);
-                        newMove->endPiece = mainBoard[newMove->endPlace];
-                    }
-                    if (PieceMoves::WhitePawnMoves[piecePosition][14] != nullptr && (Option::PowerTwo[piecePosition + 9] & blackPieces) != 0)
-                    {
-                        for (int i = 14; i <= 17; i++)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][i]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                }
-                break;
-            case 2:
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
-                    int endPlace = piecePosition + 17;
-                    if (PieceMoves::KnightMoves[piecePosition][0] != nullptr)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][0]);
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][1]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition + 10;
-                    if (PieceMoves::KnightMoves[piecePosition][2] != nullptr)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][2]);
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][3]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition + 15;
-                    if (PieceMoves::KnightMoves[piecePosition][4] != nullptr)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][4]);
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][5]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition + 6;
-                    if (PieceMoves::KnightMoves[piecePosition][6] != nullptr)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][6]);
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][7]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition - 10;
-                    if (PieceMoves::KnightMoves[piecePosition][8] != nullptr)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][8]);
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][9]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition - 17;
-                    if (PieceMoves::KnightMoves[piecePosition][10] != nullptr)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][10]);
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][11]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition - 15;
-                    if (PieceMoves::KnightMoves[piecePosition][12] != nullptr)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][12]);
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][13]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition - 6;
-                    if (PieceMoves::KnightMoves[piecePosition][14] != nullptr)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][14]);
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][15]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                }
-                break;
-            case 3:
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
-                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][0].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][0][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][1][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][2].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][2][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][3][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][4].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][4][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][5][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][6].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][6][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][7][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                }
-                break;
-            case 4:
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
-                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][0].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][0][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][1][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][2].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][2][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][3][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][4].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][4][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][5][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][6].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][6][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][7][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                }
-                break;
-            case 5:
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][0].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][0][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][1][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][2].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][2][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][3][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][4].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][4][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][5][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][6].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][6][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][7][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][8].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][8][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][9][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][10].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][10][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][11][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][12].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][12][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][13][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][14].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][14][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][15][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                }
-                break;
-            case 6:
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
-                    int endPlace;
-                    endPlace = piecePosition + 7;
-                    if (PieceMoves::WhiteKingMoves[piecePosition][0] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][0]);
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][1]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition + 8;
-                    if (PieceMoves::WhiteKingMoves[piecePosition][2] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][2]);
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][3]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition + 9;
-                    if (PieceMoves::WhiteKingMoves[piecePosition][4] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][4]);
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][5]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition + 1;
-                    if (PieceMoves::WhiteKingMoves[piecePosition][6] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][6]);
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][7]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition - 7;
-                    if (PieceMoves::WhiteKingMoves[piecePosition][8] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][8]);
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][9]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition - 8;
-                    if (PieceMoves::WhiteKingMoves[piecePosition][10] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][10]);
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][11]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition - 9;
-                    if (PieceMoves::WhiteKingMoves[piecePosition][12] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][12]);
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][13]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition - 1;
-                    if (PieceMoves::WhiteKingMoves[piecePosition][14] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][14]);
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][15]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    if (thisBoard.whiteSmallCastle && (!onlyCapturesAndChecks || (includeQuietChecks && (AttackPlaces::LineMask[5][enemyKingPos] != 0 || AttackPlaces::LineMask[6][enemyKingPos] != 0))) && castleSquaresSafe(true, 4, 5, 6) && mainBoard[5] == 0 && mainBoard[6] == 0)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][16]);
-                        newMove->value = 50;
-                    }
-                    if (thisBoard.whiteBigCastle && (!onlyCapturesAndChecks || (includeQuietChecks && (AttackPlaces::LineMask[3][enemyKingPos] != 0 || AttackPlaces::LineMask[2][enemyKingPos] != 0))) && castleSquaresSafe(true, 4, 3, 2) && mainBoard[3] == 0 && mainBoard[2] == 0 && mainBoard[1] == 0)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][17]);
-                        newMove->value = 50;
-                    }
-                }
-                break;
-            }
-        }
-    }
-    else
-    {
-        for (int pieceCounter = 9; pieceCounter < 15; pieceCounter++)
-        {
-            int piece = pieceMoveStack[pieceCounter];
-            switch (piece)
-            {
-            case 9:
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
-                    int exchangeInPlace = -ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[piecePosition], whiteAttacker.pieceCounts[piecePosition], piecePosition, piece - 8, 0, 0);
-                    if (PieceMoves::BlackPawnMoves[piecePosition][0] != nullptr)
-                    {
-                        int endPlace = piecePosition - 16;
-                        if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || ((AttackPlaces::BlackPawnAttackPlaces[endPlace] & enemyKingBit) != 0 && (blackAttacker.pieceCounts[endPlace] != 0 || endPlace <= 23)))))
-                        {
-                            if ((PieceMoves::pawnTwoMove[piecePosition] & wholeBoard) == 0)
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][0]);
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                                newMove->value = ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[newMove->endPlace], whiteAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
-                            }
-                        }
-                    }
-                    if (PieceMoves::BlackPawnMoves[piecePosition][1] != nullptr && (Option::PowerTwo[piecePosition - 8] & wholeBoard) == 0)
-                    {
-                        int endPlace = piecePosition - 8;
-                        if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || ((AttackPlaces::BlackPawnAttackPlaces[endPlace] & enemyKingBit) != 0 && (blackAttacker.pieceCounts[endPlace] != 0 || endPlace <= 23)))))
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][1]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            newMove->value = ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[newMove->endPlace], whiteAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
-                        }
-                    }
-                    if (PieceMoves::BlackPawnMoves[piecePosition][2] != nullptr && (Option::PowerTwo[piecePosition - 8] & wholeBoard) == 0)
-                    {
-                        for (int i = 2; i <= 5; i++)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][i]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            newMove->value = ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[newMove->endPlace], whiteAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 5 - (i - 2));
-                        }
-                    }
-                    if (PieceMoves::BlackPawnMoves[piecePosition][6] != nullptr && piecePosition - 7 == thisBoard.unpassentPlace)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][6]);
-                        newMove->endPiece = 1;
-                    }
-                    if (PieceMoves::BlackPawnMoves[piecePosition][7] != nullptr && piecePosition - 9 == thisBoard.unpassentPlace)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][7]);
-                        newMove->endPiece = 1;
-                    }
-                    if (PieceMoves::BlackPawnMoves[piecePosition][8] != nullptr && (Option::PowerTwo[piecePosition - 7] & whitePieces) != 0)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][8]);
-                        newMove->endPiece = mainBoard[newMove->endPlace];
-                    }
-                    if (PieceMoves::BlackPawnMoves[piecePosition][9] != nullptr && (Option::PowerTwo[piecePosition - 7] & whitePieces) != 0)
-                    {
-                        for (int i = 9; i <= 12; i++)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][i]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    if (PieceMoves::BlackPawnMoves[piecePosition][13] != nullptr && (Option::PowerTwo[piecePosition - 9] & whitePieces) != 0)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][13]);
-                        newMove->endPiece = mainBoard[newMove->endPlace];
-                    }
-                    if (PieceMoves::BlackPawnMoves[piecePosition][14] != nullptr && (Option::PowerTwo[piecePosition - 9] & whitePieces) != 0)
-                    {
-                        for (int i = 14; i <= 17; i++)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][i]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                }
-                break;
-            case 10:
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
-                    int endPlace = piecePosition + 17;
-                    if (PieceMoves::KnightMoves[piecePosition][0] != nullptr)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][0]);
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][1]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition + 10;
-                    if (PieceMoves::KnightMoves[piecePosition][2] != nullptr)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][2]);
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][3]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition + 15;
-                    if (PieceMoves::KnightMoves[piecePosition][4] != nullptr)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][4]);
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][5]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition + 6;
-                    if (PieceMoves::KnightMoves[piecePosition][6] != nullptr)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][6]);
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][7]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition - 10;
-                    if (PieceMoves::KnightMoves[piecePosition][8] != nullptr)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][8]);
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][9]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition - 17;
-                    if (PieceMoves::KnightMoves[piecePosition][10] != nullptr)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][10]);
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][11]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition - 15;
-                    if (PieceMoves::KnightMoves[piecePosition][12] != nullptr)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][12]);
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][13]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition - 6;
-                    if (PieceMoves::KnightMoves[piecePosition][14] != nullptr)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][14]);
-                                newMove->endPiece = mainBoard[newMove->endPlace];
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][15]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                }
-                break;
-            case 11:
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
-                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][0].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][0][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][1][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][2].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][2][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][3][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][4].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][4][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][5][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][6].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][6][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][7][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                }
-                break;
-            case 12:
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
-                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][0].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][0][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][1][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][2].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][2][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][3][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][4].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][4][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][5][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][6].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][6][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][7][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                }
-                break;
-            case 13:
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][0].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][0][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][1][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][2].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][2][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][3][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][4].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][4][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][5][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][6].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][6][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][7][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][8].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][8][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][9][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][10].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][10][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][11][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][12].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][12][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][13][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                    for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][14].size(); counter++)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][14][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
-                            {
-                            }
-                            else
-                            {
-                                moveList.Discard(newMove);
-                                newMove = nullptr;
-                            }
-                        }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
-                        {
-                            moveList.Discard(newMove);
-                            newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][15][counter]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                            break;
-                        }
-                        else
-                        {
-                            moveList.Discard(newMove);
-                            newMove = nullptr;
-                            break;
-                        }
-                    }
-                }
-                break;
-            case 14:
-                for (int piecePosition : thisBoard.pieces[piece])
-                {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
-                    int endPlace;
-                    endPlace = piecePosition + 7;
-                    if (PieceMoves::BlackKingMoves[piecePosition][0] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][0]);
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][1]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition + 8;
-                    if (PieceMoves::BlackKingMoves[piecePosition][2] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][2]);
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][3]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition + 9;
-                    if (PieceMoves::BlackKingMoves[piecePosition][4] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][4]);
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][5]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition + 1;
-                    if (PieceMoves::BlackKingMoves[piecePosition][6] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][6]);
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][7]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition - 7;
-                    if (PieceMoves::BlackKingMoves[piecePosition][8] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][8]);
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][9]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition - 8;
-                    if (PieceMoves::BlackKingMoves[piecePosition][10] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][10]);
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][11]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition - 9;
-                    if (PieceMoves::BlackKingMoves[piecePosition][12] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][12]);
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][13]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    endPlace = piecePosition - 1;
-                    if (PieceMoves::BlackKingMoves[piecePosition][14] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
-                    {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
-                        {
-                            if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
-                            {
-                                Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][14]);
-                            }
-                        }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
-                        {
-                            Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][15]);
-                            newMove->endPiece = mainBoard[newMove->endPlace];
-                        }
-                    }
-                    if (thisBoard.blackSmallCastle && (!onlyCapturesAndChecks || (includeQuietChecks && (AttackPlaces::LineMask[61][enemyKingPos] != 0 || AttackPlaces::LineMask[62][enemyKingPos] != 0))) && castleSquaresSafe(false, 60, 61, 62) && mainBoard[61] == 0 && mainBoard[62] == 0)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][16]);
-                        newMove->value = 25;
-                    }
-                    if (thisBoard.blackBigCastle && (!onlyCapturesAndChecks || (includeQuietChecks && (AttackPlaces::LineMask[59][enemyKingPos] != 0 || AttackPlaces::LineMask[58][enemyKingPos] != 0))) && castleSquaresSafe(false, 60, 59, 58) && mainBoard[59] == 0 && mainBoard[58] == 0 && mainBoard[57] == 0)
-                    {
-                        Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][17]);
-                        newMove->value = 25;
-                    }
-                }
-                break;
-            }
-        }
-    }
-    // --- END REPLACEMENT OF VECTOR USAGE ---
-
-    if (!onlyCapturesAndChecks && scoreAndSort)
-    {
-        for (int i = 0; i < moveList.count; ++i)
-            moveList[i].givesCheck = MoveWouldGiveCheck(thisBoard, moveList[i]);
-    }
-
-    if (scoreAndSort)
-    {
-        ScoreAndSortMoves(thisBoard, moveList, depth, depthGone, whiteAttacker, blackAttacker);
-    }
-}
-
-
-#endif
-
 void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int depthGone, bool onlyCapturesAndChecks, bool scoreAndSort, const AttackerState& whiteAttacker, const AttackerState& blackAttacker, MoveList& moveList, bool includeQuietChecks)
 {
     moveList.Clear();
@@ -2212,7 +371,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
         if (!positionCorePieceLists[enemyKingIndex].empty())
         {
             enemyKingPos = positionCorePieceLists[enemyKingIndex].front();
-            enemyKingBit = Option::PowerTwo[enemyKingPos];
+            enemyKingBit = EngineInitializer::PowerTwo[enemyKingPos];
             int offset = (!core.sideToMove ? 0 : 8);
             for (int p = 3; p <= 5; ++p)
             {
@@ -2234,7 +393,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
             case 1:
                 for (int piecePosition : positionCorePieceLists[piece])
                 {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    bool srcOnRay = (EngineInitializer::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     if (PieceMoves::WhitePawnMoves[piecePosition][0] != nullptr)
                     {
                         int endPlace = piecePosition + 16;
@@ -2253,7 +412,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                             }
                         }
                     }
-                    if (PieceMoves::WhitePawnMoves[piecePosition][1] != nullptr && (Option::PowerTwo[piecePosition + 8] & wholeBoard) == 0)
+                    if (PieceMoves::WhitePawnMoves[piecePosition][1] != nullptr && (EngineInitializer::PowerTwo[piecePosition + 8] & wholeBoard) == 0)
                     {
                         int endPlace = piecePosition + 8;
                         if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || ((AttackPlaces::WhitePawnAttackPlaces[endPlace] & enemyKingBit) != 0 && (whiteAttacker.pieceCounts[endPlace] != 0 || endPlace >= 40)))))
@@ -2263,7 +422,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                             newMove->value = ExchangeWithoutBeginPiece(whiteAttacker.pieceCounts[newMove->endPlace], blackAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
                         }
                     }
-                    if (PieceMoves::WhitePawnMoves[piecePosition][2] != nullptr && (Option::PowerTwo[piecePosition + 8] & wholeBoard) == 0)
+                    if (PieceMoves::WhitePawnMoves[piecePosition][2] != nullptr && (EngineInitializer::PowerTwo[piecePosition + 8] & wholeBoard) == 0)
                     {
                         for (int i = 2; i <= 5; i++)
                         {
@@ -2282,12 +441,12 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                         Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][7]);
                         newMove->endPiece = 9;
                     }
-                    if (PieceMoves::WhitePawnMoves[piecePosition][8] != nullptr && (Option::PowerTwo[piecePosition + 7] & blackPieces) != 0)
+                    if (PieceMoves::WhitePawnMoves[piecePosition][8] != nullptr && (EngineInitializer::PowerTwo[piecePosition + 7] & blackPieces) != 0)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][8]);
                         newMove->endPiece = mainBoard[newMove->endPlace];
                     }
-                    if (PieceMoves::WhitePawnMoves[piecePosition][9] != nullptr && (Option::PowerTwo[piecePosition + 7] & blackPieces) != 0)
+                    if (PieceMoves::WhitePawnMoves[piecePosition][9] != nullptr && (EngineInitializer::PowerTwo[piecePosition + 7] & blackPieces) != 0)
                     {
                         for (int i = 9; i <= 12; i++)
                         {
@@ -2295,12 +454,12 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                             newMove->endPiece = mainBoard[newMove->endPlace];
                         }
                     }
-                    if (PieceMoves::WhitePawnMoves[piecePosition][13] != nullptr && (Option::PowerTwo[piecePosition + 9] & blackPieces) != 0)
+                    if (PieceMoves::WhitePawnMoves[piecePosition][13] != nullptr && (EngineInitializer::PowerTwo[piecePosition + 9] & blackPieces) != 0)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::WhitePawnMoves[piecePosition][13]);
                         newMove->endPiece = mainBoard[newMove->endPlace];
                     }
-                    if (PieceMoves::WhitePawnMoves[piecePosition][14] != nullptr && (Option::PowerTwo[piecePosition + 9] & blackPieces) != 0)
+                    if (PieceMoves::WhitePawnMoves[piecePosition][14] != nullptr && (EngineInitializer::PowerTwo[piecePosition + 9] & blackPieces) != 0)
                     {
                         for (int i = 14; i <= 17; i++)
                         {
@@ -2313,11 +472,11 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
             case 2:
                 for (int piecePosition : positionCorePieceLists[piece])
                 {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    bool srcOnRay = (EngineInitializer::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     int endPlace = piecePosition + 17;
                     if (PieceMoves::KnightMoves[piecePosition][0] != nullptr)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
                             {
@@ -2325,7 +484,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove->endPiece = mainBoard[newMove->endPlace];
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & blackPieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][1]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -2334,7 +493,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition + 10;
                     if (PieceMoves::KnightMoves[piecePosition][2] != nullptr)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
                             {
@@ -2342,7 +501,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove->endPiece = mainBoard[newMove->endPlace];
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & blackPieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][3]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -2351,7 +510,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition + 15;
                     if (PieceMoves::KnightMoves[piecePosition][4] != nullptr)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
                             {
@@ -2359,7 +518,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove->endPiece = mainBoard[newMove->endPlace];
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & blackPieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][5]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -2368,7 +527,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition + 6;
                     if (PieceMoves::KnightMoves[piecePosition][6] != nullptr)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
                             {
@@ -2376,7 +535,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove->endPiece = mainBoard[newMove->endPlace];
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & blackPieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][7]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -2385,7 +544,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition - 10;
                     if (PieceMoves::KnightMoves[piecePosition][8] != nullptr)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
                             {
@@ -2393,7 +552,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove->endPiece = mainBoard[newMove->endPlace];
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & blackPieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][9]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -2402,7 +561,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition - 17;
                     if (PieceMoves::KnightMoves[piecePosition][10] != nullptr)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
                             {
@@ -2410,7 +569,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove->endPiece = mainBoard[newMove->endPlace];
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & blackPieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][11]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -2419,7 +578,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition - 15;
                     if (PieceMoves::KnightMoves[piecePosition][12] != nullptr)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
                             {
@@ -2427,7 +586,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove->endPiece = mainBoard[newMove->endPlace];
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & blackPieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][13]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -2436,7 +595,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition - 6;
                     if (PieceMoves::KnightMoves[piecePosition][14] != nullptr)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
                             {
@@ -2444,7 +603,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove->endPiece = mainBoard[newMove->endPlace];
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & blackPieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][15]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -2455,11 +614,11 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
             case 3:
                 for (int piecePosition : positionCorePieceLists[piece])
                 {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    bool srcOnRay = (EngineInitializer::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][0].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][0][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -2470,7 +629,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][1][counter]);
@@ -2487,7 +646,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][2].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][2][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -2498,7 +657,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][3][counter]);
@@ -2515,7 +674,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][4].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][4][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -2526,7 +685,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][5][counter]);
@@ -2543,7 +702,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][6].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][6][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -2554,7 +713,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][7][counter]);
@@ -2573,11 +732,11 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
             case 4:
                 for (int piecePosition : positionCorePieceLists[piece])
                 {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    bool srcOnRay = (EngineInitializer::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][0].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][0][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -2588,7 +747,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][1][counter]);
@@ -2605,7 +764,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][2].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][2][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -2616,7 +775,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][3][counter]);
@@ -2633,7 +792,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][4].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][4][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -2644,7 +803,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][5][counter]);
@@ -2661,7 +820,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][6].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][6][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -2672,7 +831,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][7][counter]);
@@ -2691,11 +850,11 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
             case 5:
                 for (int piecePosition : positionCorePieceLists[piece])
                 {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    bool srcOnRay = (EngineInitializer::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][0].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][0][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -2706,7 +865,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][1][counter]);
@@ -2723,7 +882,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][2].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][2][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -2734,7 +893,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][3][counter]);
@@ -2751,7 +910,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][4].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][4][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -2762,7 +921,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][5][counter]);
@@ -2779,7 +938,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][6].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][6][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -2790,7 +949,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][7][counter]);
@@ -2807,7 +966,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][8].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][8][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -2818,7 +977,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][9][counter]);
@@ -2835,7 +994,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][10].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][10][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -2846,7 +1005,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][11][counter]);
@@ -2863,7 +1022,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][12].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][12][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -2874,7 +1033,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][13][counter]);
@@ -2891,7 +1050,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][14].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][14][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && blackAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -2902,7 +1061,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & blackPieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][15][counter]);
@@ -2921,19 +1080,19 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
             case 6:
                 for (int piecePosition : positionCorePieceLists[piece])
                 {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    bool srcOnRay = (EngineInitializer::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     int endPlace;
                     endPlace = piecePosition + 7;
                     if (PieceMoves::WhiteKingMoves[piecePosition][0] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
                             {
                                 Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][0]);
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & blackPieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][1]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -2942,14 +1101,14 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition + 8;
                     if (PieceMoves::WhiteKingMoves[piecePosition][2] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
                             {
                                 Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][2]);
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & blackPieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][3]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -2958,14 +1117,14 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition + 9;
                     if (PieceMoves::WhiteKingMoves[piecePosition][4] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
                             {
                                 Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][4]);
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & blackPieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][5]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -2974,14 +1133,14 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition + 1;
                     if (PieceMoves::WhiteKingMoves[piecePosition][6] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
                             {
                                 Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][6]);
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & blackPieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][7]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -2990,14 +1149,14 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition - 7;
                     if (PieceMoves::WhiteKingMoves[piecePosition][8] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
                             {
                                 Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][8]);
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & blackPieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][9]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3006,14 +1165,14 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition - 8;
                     if (PieceMoves::WhiteKingMoves[piecePosition][10] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
                             {
                                 Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][10]);
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & blackPieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][11]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3022,14 +1181,14 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition - 9;
                     if (PieceMoves::WhiteKingMoves[piecePosition][12] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
                             {
                                 Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][12]);
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & blackPieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][13]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3038,14 +1197,14 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition - 1;
                     if (PieceMoves::WhiteKingMoves[piecePosition][14] != nullptr && blackAttacker.pieceCounts[endPlace] == 0)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
                             {
                                 Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][14]);
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & blackPieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & blackPieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::WhiteKingMoves[piecePosition][15]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3076,7 +1235,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
             case 9:
                 for (int piecePosition : positionCorePieceLists[piece])
                 {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    bool srcOnRay = (EngineInitializer::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     int exchangeInPlace = -ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[piecePosition], whiteAttacker.pieceCounts[piecePosition], piecePosition, piece - 8, 0, 0);
                     if (PieceMoves::BlackPawnMoves[piecePosition][0] != nullptr)
                     {
@@ -3091,7 +1250,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                             }
                         }
                     }
-                    if (PieceMoves::BlackPawnMoves[piecePosition][1] != nullptr && (Option::PowerTwo[piecePosition - 8] & wholeBoard) == 0)
+                    if (PieceMoves::BlackPawnMoves[piecePosition][1] != nullptr && (EngineInitializer::PowerTwo[piecePosition - 8] & wholeBoard) == 0)
                     {
                         int endPlace = piecePosition - 8;
                         if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || ((AttackPlaces::BlackPawnAttackPlaces[endPlace] & enemyKingBit) != 0 && (blackAttacker.pieceCounts[endPlace] != 0 || endPlace <= 23)))))
@@ -3101,7 +1260,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                             newMove->value = ExchangeWithoutBeginPiece(blackAttacker.pieceCounts[newMove->endPlace], whiteAttacker.pieceCounts[newMove->endPlace], newMove->endPlace, 1, mainBoard[newMove->endPlace], 0);
                         }
                     }
-                    if (PieceMoves::BlackPawnMoves[piecePosition][2] != nullptr && (Option::PowerTwo[piecePosition - 8] & wholeBoard) == 0)
+                    if (PieceMoves::BlackPawnMoves[piecePosition][2] != nullptr && (EngineInitializer::PowerTwo[piecePosition - 8] & wholeBoard) == 0)
                     {
                         for (int i = 2; i <= 5; i++)
                         {
@@ -3120,12 +1279,12 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                         Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][7]);
                         newMove->endPiece = 1;
                     }
-                    if (PieceMoves::BlackPawnMoves[piecePosition][8] != nullptr && (Option::PowerTwo[piecePosition - 7] & whitePieces) != 0)
+                    if (PieceMoves::BlackPawnMoves[piecePosition][8] != nullptr && (EngineInitializer::PowerTwo[piecePosition - 7] & whitePieces) != 0)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][8]);
                         newMove->endPiece = mainBoard[newMove->endPlace];
                     }
-                    if (PieceMoves::BlackPawnMoves[piecePosition][9] != nullptr && (Option::PowerTwo[piecePosition - 7] & whitePieces) != 0)
+                    if (PieceMoves::BlackPawnMoves[piecePosition][9] != nullptr && (EngineInitializer::PowerTwo[piecePosition - 7] & whitePieces) != 0)
                     {
                         for (int i = 9; i <= 12; i++)
                         {
@@ -3133,12 +1292,12 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                             newMove->endPiece = mainBoard[newMove->endPlace];
                         }
                     }
-                    if (PieceMoves::BlackPawnMoves[piecePosition][13] != nullptr && (Option::PowerTwo[piecePosition - 9] & whitePieces) != 0)
+                    if (PieceMoves::BlackPawnMoves[piecePosition][13] != nullptr && (EngineInitializer::PowerTwo[piecePosition - 9] & whitePieces) != 0)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::BlackPawnMoves[piecePosition][13]);
                         newMove->endPiece = mainBoard[newMove->endPlace];
                     }
-                    if (PieceMoves::BlackPawnMoves[piecePosition][14] != nullptr && (Option::PowerTwo[piecePosition - 9] & whitePieces) != 0)
+                    if (PieceMoves::BlackPawnMoves[piecePosition][14] != nullptr && (EngineInitializer::PowerTwo[piecePosition - 9] & whitePieces) != 0)
                     {
                         for (int i = 14; i <= 17; i++)
                         {
@@ -3151,11 +1310,11 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
             case 10:
                 for (int piecePosition : positionCorePieceLists[piece])
                 {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    bool srcOnRay = (EngineInitializer::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     int endPlace = piecePosition + 17;
                     if (PieceMoves::KnightMoves[piecePosition][0] != nullptr)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
                             {
@@ -3163,7 +1322,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove->endPiece = mainBoard[newMove->endPlace];
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & whitePieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][1]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3172,7 +1331,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition + 10;
                     if (PieceMoves::KnightMoves[piecePosition][2] != nullptr)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
                             {
@@ -3180,7 +1339,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove->endPiece = mainBoard[newMove->endPlace];
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & whitePieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][3]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3189,7 +1348,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition + 15;
                     if (PieceMoves::KnightMoves[piecePosition][4] != nullptr)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
                             {
@@ -3197,7 +1356,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove->endPiece = mainBoard[newMove->endPlace];
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & whitePieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][5]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3206,7 +1365,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition + 6;
                     if (PieceMoves::KnightMoves[piecePosition][6] != nullptr)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
                             {
@@ -3214,7 +1373,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove->endPiece = mainBoard[newMove->endPlace];
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & whitePieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][7]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3223,7 +1382,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition - 10;
                     if (PieceMoves::KnightMoves[piecePosition][8] != nullptr)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
                             {
@@ -3231,7 +1390,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove->endPiece = mainBoard[newMove->endPlace];
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & whitePieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][9]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3240,7 +1399,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition - 17;
                     if (PieceMoves::KnightMoves[piecePosition][10] != nullptr)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
                             {
@@ -3248,7 +1407,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove->endPiece = mainBoard[newMove->endPlace];
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & whitePieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][11]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3257,7 +1416,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition - 15;
                     if (PieceMoves::KnightMoves[piecePosition][12] != nullptr)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
                             {
@@ -3265,7 +1424,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove->endPiece = mainBoard[newMove->endPlace];
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & whitePieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][13]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3274,7 +1433,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition - 6;
                     if (PieceMoves::KnightMoves[piecePosition][14] != nullptr)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::KnightAttackPlaces[endPlace] & enemyKingBit) != 0)))
                             {
@@ -3282,7 +1441,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove->endPiece = mainBoard[newMove->endPlace];
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & whitePieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::KnightMoves[piecePosition][15]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3293,11 +1452,11 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
             case 11:
                 for (int piecePosition : positionCorePieceLists[piece])
                 {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    bool srcOnRay = (EngineInitializer::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][0].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][0][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -3308,7 +1467,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][1][counter]);
@@ -3325,7 +1484,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][2].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][2][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -3336,7 +1495,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][3][counter]);
@@ -3353,7 +1512,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][4].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][4][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -3364,7 +1523,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][5][counter]);
@@ -3381,7 +1540,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][6].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][6][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -3392,7 +1551,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::BishopMoves[piecePosition][7][counter]);
@@ -3411,11 +1570,11 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
             case 12:
                 for (int piecePosition : positionCorePieceLists[piece])
                 {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    bool srcOnRay = (EngineInitializer::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][0].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][0][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -3426,7 +1585,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][1][counter]);
@@ -3443,7 +1602,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][2].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][2][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -3454,7 +1613,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][3][counter]);
@@ -3471,7 +1630,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][4].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][4][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -3482,7 +1641,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][5][counter]);
@@ -3499,7 +1658,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][6].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][6][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -3510,7 +1669,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::RookMoves[piecePosition][7][counter]);
@@ -3529,11 +1688,11 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
             case 13:
                 for (int piecePosition : positionCorePieceLists[piece])
                 {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    bool srcOnRay = (EngineInitializer::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][0].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][0][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -3544,7 +1703,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][1][counter]);
@@ -3561,7 +1720,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][2].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][2][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -3572,7 +1731,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][3][counter]);
@@ -3589,7 +1748,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][4].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][4][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -3600,7 +1759,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][5][counter]);
@@ -3617,7 +1776,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][6].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][6][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -3628,7 +1787,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][7][counter]);
@@ -3645,7 +1804,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][8].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][8][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -3656,7 +1815,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][9][counter]);
@@ -3673,7 +1832,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][10].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][10][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -3684,7 +1843,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][11][counter]);
@@ -3701,7 +1860,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][12].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][12][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -3712,7 +1871,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][13][counter]);
@@ -3729,7 +1888,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][14].size(); counter++)
                     {
                         Move *newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][14][counter]);
-                        if ((Option::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[newMove->endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay || (AttackPlaces::LineMask[newMove->endPlace][enemyKingPos] != 0 && whiteAttacker.pieceCounts[newMove->endPlace] != 0))))
                             {
@@ -3740,7 +1899,7 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                                 newMove = nullptr;
                             }
                         }
-                        else if ((Option::PowerTwo[newMove->endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[newMove->endPlace] & whitePieces) != 0)
                         {
                             moveList.Discard(newMove);
                             newMove = moveList.AppendCopy(PieceMoves::QueenMoves[piecePosition][15][counter]);
@@ -3759,19 +1918,19 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
             case 14:
                 for (int piecePosition : positionCorePieceLists[piece])
                 {
-                    bool srcOnRay = (Option::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
+                    bool srcOnRay = (EngineInitializer::PowerTwo[piecePosition] & friendlySliderRayMask) != 0;
                     int endPlace;
                     endPlace = piecePosition + 7;
                     if (PieceMoves::BlackKingMoves[piecePosition][0] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
                             {
                                 Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][0]);
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & whitePieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][1]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3780,14 +1939,14 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition + 8;
                     if (PieceMoves::BlackKingMoves[piecePosition][2] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
                             {
                                 Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][2]);
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & whitePieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][3]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3796,14 +1955,14 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition + 9;
                     if (PieceMoves::BlackKingMoves[piecePosition][4] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
                             {
                                 Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][4]);
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & whitePieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][5]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3812,14 +1971,14 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition + 1;
                     if (PieceMoves::BlackKingMoves[piecePosition][6] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
                             {
                                 Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][6]);
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & whitePieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][7]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3828,14 +1987,14 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition - 7;
                     if (PieceMoves::BlackKingMoves[piecePosition][8] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
                             {
                                 Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][8]);
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & whitePieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][9]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3844,14 +2003,14 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition - 8;
                     if (PieceMoves::BlackKingMoves[piecePosition][10] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
                             {
                                 Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][10]);
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & whitePieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][11]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3860,14 +2019,14 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition - 9;
                     if (PieceMoves::BlackKingMoves[piecePosition][12] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
                             {
                                 Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][12]);
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & whitePieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][13]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3876,14 +2035,14 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
                     endPlace = piecePosition - 1;
                     if (PieceMoves::BlackKingMoves[piecePosition][14] != nullptr && whiteAttacker.pieceCounts[endPlace] == 0)
                     {
-                        if ((Option::PowerTwo[endPlace] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[endPlace] & wholeBoard) == 0)
                         {
                             if (!onlyCapturesAndChecks || (includeQuietChecks && (srcOnRay)))
                             {
                                 Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][14]);
                             }
                         }
-                        else if ((Option::PowerTwo[endPlace] & whitePieces) != 0)
+                        else if ((EngineInitializer::PowerTwo[endPlace] & whitePieces) != 0)
                         {
                             Move *newMove = moveList.AppendCopy(PieceMoves::BlackKingMoves[piecePosition][15]);
                             newMove->endPiece = mainBoard[newMove->endPlace];
@@ -3919,118 +2078,15 @@ void MoveLogic::PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int d
 }
 
 
-#if defined(HOWL_MOVE_GENERATOR_INTO_VERIFY) && HOWL_MOVE_GENERATOR_INTO_VERIFY
-bool SameGeneratedMove(const Move& left, const Move& right)
-{
-    return left.beginPlace == right.beginPlace &&
-           left.endPlace == right.endPlace &&
-           left.endPiece == right.endPiece &&
-           left.promotionPiece == right.promotionPiece &&
-           left.CastleFlag == right.CastleFlag &&
-           left.PublicFlag == right.PublicFlag &&
-           left.unpassentPlace == right.unpassentPlace &&
-           left.givesCheck == right.givesCheck &&
-           left.givesCheckComputed == right.givesCheckComputed &&
-           left.isRefuteWithoutNullMove == right.isRefuteWithoutNullMove &&
-           left.pad == right.pad &&
-           left.value == right.value;
-}
-
-bool SameGeneratedMoveSet(const MoveList& left, const MoveList& right, int& mismatch)
-{
-    if (left.count != right.count)
-    {
-        mismatch = 0;
-        return false;
-    }
-    bool matched[MoveList::Capacity] = {};
-    for (int i = 0; i < left.count; ++i)
-    {
-        int match = -1;
-        for (int j = 0; j < right.count; ++j)
-            if (!matched[j] && SameGeneratedMove(left[i], right[j]))
-            {
-                match = j;
-                break;
-            }
-        if (match < 0)
-        {
-            mismatch = i;
-            return false;
-        }
-        matched[match] = true;
-    }
-    return true;
-}
-
-[[noreturn]] void ReportMoveGeneratorMismatch(
-    const Board& board, int depth, int depthGone,
-    bool onlyCapturesAndChecks, bool scoreAndSort, bool includeQuietChecks,
-    const MoveList& legacyList, const MoveList& positionCoreList, int index)
-{
-    const Move* legacyMove = index < legacyList.count ? &legacyList[index] : nullptr;
-    const Move* positionCoreMove =
-        index < positionCoreList.count ? &positionCoreList[index] : nullptr;
-    std::cerr << "MoveGeneratorInto mismatch: hash=" << board.ZobristHashCode
-              << " side=" << int(board.positionCore.sideToMove)
-              << " depth=" << depth
-              << " depthGone=" << depthGone
-              << " onlyCapturesAndChecks=" << onlyCapturesAndChecks
-              << " scoreAndSort=" << scoreAndSort
-              << " includeQuietChecks=" << includeQuietChecks
-              << " index=" << index
-              << " legacyCount=" << legacyList.count
-              << " positionCoreCount=" << positionCoreList.count << '\n';
-    if (legacyMove != nullptr)
-        std::cerr << " legacy=" << int(legacyMove->beginPlace) << '-' << int(legacyMove->endPlace)
-                  << " endPiece=" << int(legacyMove->endPiece)
-                  << " promotion=" << int(legacyMove->promotionPiece)
-                  << " publicFlags=" << int(static_cast<unsigned char>(legacyMove->PublicFlag))
-                  << " castleFlags=" << int(static_cast<unsigned char>(legacyMove->CastleFlag))
-                  << " value=" << legacyMove->value << '\n';
-    if (positionCoreMove != nullptr)
-        std::cerr << " positionCore=" << int(positionCoreMove->beginPlace) << '-' << int(positionCoreMove->endPlace)
-                  << " endPiece=" << int(positionCoreMove->endPiece)
-                  << " promotion=" << int(positionCoreMove->promotionPiece)
-                  << " publicFlags=" << int(static_cast<unsigned char>(positionCoreMove->PublicFlag))
-                  << " castleFlags=" << int(static_cast<unsigned char>(positionCoreMove->CastleFlag))
-                  << " value=" << positionCoreMove->value << '\n';
-    std::abort();
-}
-#endif
-
 void MoveLogic::MoveGeneratorInto(Board &thisBoard, int depth, int depthGone,
                                   bool onlyCapturesAndChecks, bool scoreAndSort,
                                   const AttackerState& whiteAttacker,
                                   const AttackerState& blackAttacker,
                                   MoveList& moveList, bool includeQuietChecks)
 {
-#if defined(HOWL_MOVE_GENERATOR_INTO_VERIFY) && HOWL_MOVE_GENERATOR_INTO_VERIFY
-    MoveList legacyList;
-    MoveList positionCoreList;
-    LegacyMoveGeneratorInto(thisBoard, depth, depthGone, onlyCapturesAndChecks,
-                            scoreAndSort, whiteAttacker, blackAttacker,
-                            legacyList, includeQuietChecks);
-    PositionCoreMoveGeneratorInto(thisBoard, depth, depthGone, onlyCapturesAndChecks,
-                                  scoreAndSort, whiteAttacker, blackAttacker,
-                                  positionCoreList, includeQuietChecks);
-    if (legacyList.count != positionCoreList.count)
-        ReportMoveGeneratorMismatch(thisBoard, depth, depthGone,
-                                    onlyCapturesAndChecks, scoreAndSort,
-                                    includeQuietChecks, legacyList,
-                                    positionCoreList, 0);
-    int mismatch = 0;
-    if (!SameGeneratedMoveSet(legacyList, positionCoreList, mismatch))
-        ReportMoveGeneratorMismatch(thisBoard, depth, depthGone,
-                                    onlyCapturesAndChecks, scoreAndSort,
-                                    includeQuietChecks, legacyList,
-                                    positionCoreList, mismatch);
-    moveList = positionCoreList;
-#else
     PositionCoreMoveGeneratorInto(thisBoard, depth, depthGone, onlyCapturesAndChecks,
                                   scoreAndSort, whiteAttacker, blackAttacker,
                                   moveList, includeQuietChecks);
-#endif
 }
 
 void MoveLogic::ScoreAndSortMoves(Board& thisBoard, MoveList& moveList, int depth, int depthGone, const AttackerState& whiteAttacker, const AttackerState& blackAttacker)
@@ -4053,14 +2109,14 @@ void MoveLogic::ScoreMove(Board& thisBoard, Move& move, const AttackerState& whi
         int beginPiece = mainBoard[move.beginPlace] % 8;
         move.value = MoveLogic::Exchange(blackAttacker.pieceCounts[move.endPlace], whiteAttacker.pieceCounts[move.endPlace], move.endPlace, beginPiece, move.endPiece, move.promotionPiece);
         move.value += whiteAttacker.orderingScores[move.beginPlace] + whiteAttacker.orderingScores[move.endPlace];
-        move.value += Option::MoveOrderingValueBlack[state][beginPiece][move.endPlace];
+        move.value += EngineInitializer::MoveOrderingValueBlack[state][beginPiece][move.endPlace];
     }
     else
     {
         int beginPiece = mainBoard[move.beginPlace];
         move.value = MoveLogic::Exchange(whiteAttacker.pieceCounts[move.endPlace], blackAttacker.pieceCounts[move.endPlace], move.endPlace, beginPiece, move.endPiece % 8, move.promotionPiece);
         move.value += blackAttacker.orderingScores[move.beginPlace] + blackAttacker.orderingScores[move.endPlace];
-        move.value += Option::MoveOrderingValueWhite[state][beginPiece][move.endPlace];
+        move.value += EngineInitializer::MoveOrderingValueWhite[state][beginPiece][move.endPlace];
     }
 }
 
@@ -4081,7 +2137,7 @@ inline bool SeeAttacks(int piece, int from, int target, std::uint64_t occupancy)
 {
     const bool white = piece < 8;
     const int type = NormalizeExchangePiece(piece);
-    const std::uint64_t targetBit = Option::PowerTwo[target];
+    const std::uint64_t targetBit = EngineInitializer::PowerTwo[target];
     switch (type)
     {
     case 1: return ((white ? AttackPlaces::WhitePawnAttackPlaces[from]
@@ -4111,16 +2167,16 @@ struct SeePosition
     inline void remove(int piece, int square)
     {
         if (!piece) return;
-        pieceBoards[piece] &= ~Option::PowerTwo[square];
+        pieceBoards[piece] &= ~EngineInitializer::PowerTwo[square];
         pieces[square] = 0;
-        occupancy &= ~Option::PowerTwo[square];
+        occupancy &= ~EngineInitializer::PowerTwo[square];
     }
 
     inline void add(int piece, int square)
     {
-        pieceBoards[piece] |= Option::PowerTwo[square];
+        pieceBoards[piece] |= EngineInitializer::PowerTwo[square];
         pieces[square] = piece;
-        occupancy |= Option::PowerTwo[square];
+        occupancy |= EngineInitializer::PowerTwo[square];
     }
 };
 
@@ -4224,60 +2280,6 @@ int SeeExchangeKernel(SeePosition& position, int target, bool white)
 }
 }
 
-#if defined(HOWL_SEE_VERIFY) && HOWL_SEE_VERIFY
-bool MoveLogic::LegacySEE_GE(Board& board, Move& move, int threshold)
-{
-    const bool white = !board.sideToMove;
-    const bool enPassant = (move.PublicFlag & Option::PowerTwo[6]) != 0;
-    const int movingPiece = board.mainBoard[move.beginPlace];
-    const int capturedPiece = enPassant
-        ? board.mainBoard[move.endPlace + (white ? -8 : 8)]
-        : board.mainBoard[move.endPlace];
-    const int capturedValue = SafeSeeValue(capturedPiece);
-    const int promotedNorm = move.promotionPiece > 0
-        ? NormalizeExchangePiece(move.promotionPiece) : NormalizeExchangePiece(movingPiece);
-    const int promotionGain = (move.promotionPiece > 0)
-        ? (SeeValue[promotedNorm] - SeeValue[1]) : 0;
-    const int initialGain = capturedValue + promotionGain;
-
-    // Early threshold cutoff: if even capturing without any counter-captures cannot reach threshold,
-    // we can immediately reject without building SeePosition.
-    if (initialGain < threshold)
-        return false;
-
-    SeePosition position;
-    for (int p = 1; p <= 14; ++p)
-    {
-        for (int i = 0; i < board.pieces[p].count; ++i)
-        {
-            const int sq = board.pieces[p].data[i];
-            position.add(p, sq);
-        }
-    }
-    position.kingSquare[0] = board.pieces[6].count > 0 ? board.pieces[6].front() : -1;
-    position.kingSquare[1] = board.pieces[14].count > 0 ? board.pieces[14].front() : -1;
-
-
-    position.remove(movingPiece, move.beginPlace);
-    if (enPassant)
-    {
-        const int capturedSquare = move.endPlace + (white ? -8 : 8);
-        position.remove(capturedPiece, capturedSquare);
-    }
-    else
-        position.remove(capturedPiece, move.endPlace);
-    const int resultPiece = white ? promotedNorm : promotedNorm + 8;
-    position.add(resultPiece, move.endPlace);
-    if (NormalizeExchangePiece(movingPiece) == 6)
-        position.kingSquare[white ? 0 : 1] = move.endPlace;
-    const int kingSquare = position.kingSquare[white ? 0 : 1];
-    if (kingSquare >= 0 && SeeSquareAttacked(position, kingSquare, !white))
-        return false;
-    const int exchange = SeeExchangeKernel(position, move.endPlace, !white);
-    return initialGain - exchange >= threshold;
-}
-#endif
-
 namespace
 {
 void InitializeSeePositionFromCore(SeePosition& position, const PositionCore& core)
@@ -4299,7 +2301,7 @@ bool MoveLogic::PositionCoreSEE_GE(Board& board, Move& move, int threshold)
 {
     const PositionCore& core = board.positionCore;
     const bool white = core.sideToMove == 0;
-    const bool enPassant = (move.PublicFlag & Option::PowerTwo[6]) != 0;
+    const bool enPassant = (move.PublicFlag & EngineInitializer::PowerTwo[6]) != 0;
     const int movingPiece = core.pieceAt[move.beginPlace];
     const int capturedSquare = enPassant
         ? move.endPlace + (white ? -8 : 8) : move.endPlace;
@@ -4334,20 +2336,7 @@ bool MoveLogic::PositionCoreSEE_GE(Board& board, Move& move, int threshold)
 
 bool MoveLogic::SEE_GE(Board& board, Move& move, int threshold)
 {
-#if defined(HOWL_SEE_VERIFY) && HOWL_SEE_VERIFY
-    const bool legacy = LegacySEE_GE(board, move, threshold);
-    const bool core = PositionCoreSEE_GE(board, move, threshold);
-    if (legacy != core)
-    {
-        std::cerr << "SEE_GE mismatch move=" << int(move.beginPlace) << '-'
-                  << int(move.endPlace) << " threshold=" << threshold
-                  << " legacy=" << legacy << " core=" << core << '\n';
-        std::abort();
-    }
-    return core;
-#else
     return PositionCoreSEE_GE(board, move, threshold);
-#endif
 }
 
 MoveList MoveLogic::QSearchStage1Generator(Board &thisBoard, int depth, int depthGone, DeferredMove* deferredMoves, int& deferredCount, const Move& prevMove, bool includeQuietChecks, bool deepResolution)
@@ -4460,13 +2449,13 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
                     Move* tm = PieceMoves::KnightMoves[pos][i * 2];
                     if (!tm) continue;
                     int dest = tm->endPlace;
-                    if ((Option::PowerTwo[dest] & wholeBoard) == 0)
+                    if ((EngineInitializer::PowerTwo[dest] & wholeBoard) == 0)
                     {
                         Move m = *tm;
                         m.endPiece = 0;
                         if (isLegal(m)) return true;
                     }
-                    else if ((Option::PowerTwo[dest] & enemyPieces) != 0)
+                    else if ((EngineInitializer::PowerTwo[dest] & enemyPieces) != 0)
                     {
                         Move m = *PieceMoves::KnightMoves[pos][i * 2 + 1];
                         m.endPiece = mainBoard[dest];
@@ -4490,7 +2479,7 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
                     for (size_t c = 0; c < quietVec.size(); ++c)
                     {
                         int dest = quietVec[c]->endPlace;
-                        if ((Option::PowerTwo[dest] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[dest] & wholeBoard) == 0)
                         {
                             Move m = *quietVec[c];
                             m.endPiece = 0;
@@ -4498,7 +2487,7 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
                         }
                         else
                         {
-                            if ((Option::PowerTwo[dest] & enemyPieces) != 0)
+                            if ((EngineInitializer::PowerTwo[dest] & enemyPieces) != 0)
                             {
                                 Move m = *capVec[c];
                                 m.endPiece = mainBoard[dest];
@@ -4525,7 +2514,7 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
                     for (size_t c = 0; c < quietVec.size(); ++c)
                     {
                         int dest = quietVec[c]->endPlace;
-                        if ((Option::PowerTwo[dest] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[dest] & wholeBoard) == 0)
                         {
                             Move m = *quietVec[c];
                             m.endPiece = 0;
@@ -4533,7 +2522,7 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
                         }
                         else
                         {
-                            if ((Option::PowerTwo[dest] & enemyPieces) != 0)
+                            if ((EngineInitializer::PowerTwo[dest] & enemyPieces) != 0)
                             {
                                 Move m = *capVec[c];
                                 m.endPiece = mainBoard[dest];
@@ -4560,7 +2549,7 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
                     for (size_t c = 0; c < quietVec.size(); ++c)
                     {
                         int dest = quietVec[c]->endPlace;
-                        if ((Option::PowerTwo[dest] & wholeBoard) == 0)
+                        if ((EngineInitializer::PowerTwo[dest] & wholeBoard) == 0)
                         {
                             Move m = *quietVec[c];
                             m.endPiece = 0;
@@ -4568,7 +2557,7 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
                         }
                         else
                         {
-                            if ((Option::PowerTwo[dest] & enemyPieces) != 0)
+                            if ((EngineInitializer::PowerTwo[dest] & enemyPieces) != 0)
                             {
                                 Move m = *capVec[c];
                                 m.endPiece = mainBoard[dest];
@@ -4591,13 +2580,13 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
                     m.endPiece = 0;
                     if (isLegal(m)) return true;
                 }
-                if (PieceMoves::WhitePawnMoves[pos][1] != nullptr && (Option::PowerTwo[pos + 8] & wholeBoard) == 0)
+                if (PieceMoves::WhitePawnMoves[pos][1] != nullptr && (EngineInitializer::PowerTwo[pos + 8] & wholeBoard) == 0)
                 {
                     Move m = *PieceMoves::WhitePawnMoves[pos][1];
                     m.endPiece = 0;
                     if (isLegal(m)) return true;
                 }
-                if (PieceMoves::WhitePawnMoves[pos][2] != nullptr && (Option::PowerTwo[pos + 8] & wholeBoard) == 0)
+                if (PieceMoves::WhitePawnMoves[pos][2] != nullptr && (EngineInitializer::PowerTwo[pos + 8] & wholeBoard) == 0)
                 {
                     for (int i = 2; i <= 5; ++i)
                     {
@@ -4618,13 +2607,13 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
                     m.endPiece = 9;
                     if (isLegal(m)) return true;
                 }
-                if (PieceMoves::WhitePawnMoves[pos][8] != nullptr && (Option::PowerTwo[pos + 7] & enemyPieces) != 0)
+                if (PieceMoves::WhitePawnMoves[pos][8] != nullptr && (EngineInitializer::PowerTwo[pos + 7] & enemyPieces) != 0)
                 {
                     Move m = *PieceMoves::WhitePawnMoves[pos][8];
                     m.endPiece = mainBoard[pos + 7];
                     if (isLegal(m)) return true;
                 }
-                if (PieceMoves::WhitePawnMoves[pos][9] != nullptr && (Option::PowerTwo[pos + 7] & enemyPieces) != 0)
+                if (PieceMoves::WhitePawnMoves[pos][9] != nullptr && (EngineInitializer::PowerTwo[pos + 7] & enemyPieces) != 0)
                 {
                     for (int i = 9; i <= 12; ++i)
                     {
@@ -4633,13 +2622,13 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
                         if (isLegal(m)) return true;
                     }
                 }
-                if (PieceMoves::WhitePawnMoves[pos][13] != nullptr && (Option::PowerTwo[pos + 9] & enemyPieces) != 0)
+                if (PieceMoves::WhitePawnMoves[pos][13] != nullptr && (EngineInitializer::PowerTwo[pos + 9] & enemyPieces) != 0)
                 {
                     Move m = *PieceMoves::WhitePawnMoves[pos][13];
                     m.endPiece = mainBoard[pos + 9];
                     if (isLegal(m)) return true;
                 }
-                if (PieceMoves::WhitePawnMoves[pos][14] != nullptr && (Option::PowerTwo[pos + 9] & enemyPieces) != 0)
+                if (PieceMoves::WhitePawnMoves[pos][14] != nullptr && (EngineInitializer::PowerTwo[pos + 9] & enemyPieces) != 0)
                 {
                     for (int i = 14; i <= 17; ++i)
                     {
@@ -4661,13 +2650,13 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
                     m.endPiece = 0;
                     if (isLegal(m)) return true;
                 }
-                if (PieceMoves::BlackPawnMoves[pos][1] != nullptr && (Option::PowerTwo[pos - 8] & wholeBoard) == 0)
+                if (PieceMoves::BlackPawnMoves[pos][1] != nullptr && (EngineInitializer::PowerTwo[pos - 8] & wholeBoard) == 0)
                 {
                     Move m = *PieceMoves::BlackPawnMoves[pos][1];
                     m.endPiece = 0;
                     if (isLegal(m)) return true;
                 }
-                if (PieceMoves::BlackPawnMoves[pos][2] != nullptr && (Option::PowerTwo[pos - 8] & wholeBoard) == 0)
+                if (PieceMoves::BlackPawnMoves[pos][2] != nullptr && (EngineInitializer::PowerTwo[pos - 8] & wholeBoard) == 0)
                 {
                     for (int i = 2; i <= 5; ++i)
                     {
@@ -4688,13 +2677,13 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
                     m.endPiece = 1;
                     if (isLegal(m)) return true;
                 }
-                if (PieceMoves::BlackPawnMoves[pos][8] != nullptr && (Option::PowerTwo[pos - 7] & enemyPieces) != 0)
+                if (PieceMoves::BlackPawnMoves[pos][8] != nullptr && (EngineInitializer::PowerTwo[pos - 7] & enemyPieces) != 0)
                 {
                     Move m = *PieceMoves::BlackPawnMoves[pos][8];
                     m.endPiece = mainBoard[pos - 7];
                     if (isLegal(m)) return true;
                 }
-                if (PieceMoves::BlackPawnMoves[pos][9] != nullptr && (Option::PowerTwo[pos - 7] & enemyPieces) != 0)
+                if (PieceMoves::BlackPawnMoves[pos][9] != nullptr && (EngineInitializer::PowerTwo[pos - 7] & enemyPieces) != 0)
                 {
                     for (int i = 9; i <= 12; ++i)
                     {
@@ -4703,13 +2692,13 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
                         if (isLegal(m)) return true;
                     }
                 }
-                if (PieceMoves::BlackPawnMoves[pos][13] != nullptr && (Option::PowerTwo[pos - 9] & enemyPieces) != 0)
+                if (PieceMoves::BlackPawnMoves[pos][13] != nullptr && (EngineInitializer::PowerTwo[pos - 9] & enemyPieces) != 0)
                 {
                     Move m = *PieceMoves::BlackPawnMoves[pos][13];
                     m.endPiece = mainBoard[pos - 9];
                     if (isLegal(m)) return true;
                 }
-                if (PieceMoves::BlackPawnMoves[pos][14] != nullptr && (Option::PowerTwo[pos - 9] & enemyPieces) != 0)
+                if (PieceMoves::BlackPawnMoves[pos][14] != nullptr && (EngineInitializer::PowerTwo[pos - 9] & enemyPieces) != 0)
                 {
                     for (int i = 14; i <= 17; ++i)
                     {
@@ -4733,13 +2722,13 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
                     Move* tm = kingMoves[i * 2];
                     if (!tm) continue;
                     int dest = tm->endPlace;
-                    if ((Option::PowerTwo[dest] & wholeBoard) == 0)
+                    if ((EngineInitializer::PowerTwo[dest] & wholeBoard) == 0)
                     {
                         Move m = *tm;
                         m.endPiece = 0;
                         if (isLegal(m)) return true;
                     }
-                    else if ((Option::PowerTwo[dest] & enemyPieces) != 0)
+                    else if ((EngineInitializer::PowerTwo[dest] & enemyPieces) != 0)
                     {
                         Move m = *kingMoves[i * 2 + 1];
                         m.endPiece = mainBoard[dest];
@@ -4799,853 +2788,6 @@ bool MoveLogic::HasAnyLegalMove(Board &thisBoard, const Move& prevMove, int dept
 // NOTE: You must also replace all Moves->push_back and ComplicatedMoves->push_back in the body with the array logic as described above.
 // The rest of the function logic remains the same, just replace vector operations with array operations.
 
-#if defined(HOWL_ATTACKER_VERIFY) && HOWL_ATTACKER_VERIFY
-AttackerState MoveLogic::LegacySetWhiteAttacker(Board &thisBoard)
-{
-    AttackerState whiteAttacker;
-    long long whitePieces = thisBoard.whitePieces;
-    long long blackPieces = thisBoard.blackPieces;
-    int *mainBoard = thisBoard.mainBoard;
-    long long wholeBoard = whitePieces | blackPieces;
-
-    for (int piece = 6; piece > 0; piece--)
-    {
-        switch (piece)
-        {
-        case 6:
-            for (int piecePosition : thisBoard.pieces[piece])
-            {
-                int endPlace = piecePosition + 7;
-                if (PieceMoves::WhiteKingMoves[piecePosition][0] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 6);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-
-                endPlace = piecePosition + 8;
-                if (PieceMoves::WhiteKingMoves[piecePosition][2] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 6);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-
-                endPlace = piecePosition + 9;
-                if (PieceMoves::WhiteKingMoves[piecePosition][4] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 6);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-
-                endPlace = piecePosition + 1;
-                if (PieceMoves::WhiteKingMoves[piecePosition][6] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 6);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-
-                endPlace = piecePosition - 7;
-                if (PieceMoves::WhiteKingMoves[piecePosition][8] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 6);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-
-                endPlace = piecePosition - 8;
-                if (PieceMoves::WhiteKingMoves[piecePosition][10] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 6);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-
-                endPlace = piecePosition - 9;
-                if (PieceMoves::WhiteKingMoves[piecePosition][12] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 6);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-
-                endPlace = piecePosition - 1;
-                if (PieceMoves::WhiteKingMoves[piecePosition][14] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 6);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-            }
-            break;
-        case 5:
-            for (int piecePosition : thisBoard.pieces[piece])
-            {
-                for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][0].size(); counter++)
-                {
-                    int endPos = PieceMoves::QueenMoves[piecePosition][0][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
-                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-
-                for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][2].size(); counter++)
-                {
-                    int endPos = PieceMoves::QueenMoves[piecePosition][2][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
-                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-
-                for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][4].size(); counter++)
-                {
-                    int endPos = PieceMoves::QueenMoves[piecePosition][4][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
-                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-
-                for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][6].size(); counter++)
-                {
-                    int endPos = PieceMoves::QueenMoves[piecePosition][6][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
-                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-
-                for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][8].size(); counter++)
-                {
-                    int endPos = PieceMoves::QueenMoves[piecePosition][8][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
-                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-
-                for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][10].size(); counter++)
-                {
-                    int endPos = PieceMoves::QueenMoves[piecePosition][10][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
-                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-
-                for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][12].size(); counter++)
-                {
-                    int endPos = PieceMoves::QueenMoves[piecePosition][12][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
-                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-
-                for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][14].size(); counter++)
-                {
-                    int endPos = PieceMoves::QueenMoves[piecePosition][14][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 5);
-                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-            }
-            break;
-        case 4:
-            for (int piecePosition : thisBoard.pieces[piece])
-            {
-                for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][0].size(); counter++)
-                {
-                    int endPos = PieceMoves::RookMoves[piecePosition][0][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 4);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 4);
-                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-
-                for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][2].size(); counter++)
-                {
-                    int endPos = PieceMoves::RookMoves[piecePosition][2][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 4);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 4);
-                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-
-                for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][4].size(); counter++)
-                {
-                    int endPos = PieceMoves::RookMoves[piecePosition][4][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 4);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 4);
-                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-
-                for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][6].size(); counter++)
-                {
-                    int endPos = PieceMoves::RookMoves[piecePosition][6][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 4);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 4);
-                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-            }
-            break;
-
-        case 3:
-            for (int piecePosition : thisBoard.pieces[piece])
-            {
-                for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][0].size(); counter++)
-                {
-                    int endPos = PieceMoves::BishopMoves[piecePosition][0][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 3);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 3);
-                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-
-                for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][2].size(); counter++)
-                {
-                    int endPos = PieceMoves::BishopMoves[piecePosition][2][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 3);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 3);
-                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-
-                for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][4].size(); counter++)
-                {
-                    int endPos = PieceMoves::BishopMoves[piecePosition][4][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 3);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 3);
-                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-
-                for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][6].size(); counter++)
-                {
-                    int endPos = PieceMoves::BishopMoves[piecePosition][6][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 3);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(whiteAttacker.pieceCounts[endPos], 3);
-                        whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        whiteAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-            }
-            break;
-
-        case 2:
-            for (int piecePosition : thisBoard.pieces[piece])
-            {
-                int endPlace = piecePosition + 17;
-                if (PieceMoves::KnightMoves[piecePosition][0] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 2);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition + 10;
-                if (PieceMoves::KnightMoves[piecePosition][2] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 2);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition + 15;
-                if (PieceMoves::KnightMoves[piecePosition][4] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 2);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition + 6;
-                if (PieceMoves::KnightMoves[piecePosition][6] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 2);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition - 10;
-                if (PieceMoves::KnightMoves[piecePosition][8] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 2);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition - 17;
-                if (PieceMoves::KnightMoves[piecePosition][10] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 2);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition - 15;
-                if (PieceMoves::KnightMoves[piecePosition][12] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 2);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition - 6;
-                if (PieceMoves::KnightMoves[piecePosition][14] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[endPlace], 2);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    whiteAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-            }
-            break;
-
-        case 1:
-            for (int piecePosition : thisBoard.pieces[piece])
-            {
-                if (PieceMoves::WhitePawnMoves[piecePosition][8] != nullptr || PieceMoves::WhitePawnMoves[piecePosition][9] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[piecePosition + 7], 1);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[piecePosition + 7]];
-                    whiteAttacker.orderingScores[piecePosition + 7] += Option::AttackValueMovement[piece][mainBoard[piecePosition + 7]];
-                }
-                if (PieceMoves::WhitePawnMoves[piecePosition][13] != nullptr || PieceMoves::WhitePawnMoves[piecePosition][14] != nullptr)
-                {
-                    AddPackedAttacker(whiteAttacker.pieceCounts[piecePosition + 9], 1);
-                    whiteAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[piecePosition + 9]];
-                    whiteAttacker.orderingScores[piecePosition + 9] += Option::AttackValueMovement[piece][mainBoard[piecePosition + 9]];
-                }
-            }
-            break;
-        }
-    }
-    return whiteAttacker;
-}
-
-AttackerState MoveLogic::LegacySetBlackAttacker(Board &thisBoard)
-{
-    AttackerState blackAttacker;
-    long long whitePieces = thisBoard.whitePieces;
-    long long blackPieces = thisBoard.blackPieces;
-    int *mainBoard = thisBoard.mainBoard;
-    long long wholeBoard = whitePieces | blackPieces;
-
-    for (int piece = 14; piece > 8; piece--)
-    {
-        switch (piece)
-        {
-        case 14:
-            for (int piecePosition : thisBoard.pieces[piece])
-            {
-                int endPlace = piecePosition + 7;
-                if (PieceMoves::BlackKingMoves[piecePosition][0] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 6);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition + 8;
-                if (PieceMoves::BlackKingMoves[piecePosition][2] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 6);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition + 9;
-                if (PieceMoves::BlackKingMoves[piecePosition][4] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 6);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition + 1;
-                if (PieceMoves::BlackKingMoves[piecePosition][6] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 6);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition - 7;
-                if (PieceMoves::BlackKingMoves[piecePosition][8] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 6);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition - 8;
-                if (PieceMoves::BlackKingMoves[piecePosition][10] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 6);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition - 9;
-                if (PieceMoves::BlackKingMoves[piecePosition][12] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 6);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition - 1;
-                if (PieceMoves::BlackKingMoves[piecePosition][14] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 6);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-            }
-            break;
-        case 13:
-            for (int piecePosition : thisBoard.pieces[piece])
-            {
-                for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][0].size(); counter++)
-                {
-                    int endPos = PieceMoves::QueenMoves[piecePosition][0][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
-                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-                for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][2].size(); counter++)
-                {
-                    int endPos = PieceMoves::QueenMoves[piecePosition][2][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
-                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-                for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][4].size(); counter++)
-                {
-                    int endPos = PieceMoves::QueenMoves[piecePosition][4][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
-                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-                for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][6].size(); counter++)
-                {
-                    int endPos = PieceMoves::QueenMoves[piecePosition][6][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
-                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-                for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][8].size(); counter++)
-                {
-                    int endPos = PieceMoves::QueenMoves[piecePosition][8][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
-                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-                for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][10].size(); counter++)
-                {
-                    int endPos = PieceMoves::QueenMoves[piecePosition][10][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
-                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-                for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][12].size(); counter++)
-                {
-                    int endPos = PieceMoves::QueenMoves[piecePosition][12][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
-                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-                for (int counter = 0; counter < PieceMoves::QueenMoves[piecePosition][14].size(); counter++)
-                {
-                    int endPos = PieceMoves::QueenMoves[piecePosition][14][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 5);
-                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-            }
-            break;
-        case 12:
-            for (int piecePosition : thisBoard.pieces[piece])
-            {
-                for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][0].size(); counter++)
-                {
-                    int endPos = PieceMoves::RookMoves[piecePosition][0][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 4);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 4);
-                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-                for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][2].size(); counter++)
-                {
-                    int endPos = PieceMoves::RookMoves[piecePosition][2][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 4);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 4);
-                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-                for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][4].size(); counter++)
-                {
-                    int endPos = PieceMoves::RookMoves[piecePosition][4][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 4);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 4);
-                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-                for (int counter = 0; counter < PieceMoves::RookMoves[piecePosition][6].size(); counter++)
-                {
-                    int endPos = PieceMoves::RookMoves[piecePosition][6][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 4);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 4);
-                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-            }
-            break;
-        case 11:
-            for (int piecePosition : thisBoard.pieces[piece])
-            {
-                for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][0].size(); counter++)
-                {
-                    int endPos = PieceMoves::BishopMoves[piecePosition][0][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 3);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 3);
-                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-                for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][2].size(); counter++)
-                {
-                    int endPos = PieceMoves::BishopMoves[piecePosition][2][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 3);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 3);
-                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-                for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][4].size(); counter++)
-                {
-                    int endPos = PieceMoves::BishopMoves[piecePosition][4][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 3);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 3);
-                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-                for (int counter = 0; counter < PieceMoves::BishopMoves[piecePosition][6].size(); counter++)
-                {
-                    int endPos = PieceMoves::BishopMoves[piecePosition][6][counter]->endPlace;
-                    if ((Option::PowerTwo[endPos] & wholeBoard) == 0)
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 3);
-                    }
-                    else
-                    {
-                        AddPackedAttacker(blackAttacker.pieceCounts[endPos], 3);
-                        blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        blackAttacker.orderingScores[endPos] += Option::AttackValueMovement[piece][mainBoard[endPos]];
-                        break;
-                    }
-                }
-            }
-            break;
-        case 10:
-            for (int piecePosition : thisBoard.pieces[piece])
-            {
-                int endPlace = piecePosition + 17;
-                if (PieceMoves::KnightMoves[piecePosition][0] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 2);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition + 10;
-                if (PieceMoves::KnightMoves[piecePosition][2] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 2);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition + 15;
-                if (PieceMoves::KnightMoves[piecePosition][4] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 2);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition + 6;
-                if (PieceMoves::KnightMoves[piecePosition][6] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 2);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition - 10;
-                if (PieceMoves::KnightMoves[piecePosition][8] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 2);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition - 17;
-                if (PieceMoves::KnightMoves[piecePosition][10] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 2);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition - 15;
-                if (PieceMoves::KnightMoves[piecePosition][12] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 2);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-                endPlace = piecePosition - 6;
-                if (PieceMoves::KnightMoves[piecePosition][14] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[endPlace], 2);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                    blackAttacker.orderingScores[endPlace] += Option::AttackValueMovement[piece][mainBoard[endPlace]];
-                }
-            }
-            break;
-        case 9:
-            for (int piecePosition : thisBoard.pieces[piece])
-            {
-                if (PieceMoves::BlackPawnMoves[piecePosition][8] != nullptr || PieceMoves::BlackPawnMoves[piecePosition][9] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[piecePosition - 7], 1);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[piecePosition - 7]];
-                    blackAttacker.orderingScores[piecePosition - 7] += Option::AttackValueMovement[piece][mainBoard[piecePosition - 7]];
-                }
-                if (PieceMoves::BlackPawnMoves[piecePosition][13] != nullptr || PieceMoves::BlackPawnMoves[piecePosition][14] != nullptr)
-                {
-                    AddPackedAttacker(blackAttacker.pieceCounts[piecePosition - 9], 1);
-                    blackAttacker.orderingScores[piecePosition] += Option::AttackValueMovement[piece][mainBoard[piecePosition - 9]];
-                    blackAttacker.orderingScores[piecePosition - 9] += Option::AttackValueMovement[piece][mainBoard[piecePosition - 9]];
-                }
-            }
-            break;
-        }
-    }
-    return blackAttacker;
-}
-#endif
-
 namespace
 {
 AttackerState BuildPositionCoreAttacker(const Board& board, bool white)
@@ -5662,8 +2804,8 @@ AttackerState BuildPositionCoreAttacker(const Board& board, bool white)
         AddPackedAttacker(result.pieceCounts[to], type);
         const int piece = pieceCode[type];
         const int targetPiece = core.pieceAt[to];
-        result.orderingScores[from] += Option::AttackValueMovement[piece][targetPiece];
-        result.orderingScores[to] += Option::AttackValueMovement[piece][targetPiece];
+        result.orderingScores[from] += EngineInitializer::AttackValueMovement[piece][targetPiece];
+        result.orderingScores[to] += EngineInitializer::AttackValueMovement[piece][targetPiece];
     };
 
     for (int type = 6; type >= 1; --type)
@@ -5713,7 +2855,7 @@ AttackerState BuildPositionCoreAttacker(const Board& board, bool white)
                 {
                     const int to = rayMove->endPlace;
                     add(from, to, type);
-                    if ((occupancy & Option::PowerTwo[to]) != 0)
+                    if ((occupancy & EngineInitializer::PowerTwo[to]) != 0)
                         break;
                 }
             }
@@ -5735,46 +2877,12 @@ AttackerState MoveLogic::PositionCoreSetBlackAttacker(Board& board)
 
 AttackerState MoveLogic::SetWhiteAttacker(Board& board)
 {
-#if defined(HOWL_ATTACKER_VERIFY) && HOWL_ATTACKER_VERIFY
-    const AttackerState legacy = LegacySetWhiteAttacker(board);
-    const AttackerState core = PositionCoreSetWhiteAttacker(board);
-    for (int square = 0; square < 64; ++square)
-        if (legacy.pieceCounts[square] != core.pieceCounts[square] ||
-            legacy.orderingScores[square] != core.orderingScores[square])
-        {
-            std::cerr << "SetWhiteAttacker mismatch square=" << square
-                      << " legacyCount=" << legacy.pieceCounts[square]
-                      << " coreCount=" << core.pieceCounts[square]
-                      << " legacyScore=" << legacy.orderingScores[square]
-                      << " coreScore=" << core.orderingScores[square] << '\n';
-            std::abort();
-        }
-    return core;
-#else
     return PositionCoreSetWhiteAttacker(board);
-#endif
 }
 
 AttackerState MoveLogic::SetBlackAttacker(Board& board)
 {
-#if defined(HOWL_ATTACKER_VERIFY) && HOWL_ATTACKER_VERIFY
-    const AttackerState legacy = LegacySetBlackAttacker(board);
-    const AttackerState core = PositionCoreSetBlackAttacker(board);
-    for (int square = 0; square < 64; ++square)
-        if (legacy.pieceCounts[square] != core.pieceCounts[square] ||
-            legacy.orderingScores[square] != core.orderingScores[square])
-        {
-            std::cerr << "SetBlackAttacker mismatch square=" << square
-                      << " legacyCount=" << legacy.pieceCounts[square]
-                      << " coreCount=" << core.pieceCounts[square]
-                      << " legacyScore=" << legacy.orderingScores[square]
-                      << " coreScore=" << core.orderingScores[square] << '\n';
-            std::abort();
-        }
-    return core;
-#else
     return PositionCoreSetBlackAttacker(board);
-#endif
 }
 
 Move *MoveLogic::MoveCopy(Move *move)
@@ -6084,14 +3192,6 @@ std::size_t MoveLogic::ExchangeWithoutBeginPieceCacheCapacityBytes()
 {
     return ExchangeCacheWithoutBeginPiece.capacityBytes();
 }
-
-#if HOWL_CORRECTNESS_TESTING
-void MoveLogic::SetExchangeCacheAllocationFailureThresholdForTesting(
-    std::size_t capacityBytes)
-{
-    ExchangeChessCache::SetAllocationFailureThresholdForTesting(capacityBytes);
-}
-#endif
 
 void MoveLogic::Cleanup()
 {

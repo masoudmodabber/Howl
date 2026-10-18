@@ -3,7 +3,7 @@
 #include <crtdbg.h>
 #endif
 #include "PieceMoves.h"
-#include "Option.h"
+#include "EngineInitializer.h"
 
 Move *PieceMoves::WhitePawnMoves[64][18] = {nullptr};
 Move *PieceMoves::BlackPawnMoves[64][18] = {nullptr};
@@ -23,11 +23,11 @@ void PieceMoves::Initialize()
     {
         for (int counter = 8; counter < 16; counter++)
         {
-            pawnTwoMove[counter] = Option::PowerTwo[counter + 8] + Option::PowerTwo[counter + 16];
+            pawnTwoMove[counter] = EngineInitializer::PowerTwo[counter + 8] + EngineInitializer::PowerTwo[counter + 16];
         }
         for (int counter = 48; counter < 56; counter++)
         {
-            pawnTwoMove[counter] = Option::PowerTwo[counter - 8] + Option::PowerTwo[counter - 16];
+            pawnTwoMove[counter] = EngineInitializer::PowerTwo[counter - 8] + EngineInitializer::PowerTwo[counter - 16];
         }
 
         // WhitePawnMoves

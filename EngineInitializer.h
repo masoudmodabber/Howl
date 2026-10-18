@@ -1,25 +1,14 @@
 
-#ifndef OPTION_H
-#define OPTION_H
+#ifndef ENGINEINITIALIZER_H
+#define ENGINEINITIALIZER_H
 
-#include <string>
-
-class Option
+class EngineInitializer
 {
 public:
     static void Initialize();
-    static void Cleanup();
 
     static char charPowerTwo[8];
     static char charPowerTwoC[8];
-
-    // Option
-    static int MultiPV;
-    static std::string SyzygyPath;
-    static int SyzygyProbeLimit;
-    static int nullWindowSize;
-    static int checkExtension;
-    static int SafetyMargin;
 
     // Piece Value
     static int PawnValue;
@@ -175,22 +164,22 @@ public:
     static int QueenMoveCountValue[3][28];
     static int KingMoveCountValueMiddleGame[9];
     static int KingMoveCountValue[3][9];
-    // Experimental Representation Switch (Candidate Attack Model)
-    static bool UseExperimentalAttackModel;
+    // Representation Switch (Candidate Attack Model)
+    static bool UseAttackModel;
     static int AttackEndgameMultiplierPercent;
-    // Experimental Representation Switch (Candidate PieceSquare Model: 86 parameters)
-    static bool UseExperimentalPieceSquareModel;
-    // Experimental Representation Switch (Candidate QueenMobility Model: 8 parameters)
-    static bool UseExperimentalQueenMobilityModel;
-    // Experimental Representation Switch (Candidate KingSafety Model: 17 parameters)
-    static bool UseExperimentalKingSafetyModel;
-    // Experimental Representation Switch (Candidate EndgameWeights Model: 3 parameters)
-    static bool UseExperimentalEndgameWeightsModel;
+    // Representation Switch (Candidate PieceSquare Model: 86 parameters)
+    static bool UsePieceSquareModel;
+    // Representation Switch (Candidate QueenMobility Model: 8 parameters)
+    static bool UseQueenMobilityModel;
+    // Representation Switch (Candidate KingSafety Model: 17 parameters)
+    static bool UseKingSafetyModel;
+    // Representation Switch (Candidate EndgameWeights Model: 3 parameters)
+    static bool UseEndgameWeightsModel;
     static int CandLoneKingPushWeight;
     static int CandLoneKingConfinementWeight;
     static int CandLoneKingRestrictedNeighbourWeight;
-    // Experimental Representation Switch (Candidate Inline Model: 7 parameters)
-    static bool UseExperimentalInlineModel;
+    // Representation Switch (Candidate Inline Model: 7 parameters)
+    static bool UseInlineModel;
     static int CandBishopOpenFilePawnScale;
     static int CandTempoMiddleGame;
     static int CandTempoEndGame;
@@ -198,8 +187,8 @@ public:
     static int CandOppositeColorBishopEndGameScalePermille;
     static int CandEndgamePawnAdvancementRankMultiplier;
     static int CandPieceAttackScalePercent;
-    // Experimental Representation Switch (Candidate RookFile Model: 4 parameters)
-    static bool UseExperimentalRookFileModel;
+    // Representation Switch (Candidate RookFile Model: 4 parameters)
+    static bool UseRookFileModel;
     static int CandRookOpenFileMiddleGame;
     static int CandRookOpenFileEndGame;
     static int CandRookSemiOpenFileMiddleGame;

@@ -121,19 +121,19 @@ void BoardInitializer::Initialize()
         beginBoard->fiftyMoveRule = 0;
         for (int counter = 0; counter < 16; counter++)
         {
-            beginBoard->whitePieces += Option::PowerTwo[counter];
+            beginBoard->whitePieces += EngineInitializer::PowerTwo[counter];
         }
         for (int counter = 48; counter < 64; counter++)
         {
-            beginBoard->blackPieces += Option::PowerTwo[counter];
+            beginBoard->blackPieces += EngineInitializer::PowerTwo[counter];
         }
         for (int counter = 8; counter < 16; counter++)
         {
-            beginBoard->whitePawns += Option::PowerTwo[counter];
+            beginBoard->whitePawns += EngineInitializer::PowerTwo[counter];
         }
         for (int counter = 48; counter < 56; counter++)
         {
-            beginBoard->blackPawns += Option::PowerTwo[counter];
+            beginBoard->blackPawns += EngineInitializer::PowerTwo[counter];
         }
         beginBoard->ZobristHashCode ^= 0 ^ ZCode[4][0] ^ ZCode[2][1] ^ ZCode[3][2] ^ ZCode[5][3] ^ ZCode[6][4] ^ ZCode[3][5] ^ ZCode[2][6] ^ ZCode[4][7] ^ ZCode[1][8] ^ ZCode[1][9] ^ ZCode[1][10] ^ ZCode[1][11] ^ ZCode[1][12] ^ ZCode[1][13] ^ ZCode[1][14] ^ ZCode[1][15] ^ ZCode[9][48] ^ ZCode[9][49] ^ ZCode[9][50] ^ ZCode[9][51] ^ ZCode[9][52] ^ ZCode[9][53] ^ ZCode[9][54] ^ ZCode[9][55] ^ ZCode[12][56] ^ ZCode[10][57] ^ ZCode[11][58] ^ ZCode[13][59] ^ ZCode[14][60] ^ ZCode[11][61] ^ ZCode[10][62] ^ ZCode[12][63];
         PositionCoreLogic::Initialize(*beginBoard);

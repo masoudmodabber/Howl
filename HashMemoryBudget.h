@@ -41,10 +41,6 @@ public:
     static HashMemoryAccounting Accounting();
     static std::uint64_t LastConfigurationPeakTableBytes();
 
-#if HOWL_CORRECTNESS_TESTING
-    static void ResetForTesting();
-#endif
-
 private:
     static bool configured;
     static bool searchStarted;

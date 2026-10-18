@@ -9,7 +9,7 @@ static bool UnderAttackCore(Board &thisBoard, int position, bool attackerSide)
 {
     const PositionCore& core = thisBoard.positionCore;
     const Bitboard wholeBoard = core.colourOccupancy[0] | core.colourOccupancy[1];
-    const Bitboard positionBit = Option::PowerTwo[position];
+    const Bitboard positionBit = EngineInitializer::PowerTwo[position];
     const int colour = attackerSide ? 1 : 0;
     const Bitboard attackers = core.colourOccupancy[colour];
 

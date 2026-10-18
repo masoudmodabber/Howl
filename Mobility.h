@@ -1,9 +1,9 @@
-#ifndef HOWL_MOBILITY_V2_H
-#define HOWL_MOBILITY_V2_H
+#ifndef HOWL_MOBILITY_H
+#define HOWL_MOBILITY_H
 
 #include <algorithm>
 
-namespace MobilityV2
+namespace Mobility
 {
 
 inline int RoundDivide(int numerator, int denominator)
@@ -96,6 +96,6 @@ inline void GenerateCandQueenEndGame(const int parameters[4], int output[28])
     GenerateQueenEndGame(fullParameters, output);
 }
 
-} // namespace MobilityV2
+} // namespace Mobility
 
-#endif // HOWL_MOBILITY_V2_H
+#endif // HOWL_MOBILITY_H

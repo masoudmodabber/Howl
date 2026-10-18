@@ -1,7 +1,7 @@
 #include "RepetitionHistory.h"
 #include "Board.h"
 #include "BoardInitializer.h"
-#include "Option.h"
+#include "EngineInitializer.h"
 #include <array>
 #include <cassert>
 #include <cstdlib>

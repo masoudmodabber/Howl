@@ -31,10 +31,6 @@ public:
     ExchangeCacheStatistics statistics() const;
     void resetStatistics();
 
-#if HOWL_CORRECTNESS_TESTING
-    static void SetAllocationFailureThresholdForTesting(std::size_t capacityBytes);
-#endif
-
 private:
     struct Entry {
         std::uint64_t packedValue = 0;
@@ -53,9 +49,6 @@ private:
     std::size_t occupiedEntries = 0;
 #if HOWL_EXCHANGE_CACHE_STATS
     ExchangeCacheStatistics cacheStatistics;
-#endif
-#if HOWL_CORRECTNESS_TESTING
-    static std::size_t allocationFailureThreshold;
 #endif
 
     static std::uint64_t MixKey(std::uint64_t key);

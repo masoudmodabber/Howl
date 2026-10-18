@@ -1,11 +1,13 @@
-#include "StructuredNNUEEvaluator.h"
-#include <filesystem>
+#include "NNUEEvaluator.h"
 #include <stdexcept>
 #include "Move.h"
-#include "Option.h"
+#include "EngineInitializer.h"
 #include <cmath>
 #include <algorithm>
-#include <stdexcept>
+#include <string>
+#include <filesystem>
+#include <unistd.h>
+#include <linux/limits.h>
 #if defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
 #include <immintrin.h>
 #endif
@@ -51,10 +53,10 @@ void FirstLayerOrdered(const float* input, const float* transposedWeights, const
             output[i] += input[j] * transposedWeights[j * 32 + i];
 }
 }
-void StructuredNNUEEvaluator::Load(const std::string& p){weights.Load(p);const float* f1=tensor("f1.weight");for(int i=0;i<32;++i)for(int j=0;j<512;++j)transposedF1Weights[j*32+i]=f1[i*512+j];}
-float* StructuredNNUEEvaluator::tensor(const char* n) const { for(const auto& t:weights.tensors)if(t.name==n)return const_cast<float*>(t.data.data()); throw std::runtime_error("missing structured tensor"); }
-int StructuredNNUEEvaluator::cls(int p,bool w){int c=-1;switch(p){case 1:c=0;break;case 2:c=1;break;case 3:c=2;break;case 4:c=3;break;case 5:c=4;break;case 9:c=0;break;case 10:c=1;break;case 11:c=2;break;case 12:c=3;break;case 13:c=4;break;default:return -1;}bool own=w?p<9:p>8;return c+(own?0:5);}
-void StructuredNNUEEvaluator::AddPiece(Board& b,int piece,int square) const {
+void NNUEEvaluator::Load(const std::string& p){weights.Load(p);const float* f1=tensor("f1.weight");for(int i=0;i<32;++i)for(int j=0;j<512;++j)transposedF1Weights[j*32+i]=f1[i*512+j];}
+float* NNUEEvaluator::tensor(const char* n) const { for(const auto& t:weights.tensors)if(t.name==n)return const_cast<float*>(t.data.data()); throw std::runtime_error("missing NNUE tensor"); }
+int NNUEEvaluator::cls(int p,bool w){int c=-1;switch(p){case 1:c=0;break;case 2:c=1;break;case 3:c=2;break;case 4:c=3;break;case 5:c=4;break;case 9:c=0;break;case 10:c=1;break;case 11:c=2;break;case 12:c=3;break;case 13:c=4;break;default:return -1;}bool own=w?p<9:p>8;return c+(own?0:5);}
+void NNUEEvaluator::AddPiece(Board& b,int piece,int square) const {
     int cw=cls(piece,true); if(cw<0 || square<0 || square>=64) return; int cb=cls(piece,false);
     auto* ft=tensor("ft.weight");
     int wr=((b.nnueState.whiteKingSquare*10+cw)*64+square)*256;
@@ -62,7 +64,7 @@ void StructuredNNUEEvaluator::AddPiece(Board& b,int piece,int square) const {
     int br=((mk*10+cb)*64+ms)*256;
     for(int u=0;u<256;++u){b.nnueState.whiteAccumulator[u]+=ft[wr+u];b.nnueState.blackAccumulator[u]+=ft[br+u];}
 }
-void StructuredNNUEEvaluator::RemovePiece(Board& b,int piece,int square) const {
+void NNUEEvaluator::RemovePiece(Board& b,int piece,int square) const {
     int cw=cls(piece,true); if(cw<0 || square<0 || square>=64) return; int cb=cls(piece,false);
     auto* ft=tensor("ft.weight");
     int wr=((b.nnueState.whiteKingSquare*10+cw)*64+square)*256;
@@ -70,22 +72,22 @@ void StructuredNNUEEvaluator::RemovePiece(Board& b,int piece,int square) const {
     int br=((mk*10+cb)*64+ms)*256;
     for(int u=0;u<256;++u){b.nnueState.whiteAccumulator[u]-=ft[wr+u];b.nnueState.blackAccumulator[u]-=ft[br+u];}
 }
-void StructuredNNUEEvaluator::MovePiece(Board& b,int piece,int from,int to) const {RemovePiece(b,piece,from);AddPiece(b,piece,to);}
-void StructuredNNUEEvaluator::RebuildWhite(Board& b) const {
+void NNUEEvaluator::MovePiece(Board& b,int piece,int from,int to) const {RemovePiece(b,piece,from);AddPiece(b,piece,to);}
+void NNUEEvaluator::RebuildWhite(Board& b) const {
     auto* ft=tensor("ft.weight");auto* bias=tensor("ft_bias");int wk=b.nnueState.whiteKingSquare;
     for(int u=0;u<256;++u)b.nnueState.whiteAccumulator[u]=bias[u];
     for(int sq=0;sq<64;++sq){int p=b.positionCore.pieceAt[sq],c=cls(p,true);if(c<0)continue;int f=((wk*10+c)*64+sq)*256;for(int u=0;u<256;++u)b.nnueState.whiteAccumulator[u]+=ft[f+u];}
 }
-void StructuredNNUEEvaluator::RebuildBlack(Board& b) const {
+void NNUEEvaluator::RebuildBlack(Board& b) const {
     auto* ft=tensor("ft.weight");auto* bias=tensor("ft_bias");int bk=b.nnueState.blackKingSquare^63;
     for(int u=0;u<256;++u)b.nnueState.blackAccumulator[u]=bias[u];
     for(int sq=0;sq<64;++sq){int p=b.positionCore.pieceAt[sq],c=cls(p,false);if(c<0)continue;int ms=sq^63,f=((bk*10+c)*64+ms)*256;for(int u=0;u<256;++u)b.nnueState.blackAccumulator[u]+=ft[f+u];}
 }
-void StructuredNNUEEvaluator::Rebuild(Board& b) const {b.nnueState.whiteKingSquare=b.positionCore.kingSquare[0];b.nnueState.blackKingSquare=b.positionCore.kingSquare[1];RebuildWhite(b);RebuildBlack(b);b.nnueState.initialized=true;}
-void StructuredNNUEEvaluator::UpdateAfterMove(Board& b,const Move& m,const NNUEState& previous) const {
+void NNUEEvaluator::Rebuild(Board& b) const {b.nnueState.whiteKingSquare=b.positionCore.kingSquare[0];b.nnueState.blackKingSquare=b.positionCore.kingSquare[1];RebuildWhite(b);RebuildBlack(b);b.nnueState.initialized=true;}
+void NNUEEvaluator::UpdateAfterMove(Board& b,const Move& m,const NNUEState& previous) const {
     if(!previous.initialized){Rebuild(b);return;}
-    bool castle=(m.CastleFlag&(Option::PowerTwo[0]|Option::PowerTwo[1]|Option::PowerTwo[2]|Option::PowerTwo[3]))!=0;
-    int after=b.positionCore.pieceAt[m.endPlace]; bool white=after>0&&after<9,ep=(m.PublicFlag&Option::PowerTwo[6])!=0,capture=m.endPiece>0,promotion=m.promotionPiece>0,king=after==6||after==14;
+    bool castle=(m.CastleFlag&(EngineInitializer::PowerTwo[0]|EngineInitializer::PowerTwo[1]|EngineInitializer::PowerTwo[2]|EngineInitializer::PowerTwo[3]))!=0;
+    int after=b.positionCore.pieceAt[m.endPlace]; bool white=after>0&&after<9,ep=(m.PublicFlag&EngineInitializer::PowerTwo[6])!=0,capture=m.endPiece>0,promotion=m.promotionPiece>0,king=after==6||after==14;
     if(!castle&&!king){
         if(promotion){if(capture)RemovePiece(b,m.endPiece,m.endPlace);RemovePiece(b,white?1:9,m.beginPlace);AddPiece(b,m.promotionPiece,m.endPlace);}
         else if(ep){MovePiece(b,after,m.beginPlace,m.endPlace);RemovePiece(b,white?9:1,white?m.endPlace-8:m.endPlace+8);}
@@ -95,16 +97,16 @@ void StructuredNNUEEvaluator::UpdateAfterMove(Board& b,const Move& m,const NNUES
         if(white){
             b.nnueState.whiteKingSquare=b.positionCore.kingSquare[0];RebuildWhite(b);
             if(king&&capture){int p=m.endPiece,c=cls(p,false);if(c>=0){auto* ft=tensor("ft.weight");int ms=m.endPlace^63,br=(((oldBlack^63)*10+c)*64+ms)*256;for(int u=0;u<256;++u)b.nnueState.blackAccumulator[u]-=ft[br+u];}}
-            if(castle){int os=m.beginPlace+((m.CastleFlag&(Option::PowerTwo[3]|Option::PowerTwo[1]))?3:-4),ns=m.beginPlace+((m.CastleFlag&(Option::PowerTwo[3]|Option::PowerTwo[1]))?1:-1),c=cls(4,false);auto* ft=tensor("ft.weight");for(int u=0;u<256;++u){int ro=(((oldBlack^63)*10+c)*64+(os^63))*256+u,rn=(((oldBlack^63)*10+c)*64+(ns^63))*256+u;b.nnueState.blackAccumulator[u]-=ft[ro];b.nnueState.blackAccumulator[u]+=ft[rn];}}
+            if(castle){int os=m.beginPlace+((m.CastleFlag&(EngineInitializer::PowerTwo[3]|EngineInitializer::PowerTwo[1]))?3:-4),ns=m.beginPlace+((m.CastleFlag&(EngineInitializer::PowerTwo[3]|EngineInitializer::PowerTwo[1]))?1:-1),c=cls(4,false);auto* ft=tensor("ft.weight");for(int u=0;u<256;++u){int ro=(((oldBlack^63)*10+c)*64+(os^63))*256+u,rn=(((oldBlack^63)*10+c)*64+(ns^63))*256+u;b.nnueState.blackAccumulator[u]-=ft[ro];b.nnueState.blackAccumulator[u]+=ft[rn];}}
         } else {
             b.nnueState.blackKingSquare=b.positionCore.kingSquare[1];RebuildBlack(b);
             if(king&&capture){int p=m.endPiece,c=cls(p,true);if(c>=0){auto* ft=tensor("ft.weight");int br=((oldWhite*10+c)*64+m.endPlace)*256;for(int u=0;u<256;++u)b.nnueState.whiteAccumulator[u]-=ft[br+u];}}
-            if(castle){int os=m.beginPlace+((m.CastleFlag&(Option::PowerTwo[3]|Option::PowerTwo[1]))?3:-4),ns=m.beginPlace+((m.CastleFlag&(Option::PowerTwo[3]|Option::PowerTwo[1]))?1:-1),c=cls(12,true);auto* ft=tensor("ft.weight");for(int u=0;u<256;++u){int ro=((oldWhite*10+c)*64+os)*256+u,rn=((oldWhite*10+c)*64+ns)*256+u;b.nnueState.whiteAccumulator[u]-=ft[ro];b.nnueState.whiteAccumulator[u]+=ft[rn];}}
+            if(castle){int os=m.beginPlace+((m.CastleFlag&(EngineInitializer::PowerTwo[3]|EngineInitializer::PowerTwo[1]))?3:-4),ns=m.beginPlace+((m.CastleFlag&(EngineInitializer::PowerTwo[3]|EngineInitializer::PowerTwo[1]))?1:-1),c=cls(12,true);auto* ft=tensor("ft.weight");for(int u=0;u<256;++u){int ro=((oldWhite*10+c)*64+os)*256+u,rn=((oldWhite*10+c)*64+ns)*256+u;b.nnueState.whiteAccumulator[u]-=ft[ro];b.nnueState.whiteAccumulator[u]+=ft[rn];}}
         }
     }
     b.nnueState.whiteKingSquare=b.positionCore.kingSquare[0];b.nnueState.blackKingSquare=b.positionCore.kingSquare[1];b.nnueState.initialized=true;
 }
-float StructuredNNUEEvaluator::Evaluate(Board& b) const {
+float NNUEEvaluator::Evaluate(Board& b) const {
     if(!b.nnueState.initialized) Rebuild(b); auto* b1=tensor("f1.bias");auto* w2=tensor("f2.weight");auto* b2=tensor("f2.bias");auto* wo=tensor("out.weight");float bo=tensor("out.bias")[0];
     const auto& wa=b.nnueState.whiteAccumulator;const auto& ba=b.nnueState.blackAccumulator;bool stmBlack=b.sideToMove;const auto& s=stmBlack?ba:wa;const auto& q=stmBlack?wa:ba;std::array<float,512> input{};std::array<float,32>h{},h2{};
     for(int j=0;j<256;++j){input[j]=std::clamp(s[j],0.f,1.f);input[j+256]=std::clamp(q[j],0.f,1.f);}
@@ -113,28 +115,43 @@ float StructuredNNUEEvaluator::Evaluate(Board& b) const {
     float result=bo;for(int i=0;i<32;++i)result+=wo[i]*h2[i];return result;
 }
 
-namespace StructuredNNUE
+namespace NNUE
 {
 namespace
 {
-StructuredNNUEEvaluator evaluator;
+NNUEEvaluator evaluator;
 bool loaded = false;
-std::string weightsPath;
+
+std::string ResolveProductionWeightsPath()
+{
+    char buffer[PATH_MAX];
+    ssize_t length = ::readlink("/proc/self/exe", buffer, sizeof(buffer) - 1);
+    if (length <= 0 || static_cast<std::size_t>(length) >= sizeof(buffer) - 1)
+    {
+        throw std::runtime_error("failed to resolve executable path from /proc/self/exe");
+    }
+    buffer[length] = '\0';
+
+    std::filesystem::path exePath(buffer);
+    std::filesystem::path exeDir = exePath.parent_path();
+    std::filesystem::path parentDir = exeDir.parent_path();
+    std::filesystem::path weightsPath = parentDir / "nnue.weights";
+
+    return weightsPath.string();
 }
 
-void SetWeightsPath(const std::string& path)
+const std::string& ProductionWeightsPath()
 {
-    weightsPath = path;
-    loaded = false;
+    static const std::string path = ResolveProductionWeightsPath();
+    return path;
+}
 }
 
 void Prepare(Board& board)
 {
     if (!board.nnueState.initialized)
     {
-        if (weightsPath.empty())
-            throw std::runtime_error("NNUE weights path was not supplied");
-        evaluator.Load(std::filesystem::absolute(weightsPath).string());
+        evaluator.Load(ProductionWeightsPath());
         loaded = true;
         evaluator.Rebuild(board);
     }

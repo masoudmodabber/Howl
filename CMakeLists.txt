@@ -20,7 +20,6 @@ set(HOWL_SOURCES
     BoardInitializer.cpp
     BoardLogic.cpp
     BoardMaker.cpp
-    ChessCache.cpp
     ChessStringManipulation.cpp
     ExchangeChessCache.cpp
     GameLogic.cpp
@@ -30,7 +29,7 @@ set(HOWL_SOURCES
     MissingInfoAboutPrevStateFromMove.cpp
     MoveLogic.cpp
     NNUEHistory.cpp
-    Option.cpp
+    EngineInitializer.cpp
     PVSSearch.cpp
     PassedPawnSetup.cpp
     PieceMoves.cpp
@@ -38,9 +37,8 @@ set(HOWL_SOURCES
     QSearcher.cpp
     RepetitionHistory.cpp
     Search.cpp
-    SearchParameters.cpp
-    StructuredNNUEEvaluator.cpp
-    StructuredNNUEWeights.cpp
+    NNUEEvaluator.cpp
+    NNUEWeights.cpp
     Tablebase.cpp
     TranspositionTable.cpp
     UCI.cpp

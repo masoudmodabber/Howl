@@ -24,6 +24,9 @@ public:
     static bool IsProbeEligible(const Board &position, int probeLimit);
     static std::optional<Wdl> ProbeWdl(const Board &position, int probeLimit);
 
+    static std::string Path;
+    static int ProbeLimit;
+
     static constexpr int WinScore = 150000;
     static constexpr int LossScore = -WinScore;
     static int Score(Wdl result);

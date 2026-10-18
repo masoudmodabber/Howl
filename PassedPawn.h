@@ -1,10 +1,10 @@
-#ifndef HOWL_PASSED_PAWN_V2_H
-#define HOWL_PASSED_PAWN_V2_H
+#ifndef HOWL_PASSED_PAWN_H
+#define HOWL_PASSED_PAWN_H
 
 #include <algorithm>
 #include <iterator>
 
-namespace PassedPawnV2
+namespace PassedPawn
 {
 
 inline int RoundDivide(int numerator, int denominator)
@@ -45,6 +45,6 @@ inline void Generate(const int middleGameParameters[6], int middleGameFileAmplit
     }
 }
 
-} // namespace PassedPawnV2
+} // namespace PassedPawn
 
-#endif // HOWL_PASSED_PAWN_V2_H
+#endif // HOWL_PASSED_PAWN_H

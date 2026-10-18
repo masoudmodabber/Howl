@@ -6,7 +6,7 @@
 #include "Search.h"
 #include "BoardLogic.h"
 #include "GamePhase.h"
-#include "StructuredNNUEEvaluator.h"
+#include "NNUEEvaluator.h"
 #include "QSearcher.h"
 #include "MoveLogic.h"
 #include "UCI.h"
@@ -17,7 +17,7 @@
 #include "TranspositionTable.h"
 #include "MateScore.h"
 #include "Tablebase.h"
-#include "Option.h"
+#include "EngineInitializer.h"
 #include "SearchParameters.h"
 #include "MoveOrdering.h"
 #include <iostream>
@@ -77,7 +77,7 @@ namespace
     const std::array<int, MaxReductionIndex + 1> Reductions = [] {
         std::array<int, MaxReductionIndex + 1> values{};
         for (int i = 1; i <= MaxReductionIndex; ++i)
-            values[i] = static_cast<int>(SearchParameters::Runtime().lmrLogarithmicScale *
+            values[i] = static_cast<int>(SearchParameters::LMR::LogarithmicScale *
                 std::log(static_cast<double>(i)));
         return values;
     }();
@@ -89,10 +89,10 @@ namespace
         const int raw = Reductions[d] * Reductions[m];
         return (raw + SearchParameters::LMR::RoundingTerm) /
             SearchParameters::LMR::Divisor +
-            (!improving && raw > SearchParameters::Runtime().lmrNonImprovingThreshold);
+            (!improving && raw > SearchParameters::LMR::NonImprovingThreshold);
     }
 
-    int FutilityMargin(int depth, bool improving) { return SearchParameters::Runtime().reverseFutilityDepthMargin * (depth - int(improving)); }
+    int FutilityMargin(int depth, bool improving) { return SearchParameters::ReverseFutility::DepthMargin * (depth - int(improving)); }
     int FutilityMoveCount(bool improving, int depth)
     {
         return (SearchParameters::MoveCountPruning::Base +
@@ -249,7 +249,7 @@ namespace
         int combinedHistory() const { return main + c1 + c2 + c4; }
         int statScore() const
         {
-        int score = combinedHistory() - SearchParameters::Runtime().historyLmrStatOffset;
+        int score = combinedHistory() - SearchParameters::History::LmrStatOffset;
             if (score < 0 && c1 >= 0 && c2 >= 0 && main >= 0)
                 score = 0;
             return score;
@@ -346,7 +346,7 @@ namespace
         const int c2 = ContinuationHistoryScoreAt(ply, 2, currentPiece, move);
         int score = main + c1 + c2 +
             ContinuationHistoryScoreAt(ply, 4, currentPiece, move) -
-            SearchParameters::Runtime().historyLmrStatOffset;
+            SearchParameters::History::LmrStatOffset;
         if (score < 0 && c1 >= 0 && c2 >= 0 && main >= 0)
             score = 0;
         return score;
@@ -391,7 +391,7 @@ namespace
                           Move* const* searchedCaptures, int searchedCaptureCount)
     {
         const int bonus1 = StatBonus(depth + 1);
-        const int bonus2 = bestValue > beta + Option::PawnValue
+        const int bonus2 = bestValue > beta + EngineInitializer::PawnValue
             ? bonus1 : StatBonus(depth);
         if (IsQuietMove(move))
         {
@@ -545,8 +545,8 @@ namespace
         if (moveNumber <= 2 && ttHitAverage / TtHitAverageWindow >=
             SearchParameters::LMR::TtHitLowThreshold)
             reduction = 0;
-        if (isPVNode || ttPvEvidence) reduction -= SearchParameters::Runtime().lmrTtPvAdjustment;
-        if (cutNode && IsQuietMove(move)) reduction += SearchParameters::Runtime().lmrCutNodeAdjustment;
+        if (isPVNode || ttPvEvidence) reduction -= SearchParameters::LMR::TtPvAdjustment;
+        if (cutNode && IsQuietMove(move)) reduction += SearchParameters::LMR::CutNodeAdjustment;
         const int currentPiece = 1;
         const int statScore = IsQuietMove(move)
             ? QuietStatScore(side, ply, currentPiece, move) : 0;
@@ -557,8 +557,8 @@ namespace
         else if (previousStatScore >= SearchParameters::LMR::GoodPreviousStatScore &&
                  statScore < SearchParameters::LMR::BadStatScore)
             ++reduction;
-        reduction -= statScore / SearchParameters::Runtime().lmrStatScoreDivisor;
-        if (singularLMR) reduction -= SearchParameters::Runtime().lmrSingularAdjustment;
+        reduction -= statScore / SearchParameters::LMR::StatScoreDivisor;
+        if (singularLMR) reduction -= SearchParameters::LMR::SingularAdjustment;
         if (ttHitAverage / TtHitAverageWindow > SearchParameters::LMR::TtHitHighThreshold) --reduction;
         if (!IsQuietMove(move) && depth < SearchParameters::LMR::ShallowCaptureDepth &&
             moveNumber > SearchParameters::LMR::LateCaptureMoveCount) ++reduction;
@@ -1055,15 +1055,15 @@ namespace
         int nonPawnMaterial = 0;
         for (int sideOffset : {0, 8})
         {
-            nonPawnMaterial += static_cast<int>(PositionCorePieceListsView{board.positionCore}[sideOffset + 2].size()) * Option::KnightValue;
-            nonPawnMaterial += static_cast<int>(PositionCorePieceListsView{board.positionCore}[sideOffset + 3].size()) * Option::BishopValue;
-            nonPawnMaterial += static_cast<int>(PositionCorePieceListsView{board.positionCore}[sideOffset + 4].size()) * Option::RookValue;
-            nonPawnMaterial += static_cast<int>(PositionCorePieceListsView{board.positionCore}[sideOffset + 5].size()) * Option::QueenValue;
+            nonPawnMaterial += static_cast<int>(PositionCorePieceListsView{board.positionCore}[sideOffset + 2].size()) * EngineInitializer::KnightValue;
+            nonPawnMaterial += static_cast<int>(PositionCorePieceListsView{board.positionCore}[sideOffset + 3].size()) * EngineInitializer::BishopValue;
+            nonPawnMaterial += static_cast<int>(PositionCorePieceListsView{board.positionCore}[sideOffset + 4].size()) * EngineInitializer::RookValue;
+            nonPawnMaterial += static_cast<int>(PositionCorePieceListsView{board.positionCore}[sideOffset + 5].size()) * EngineInitializer::QueenValue;
         }
-        static const int values[7] = {0, Option::PawnValue, Option::KnightValue,
-            Option::BishopValue, Option::RookValue, Option::QueenValue, 0};
+        static const int values[7] = {0, EngineInitializer::PawnValue, EngineInitializer::KnightValue,
+            EngineInitializer::BishopValue, EngineInitializer::RookValue, EngineInitializer::QueenValue, 0};
         nonPawnMaterial -= values[std::clamp(move.endPiece % 8, 0, 6)];
-        return nonPawnMaterial <= 2 * Option::RookValue;
+        return nonPawnMaterial <= 2 * EngineInitializer::RookValue;
     }
 
     bool MovedPieceGivesCheck(const Board& board, const Move& move)
@@ -1073,12 +1073,12 @@ namespace
         if (PositionCorePieceListsView{board.positionCore}[enemyKingIndex].empty())
             return false;
         const int kingSquare = PositionCorePieceListsView{board.positionCore}[enemyKingIndex].front();
-        const long long kingBit = Option::PowerTwo[kingSquare];
+        const long long kingBit = EngineInitializer::PowerTwo[kingSquare];
         long long occupancy = (PositionCoreLogic::WhiteOccupancy(board.positionCore) | PositionCoreLogic::BlackOccupancy(board.positionCore)) &
-            ~Option::PowerTwo[move.beginPlace];
-        occupancy |= Option::PowerTwo[move.endPlace];
-        if ((move.PublicFlag & Option::PowerTwo[6]) != 0)
-            occupancy &= ~Option::PowerTwo[move.endPlace + (movingWhite ? -8 : 8)];
+            ~EngineInitializer::PowerTwo[move.beginPlace];
+        occupancy |= EngineInitializer::PowerTwo[move.endPlace];
+        if ((move.PublicFlag & EngineInitializer::PowerTwo[6]) != 0)
+            occupancy &= ~EngineInitializer::PowerTwo[move.endPlace + (movingWhite ? -8 : 8)];
         const int piece = move.promotionPiece > 0
             ? move.promotionPiece % 8 : board.positionCore.pieceAt[move.beginPlace] % 8;
         switch (piece)
@@ -1108,8 +1108,8 @@ namespace
             6706, 5609, 4511, 3413, 2844, 2275, 1706, 1138, 569, 0, 0, 0,
             0, 0, 0, 0};
         const int phase = GamePhase::Calculate(board.positionCore);
-        return (Option::TempoMiddleGame * (10000 - weights[phase]) +
-                Option::TempoEndGame * weights[phase]) / 10000;
+        return (EngineInitializer::TempoMiddleGame * (10000 - weights[phase]) +
+                EngineInitializer::TempoEndGame * weights[phase]) / 10000;
     }
 
 }
@@ -1156,13 +1156,6 @@ void PVSSearch::SetVerificationIsolation(bool enabled)
     TranspositionTable::SetVerificationIsolation(enabled);
 }
 
-#if HOWL_CORRECTNESS_TESTING
-bool PVSSearch::NullMoveMaterialEligibleForTesting(const Board &board)
-{
-    return NullMoveMaterialEligible(board, board.sideToMove ? 1 : 0);
-}
-#endif
-
 void PVSSearch::RecordKiller(int ply, const Move &move)
 {
     if (verificationIsolation) return;
@@ -1179,555 +1172,6 @@ void PVSSearch::RecordKiller(int ply, const Move &move)
     }
 }
 
-#if HOWL_CORRECTNESS_TESTING
-namespace
-{
-    int g_futilityPruningSkippedQuietMoves = 0;
-    PVSSearch::MoveOrderingStats g_moveOrderingStats;
-    PVSSearch::MoveOrderingQualityStats g_orderingQualityStats;
-
-    void RecordMoveOrderingCutoff(int moveIndex, bool isTTMove, const Move &move, int depth, int ply, bool isPV, bool isCutNode)
-    {
-        g_orderingQualityStats.recordCutoff(moveIndex + 1, isPV, isCutNode, IsQuietMove(move));
-        g_moveOrderingStats.totalBetaCutoffs++;
-        g_moveOrderingStats.allCutoffs.add(moveIndex);
-
-        if (depth <= 2)
-            g_moveOrderingStats.depth1To2.add(moveIndex);
-        else if (depth <= 5)
-            g_moveOrderingStats.depth3To5.add(moveIndex);
-        else
-            g_moveOrderingStats.depth6Plus.add(moveIndex);
-
-        if (isTTMove)
-        {
-            g_moveOrderingStats.cutoffsTTMove++;
-        }
-        else if (move.endPiece > 0 || move.promotionPiece > 0)
-        {
-            g_moveOrderingStats.cutoffsCaptureOrPromotion++;
-        }
-        else
-        {
-            g_moveOrderingStats.cutoffsQuiet++;
-            g_moveOrderingStats.quietCutoffs.add(moveIndex);
-        }
-
-        if (ply >= 0 && ply < PVSSearch::MaxKillerPly && move.endPiece == 0 && move.promotionPiece <= 0)
-        {
-            if (PVSSearch::killers[ply][0] == move)
-            {
-                g_moveOrderingStats.killerBetaCutoffs++;
-                g_moveOrderingStats.killer1BetaCutoffs++;
-            }
-            else if (PVSSearch::killers[ply][1] == move)
-            {
-                g_moveOrderingStats.killerBetaCutoffs++;
-                g_moveOrderingStats.killer2BetaCutoffs++;
-            }
-        }
-    }
-
-    void PrintBucketGroup(const char *title, const PVSSearch::IndexBuckets &b)
-    {
-        std::cout << "\n[" << title << "]\n";
-        std::cout << "  Total cutoffs: " << b.total << "\n";
-        auto printRow = [b](const char *label, uint64_t count) {
-            double pct = (b.total > 0) ? (100.0 * count / static_cast<double>(b.total)) : 0.0;
-            char buf[128];
-            snprintf(buf, sizeof(buf), "  %-12s %8lu  (%6.2f%%)\n", label, (unsigned long)count, pct);
-            std::cout << buf;
-        };
-        printRow("Index 0:", b.idx0);
-        printRow("Index 1:", b.idx1);
-        printRow("Index 2:", b.idx2);
-        printRow("Index 3:", b.idx3);
-        printRow("Indices 4-7:", b.idx4To7);
-        printRow("Index 8+:", b.idx8Plus);
-    }
-}
-
-int PVSSearch::FutilityPruningSkippedQuietMovesForTesting()
-{
-    return g_futilityPruningSkippedQuietMoves;
-}
-
-void PVSSearch::ResetFutilityPruningSkippedQuietMovesForTesting()
-{
-    g_futilityPruningSkippedQuietMoves = 0;
-}
-
-PVSSearch::MoveOrderingStats PVSSearch::GetMoveOrderingStatsForTesting()
-{
-    return g_moveOrderingStats;
-}
-
-void PVSSearch::ResetMoveOrderingStatsForTesting()
-{
-    g_moveOrderingStats = MoveOrderingStats{};
-}
-
-void PVSSearch::PrintMoveOrderingStatsForTesting()
-{
-    std::cout << "=== Move Ordering Cutoff Stats (Recursive PVS) ===\n";
-    std::cout << "Overall total beta cutoffs: " << g_moveOrderingStats.totalBetaCutoffs << "\n";
-
-    PrintBucketGroup("All Depths (Overall)", g_moveOrderingStats.allCutoffs);
-    PrintBucketGroup("Depth 1 to 2", g_moveOrderingStats.depth1To2);
-    PrintBucketGroup("Depth 3 to 5", g_moveOrderingStats.depth3To5);
-    PrintBucketGroup("Depth 6+", g_moveOrderingStats.depth6Plus);
-    PrintBucketGroup("Quiet Moves Only", g_moveOrderingStats.quietCutoffs);
-
-    std::cout << "\n[Move Category Breakdown]\n";
-    auto printCat = [total = g_moveOrderingStats.totalBetaCutoffs](const char *label, uint64_t count) {
-        double pct = (total > 0) ? (100.0 * count / static_cast<double>(total)) : 0.0;
-        char buf[128];
-        snprintf(buf, sizeof(buf), "  %-24s %8lu  (%6.2f%%)\n", label, (unsigned long)count, pct);
-        std::cout << buf;
-    };
-    printCat("TT move:", g_moveOrderingStats.cutoffsTTMove);
-    printCat("Capture or promotion:", g_moveOrderingStats.cutoffsCaptureOrPromotion);
-    printCat("Quiet:", g_moveOrderingStats.cutoffsQuiet);
-
-    std::cout << "\n[Killer Move Stats]\n";
-    std::cout << "  Killer candidates encountered: " << g_moveOrderingStats.killerCandidatesEncountered << "\n";
-    printCat("Killer beta cutoffs:", g_moveOrderingStats.killerBetaCutoffs);
-    printCat("Killer 1 cutoffs:", g_moveOrderingStats.killer1BetaCutoffs);
-    printCat("Killer 2 cutoffs:", g_moveOrderingStats.killer2BetaCutoffs);
-}
-
-PVSSearch::LMRStats g_lmrStats;
-
-void RecordLMRSearch(int moveIndex, int depth, int ply, const Move &move, int reductionAmount, bool triggeredReSearch)
-{
-    g_lmrStats.totalReducedSearches++;
-    if (triggeredReSearch)
-        g_lmrStats.reducedTriggeredReSearch++;
-    else
-        g_lmrStats.reducedFailLow++;
-
-    const int reductionBucket = std::clamp(reductionAmount, 1, 5) - 1;
-    g_lmrStats.reductionAttempts[reductionBucket]++;
-    if (triggeredReSearch)
-        g_lmrStats.reductionReSearches[reductionBucket]++;
-
-    if (moveIndex == 1) g_lmrStats.idx1.record(triggeredReSearch);
-    else if (moveIndex == 2) g_lmrStats.idx2.record(triggeredReSearch);
-    else if (moveIndex == 3) g_lmrStats.idx3.record(triggeredReSearch);
-    else if (moveIndex >= 4 && moveIndex <= 7) g_lmrStats.idx4To7.record(triggeredReSearch);
-    else g_lmrStats.idx8Plus.record(triggeredReSearch);
-
-    if (depth == 3) g_lmrStats.depth3.record(triggeredReSearch);
-    else if (depth >= 4 && depth <= 5) g_lmrStats.depth4To5.record(triggeredReSearch);
-    else if (depth >= 6 && depth <= 8) g_lmrStats.depth6To8.record(triggeredReSearch);
-    else g_lmrStats.depth9Plus.record(triggeredReSearch);
-
-    bool isKiller = (ply >= 0 && ply < PVSSearch::MaxKillerPly && (PVSSearch::killers[ply][0] == move || PVSSearch::killers[ply][1] == move));
-    if (move.endPiece > 0)
-    {
-        g_lmrStats.moveLosingCapture.record(triggeredReSearch);
-    }
-    else if (isKiller)
-    {
-        g_lmrStats.moveKillerQuiet.record(triggeredReSearch);
-    }
-    else
-    {
-        g_lmrStats.moveQuiet.record(triggeredReSearch);
-    }
-
-    // Indices 4 to 7 detailed tracking
-    if (moveIndex >= 4 && moveIndex <= 7)
-    {
-        if (depth >= 3 && depth <= 4) g_lmrStats.idx4To7_depth3To4.record(triggeredReSearch);
-        else if (depth == 5) g_lmrStats.idx4To7_depth5.record(triggeredReSearch);
-        else if (depth == 6) g_lmrStats.idx4To7_depth6.record(triggeredReSearch);
-        else if (depth >= 7 && depth <= 8) g_lmrStats.idx4To7_depth7To8.record(triggeredReSearch);
-        else if (depth >= 9) g_lmrStats.idx4To7_depth9Plus.record(triggeredReSearch);
-
-        if (move.endPiece > 0)
-            g_lmrStats.idx4To7_losingCapture.record(triggeredReSearch);
-        else if (isKiller)
-            g_lmrStats.idx4To7_killer.record(triggeredReSearch);
-        else
-            g_lmrStats.idx4To7_quiet.record(triggeredReSearch);
-    }
-}
-
-void RecordLMRReSearchResult(int moveIndex, int finalVal, int origAlpha, int origBeta)
-{
-    if (finalVal <= origAlpha)
-        g_lmrStats.reSearchFailLow++;
-    else if (finalVal < origBeta)
-        g_lmrStats.reSearchPV++;
-    else
-        g_lmrStats.reSearchBetaCutoff++;
-
-    if (moveIndex >= 4 && moveIndex <= 7)
-    {
-        g_lmrStats.idx4To7_reSearchTotal++;
-        if (finalVal <= origAlpha)
-            g_lmrStats.idx4To7_reSearchFailLow++;
-        else if (finalVal < origBeta)
-            g_lmrStats.idx4To7_reSearchPV++;
-        else
-            g_lmrStats.idx4To7_reSearchBetaCutoff++;
-    }
-}
-
-void PrintLMRBucketRow(const char *label, const PVSSearch::LMRBucket &b)
-{
-    double failLowPct = (b.reducedSearches > 0) ? (100.0 * b.failLow / static_cast<double>(b.reducedSearches)) : 0.0;
-    double reSearchPct = (b.reducedSearches > 0) ? (100.0 * b.reSearches / static_cast<double>(b.reducedSearches)) : 0.0;
-    char buf[256];
-    snprintf(buf, sizeof(buf), "  %-20s Total: %7lu | Fail-low: %7lu (%6.2f%%) | Re-search: %7lu (%6.2f%%)\n",
-             label, (unsigned long)b.reducedSearches, (unsigned long)b.failLow, failLowPct, (unsigned long)b.reSearches, reSearchPct);
-    std::cout << buf;
-}
-
-PVSSearch::LMRStats PVSSearch::GetLMRStatsForTesting()
-{
-    return g_lmrStats;
-}
-
-void PVSSearch::ResetLMRStatsForTesting()
-{
-    g_lmrStats = LMRStats{};
-}
-
-void PVSSearch::PrintLMRStatsForTesting()
-{
-    std::cout << "=== Late Move Reduction (LMR) Stats (Recursive PVS) ===\n";
-    std::cout << "Total LMR reduced searches: " << g_lmrStats.totalReducedSearches << "\n";
-
-    double totalFailLowPct = (g_lmrStats.totalReducedSearches > 0) ? (100.0 * g_lmrStats.reducedFailLow / static_cast<double>(g_lmrStats.totalReducedSearches)) : 0.0;
-    double totalReSearchPct = (g_lmrStats.totalReducedSearches > 0) ? (100.0 * g_lmrStats.reducedTriggeredReSearch / static_cast<double>(g_lmrStats.totalReducedSearches)) : 0.0;
-
-    std::cout << "  Immediate fail-low (no re-search): " << g_lmrStats.reducedFailLow << " (" << totalFailLowPct << "%)\n";
-    std::cout << "  Triggered greater-depth re-search: " << g_lmrStats.reducedTriggeredReSearch << " (" << totalReSearchPct << "%)\n";
-    std::cout << "  Full-depth confirmations:          " << g_lmrStats.fullDepthConfirmations << "\n";
-
-    std::cout << "\n[Reduction Depth Breakdown]\n";
-    auto printRed = [](const char *label, uint64_t attempts, uint64_t reSearch) {
-        double rsPct = (attempts > 0) ? (100.0 * reSearch / static_cast<double>(attempts)) : 0.0;
-        char buf[256];
-        snprintf(buf, sizeof(buf), "  %-8s Attempts: %7lu | Re-search: %7lu (%6.2f%%)\n",
-                 label, (unsigned long)attempts, (unsigned long)reSearch, rsPct);
-        std::cout << buf;
-    };
-    printRed("R1:", g_lmrStats.reductionAttempts[0], g_lmrStats.reductionReSearches[0]);
-    printRed("R2:", g_lmrStats.reductionAttempts[1], g_lmrStats.reductionReSearches[1]);
-    printRed("R3:", g_lmrStats.reductionAttempts[2], g_lmrStats.reductionReSearches[2]);
-    printRed("R4:", g_lmrStats.reductionAttempts[3], g_lmrStats.reductionReSearches[3]);
-    printRed("R5+:", g_lmrStats.reductionAttempts[4], g_lmrStats.reductionReSearches[4]);
-
-    std::cout << "\n[Full-Depth Re-Search Outcome Breakdown]\n";
-    std::cout << "  Total full-depth confirmations: " << g_lmrStats.fullDepthConfirmations << "\n";
-    auto printOutcome = [total = g_lmrStats.fullDepthConfirmations](const char *label, uint64_t count) {
-        double pct = (total > 0) ? (100.0 * count / static_cast<double>(total)) : 0.0;
-        char buf[128];
-        snprintf(buf, sizeof(buf), "  %-32s %7lu  (%6.2f%%)\n", label, (unsigned long)count, pct);
-        std::cout << buf;
-    };
-    printOutcome("Final value <= original alpha:", g_lmrStats.reSearchFailLow);
-    printOutcome("Final value > alpha & < beta:", g_lmrStats.reSearchPV);
-    printOutcome("Final value >= beta (cutoff):", g_lmrStats.reSearchBetaCutoff);
-
-    std::cout << "\n[By Move Index]\n";
-    PrintLMRBucketRow("Index 1:", g_lmrStats.idx1);
-    PrintLMRBucketRow("Index 2:", g_lmrStats.idx2);
-    PrintLMRBucketRow("Index 3:", g_lmrStats.idx3);
-    PrintLMRBucketRow("Indices 4-7:", g_lmrStats.idx4To7);
-    PrintLMRBucketRow("Index 8+:", g_lmrStats.idx8Plus);
-
-    std::cout << "\n[By Remaining Depth]\n";
-    PrintLMRBucketRow("Depth 3:", g_lmrStats.depth3);
-    PrintLMRBucketRow("Depth 4-5:", g_lmrStats.depth4To5);
-    PrintLMRBucketRow("Depth 6-8:", g_lmrStats.depth6To8);
-    PrintLMRBucketRow("Depth 9+:", g_lmrStats.depth9Plus);
-
-    std::cout << "\n[By Move Type]\n";
-    PrintLMRBucketRow("Quiet moves:", g_lmrStats.moveQuiet);
-    PrintLMRBucketRow("Losing captures:", g_lmrStats.moveLosingCapture);
-    PrintLMRBucketRow("Killer quiet moves:", g_lmrStats.moveKillerQuiet);
-
-    std::cout << "\n=======================================================\n";
-    std::cout << "=== Detailed Investigation: Move Indices 4 to 7 ===\n";
-    std::cout << "=======================================================\n";
-    std::cout << "\n[Indices 4-7 By Depth]\n";
-    PrintLMRBucketRow("Depth 3-4:", g_lmrStats.idx4To7_depth3To4);
-    PrintLMRBucketRow("Depth 5:",   g_lmrStats.idx4To7_depth5);
-    PrintLMRBucketRow("Depth 6:",   g_lmrStats.idx4To7_depth6);
-    PrintLMRBucketRow("Depth 7-8:", g_lmrStats.idx4To7_depth7To8);
-    PrintLMRBucketRow("Depth 9+:",  g_lmrStats.idx4To7_depth9Plus);
-
-    std::cout << "\n[Indices 4-7 Re-Search Outcomes]\n";
-    std::cout << "  Total full-depth re-searches: " << g_lmrStats.idx4To7_reSearchTotal << "\n";
-    auto printIdx4To7Outcome = [total = g_lmrStats.idx4To7_reSearchTotal](const char *label, uint64_t count) {
-        double pct = (total > 0) ? (100.0 * count / static_cast<double>(total)) : 0.0;
-        char buf[128];
-        snprintf(buf, sizeof(buf), "  %-32s %7lu  (%6.2f%%)\n", label, (unsigned long)count, pct);
-        std::cout << buf;
-    };
-    printIdx4To7Outcome("Final value <= original alpha:", g_lmrStats.idx4To7_reSearchFailLow);
-    printIdx4To7Outcome("Final value > alpha & < beta:", g_lmrStats.idx4To7_reSearchPV);
-    printIdx4To7Outcome("Final value >= beta (cutoff):", g_lmrStats.idx4To7_reSearchBetaCutoff);
-
-    std::cout << "\n[Indices 4-7 By Move Type]\n";
-    PrintLMRBucketRow("Ordinary quiet:",   g_lmrStats.idx4To7_quiet);
-    PrintLMRBucketRow("Killer quiet:",     g_lmrStats.idx4To7_killer);
-    PrintLMRBucketRow("Losing capture:",   g_lmrStats.idx4To7_losingCapture);
-}
-
-PVSSearch::FutilityStats g_futilityStats;
-
-void RecordFutilityCandidate(int moveIndex, int depth, int ply, const Move &move, int staticEval, int origAlpha, int origBeta, int actualValue, bool givesCheck)
-{
-    g_futilityStats.totalCandidates++;
-    if (actualValue <= origAlpha)
-        g_futilityStats.candidatesFailLow++;
-    else if (actualValue < origBeta)
-        g_futilityStats.candidatesPV++;
-    else
-        g_futilityStats.candidatesBetaCutoff++;
-
-    if (depth == 1) g_futilityStats.depth1.record(actualValue, origAlpha, origBeta);
-    else if (depth == 2) g_futilityStats.depth2.record(actualValue, origAlpha, origBeta);
-
-    if (moveIndex == 1) g_futilityStats.idx1.record(actualValue, origAlpha, origBeta);
-    else if (moveIndex == 2) g_futilityStats.idx2.record(actualValue, origAlpha, origBeta);
-    else if (moveIndex == 3) g_futilityStats.idx3.record(actualValue, origAlpha, origBeta);
-    else if (moveIndex >= 4 && moveIndex <= 7) g_futilityStats.idx4To7.record(actualValue, origAlpha, origBeta);
-    else g_futilityStats.idx8Plus.record(actualValue, origAlpha, origBeta);
-
-    bool isKiller = (ply >= 0 && ply < PVSSearch::MaxKillerPly && (PVSSearch::killers[ply][0] == move || PVSSearch::killers[ply][1] == move));
-    if (givesCheck)
-        g_futilityStats.quietGivingCheck.record(actualValue, origAlpha, origBeta);
-    else if (isKiller)
-        g_futilityStats.killerQuiet.record(actualValue, origAlpha, origBeta);
-    else
-        g_futilityStats.ordinaryQuiet.record(actualValue, origAlpha, origBeta);
-
-    int staticGap = origAlpha - staticEval;
-    if (staticGap < 150) g_futilityStats.gap0To149.record(actualValue, origAlpha, origBeta);
-    else if (staticGap < 300) g_futilityStats.gap150To299.record(actualValue, origAlpha, origBeta);
-    else if (staticGap < 500) g_futilityStats.gap300To499.record(actualValue, origAlpha, origBeta);
-    else g_futilityStats.gap500Plus.record(actualValue, origAlpha, origBeta);
-}
-
-void PrintFutilityBucketRow(const char *label, const PVSSearch::FutilityBucket &b)
-{
-    double flPct = (b.total > 0) ? (100.0 * b.failLow / static_cast<double>(b.total)) : 0.0;
-    double pvPct = (b.total > 0) ? (100.0 * b.pv / static_cast<double>(b.total)) : 0.0;
-    double cutPct = (b.total > 0) ? (100.0 * b.cutoff / static_cast<double>(b.total)) : 0.0;
-    char buf[256];
-    snprintf(buf, sizeof(buf), "  %-24s Total: %7lu | <=alpha: %7lu (%5.1f%%) | PV: %5lu (%4.1f%%) | >=beta: %5lu (%4.1f%%)\n",
-             label, (unsigned long)b.total, (unsigned long)b.failLow, flPct, (unsigned long)b.pv, pvPct, (unsigned long)b.cutoff, cutPct);
-    std::cout << buf;
-}
-
-PVSSearch::FutilityStats PVSSearch::GetFutilityStatsForTesting()
-{
-    return g_futilityStats;
-}
-
-void PVSSearch::ResetFutilityStatsForTesting()
-{
-    g_futilityStats = FutilityStats{};
-}
-
-void PVSSearch::PrintFutilityStatsForTesting()
-{
-    std::cout << "=== Futility Pruning Safety Stats (Recursive PVS) ===\n";
-    std::cout << "Total futility candidates evaluated: " << g_futilityStats.totalCandidates << "\n";
-
-    double flPct = (g_futilityStats.totalCandidates > 0) ? (100.0 * g_futilityStats.candidatesFailLow / static_cast<double>(g_futilityStats.totalCandidates)) : 0.0;
-    double pvPct = (g_futilityStats.totalCandidates > 0) ? (100.0 * g_futilityStats.candidatesPV / static_cast<double>(g_futilityStats.totalCandidates)) : 0.0;
-    double cutPct = (g_futilityStats.totalCandidates > 0) ? (100.0 * g_futilityStats.candidatesBetaCutoff / static_cast<double>(g_futilityStats.totalCandidates)) : 0.0;
-
-    char buf[256];
-    snprintf(buf, sizeof(buf), "  Overall <= original alpha (safe to prune): %7lu (%5.1f%%)\n  Overall > alpha and < beta (would improve PV): %7lu (%5.1f%%)\n  Overall >= beta (would cause cutoff):       %7lu (%5.1f%%)\n",
-             (unsigned long)g_futilityStats.candidatesFailLow, flPct, (unsigned long)g_futilityStats.candidatesPV, pvPct, (unsigned long)g_futilityStats.candidatesBetaCutoff, cutPct);
-    std::cout << buf;
-
-    std::cout << "\n[By Remaining Depth]\n";
-    PrintFutilityBucketRow("Depth 1:", g_futilityStats.depth1);
-    PrintFutilityBucketRow("Depth 2:", g_futilityStats.depth2);
-
-    std::cout << "\n[By Move Index]\n";
-    PrintFutilityBucketRow("Index 1:", g_futilityStats.idx1);
-    PrintFutilityBucketRow("Index 2:", g_futilityStats.idx2);
-    PrintFutilityBucketRow("Index 3:", g_futilityStats.idx3);
-    PrintFutilityBucketRow("Indices 4-7:", g_futilityStats.idx4To7);
-    PrintFutilityBucketRow("Index 8+:", g_futilityStats.idx8Plus);
-
-    std::cout << "\n[By Move Type]\n";
-    PrintFutilityBucketRow("Ordinary quiet:", g_futilityStats.ordinaryQuiet);
-    PrintFutilityBucketRow("Killer quiet:", g_futilityStats.killerQuiet);
-    PrintFutilityBucketRow("Quiet giving check:", g_futilityStats.quietGivingCheck);
-
-    std::cout << "\n[By Static Evaluation Gap (alpha - staticEval)]\n";
-    PrintFutilityBucketRow("Gap 0 to 149:", g_futilityStats.gap0To149);
-    PrintFutilityBucketRow("Gap 150 to 299:", g_futilityStats.gap150To299);
-    PrintFutilityBucketRow("Gap 300 to 499:", g_futilityStats.gap300To499);
-    PrintFutilityBucketRow("Gap 500+:", g_futilityStats.gap500Plus);
-}
-
-PVSSearch::NullMoveStats g_nullMoveStats;
-
-void RecordNullMoveAttempt(int depth, int R, int staticMargin, const Board &board, int turn, bool isCutoff, bool isVerified)
-{
-    g_nullMoveStats.totalAttempts++;
-    if (isCutoff) {
-        g_nullMoveStats.totalCutoffs++;
-        if (isVerified) g_nullMoveStats.totalVerifiedCutoffs++;
-        else g_nullMoveStats.totalFalseCutoffs++;
-    } else {
-        g_nullMoveStats.totalFailLow++;
-    }
-
-    // Depth
-    if (depth == 4) g_nullMoveStats.depth4.recordAttempt(isCutoff, isVerified);
-    else if (depth >= 5 && depth <= 6) g_nullMoveStats.depth5To6.recordAttempt(isCutoff, isVerified);
-    else if (depth >= 7 && depth <= 8) g_nullMoveStats.depth7To8.recordAttempt(isCutoff, isVerified);
-    else if (depth >= 9) g_nullMoveStats.depth9Plus.recordAttempt(isCutoff, isVerified);
-
-    // Reduction R
-    if (R == 3) g_nullMoveStats.r3.recordAttempt(isCutoff, isVerified);
-    else if (R == 4) g_nullMoveStats.r4.recordAttempt(isCutoff, isVerified);
-
-    // Margin
-    if (staticMargin < 50) g_nullMoveStats.margin0To49.recordAttempt(isCutoff, isVerified);
-    else if (staticMargin < 150) g_nullMoveStats.margin50To149.recordAttempt(isCutoff, isVerified);
-    else if (staticMargin < 300) g_nullMoveStats.margin150To299.recordAttempt(isCutoff, isVerified);
-    else g_nullMoveStats.margin300Plus.recordAttempt(isCutoff, isVerified);
-
-    // Material Class
-    int knights = PositionCorePieceListsView{board.positionCore}[turn * 8 + 2].size();
-    int bishops = PositionCorePieceListsView{board.positionCore}[turn * 8 + 3].size();
-    int rooks = PositionCorePieceListsView{board.positionCore}[turn * 8 + 4].size();
-    int queens = PositionCorePieceListsView{board.positionCore}[turn * 8 + 5].size();
-    int totalNonPawnCount = knights + bishops + rooks + queens;
-
-    if (queens > 0) g_nullMoveStats.matQueen.recordAttempt(isCutoff, isVerified);
-    else if (rooks > 0) g_nullMoveStats.matRookNoQueen.recordAttempt(isCutoff, isVerified);
-    else g_nullMoveStats.matMinorsOnly.recordAttempt(isCutoff, isVerified);
-
-    if (totalNonPawnCount == 1) g_nullMoveStats.matSinglePiece.recordAttempt(isCutoff, isVerified);
-    else if (totalNonPawnCount >= 2) g_nullMoveStats.matMultiPiece.recordAttempt(isCutoff, isVerified);
-}
-
-void PrintNullBucketRow(const char *label, const PVSSearch::NullMoveBucket &b)
-{
-    double flPct = (b.attempts > 0) ? (100.0 * b.failLow / static_cast<double>(b.attempts)) : 0.0;
-    double cutPct = (b.attempts > 0) ? (100.0 * b.cutoffs / static_cast<double>(b.attempts)) : 0.0;
-    double verPct = (b.cutoffs > 0) ? (100.0 * b.verifiedCutoffs / static_cast<double>(b.cutoffs)) : 0.0;
-    double falsePct = (b.cutoffs > 0) ? (100.0 * b.falseCutoffs / static_cast<double>(b.cutoffs)) : 0.0;
-
-    char buf[256];
-    snprintf(buf, sizeof(buf), "  %-24s Attempts: %6lu | Fail-low: %6lu (%5.1f%%) | Cutoffs: %6lu (%5.1f%%) | Confirmed: %6lu (%5.1f%%) | False: %4lu (%4.1f%%)\n",
-             label, (unsigned long)b.attempts, (unsigned long)b.failLow, flPct, (unsigned long)b.cutoffs, cutPct, (unsigned long)b.verifiedCutoffs, verPct, (unsigned long)b.falseCutoffs, falsePct);
-    std::cout << buf;
-}
-
-PVSSearch::NullMoveStats PVSSearch::GetNullMoveStatsForTesting()
-{
-    return g_nullMoveStats;
-}
-
-void PVSSearch::ResetNullMoveStatsForTesting()
-{
-    g_nullMoveStats = NullMoveStats{};
-}
-
-void PVSSearch::PrintNullMoveStatsForTesting()
-{
-    std::cout << "=== Null Move Pruning (NMP) Safety Stats (Recursive PVS) ===\n";
-    std::cout << "Total null move attempts: " << g_nullMoveStats.totalAttempts << "\n";
-
-    double flPct = (g_nullMoveStats.totalAttempts > 0) ? (100.0 * g_nullMoveStats.totalFailLow / static_cast<double>(g_nullMoveStats.totalAttempts)) : 0.0;
-    double cutPct = (g_nullMoveStats.totalAttempts > 0) ? (100.0 * g_nullMoveStats.totalCutoffs / static_cast<double>(g_nullMoveStats.totalAttempts)) : 0.0;
-    double verPct = (g_nullMoveStats.totalCutoffs > 0) ? (100.0 * g_nullMoveStats.totalVerifiedCutoffs / static_cast<double>(g_nullMoveStats.totalCutoffs)) : 0.0;
-    double falsePct = (g_nullMoveStats.totalCutoffs > 0) ? (100.0 * g_nullMoveStats.totalFalseCutoffs / static_cast<double>(g_nullMoveStats.totalCutoffs)) : 0.0;
-
-    char buf[256];
-    snprintf(buf, sizeof(buf), "  Null move fail-lows:           %6lu (%5.1f%%)\n  Null move cutoffs:             %6lu (%5.1f%%)\n  Confirmed genuine cutoffs:     %6lu (%5.1f%% of cutoffs)\n  False cutoffs (failed verify): %6lu (%5.1f%% of cutoffs)\n",
-             (unsigned long)g_nullMoveStats.totalFailLow, flPct, (unsigned long)g_nullMoveStats.totalCutoffs, cutPct, (unsigned long)g_nullMoveStats.totalVerifiedCutoffs, verPct, (unsigned long)g_nullMoveStats.totalFalseCutoffs, falsePct);
-    std::cout << buf;
-
-    std::cout << "\n[By Remaining Depth]\n";
-    PrintNullBucketRow("Depth 4:", g_nullMoveStats.depth4);
-    PrintNullBucketRow("Depth 5-6:", g_nullMoveStats.depth5To6);
-    PrintNullBucketRow("Depth 7-8:", g_nullMoveStats.depth7To8);
-    PrintNullBucketRow("Depth 9+:", g_nullMoveStats.depth9Plus);
-
-    std::cout << "\n[By Reduction R]\n";
-    PrintNullBucketRow("R = 3:", g_nullMoveStats.r3);
-    PrintNullBucketRow("R = 4:", g_nullMoveStats.r4);
-
-    std::cout << "\n[By Side-to-Move Material Class]\n";
-    PrintNullBucketRow("Queen present:", g_nullMoveStats.matQueen);
-    PrintNullBucketRow("Rook (no queen):", g_nullMoveStats.matRookNoQueen);
-    PrintNullBucketRow("Minor pieces only:", g_nullMoveStats.matMinorsOnly);
-    PrintNullBucketRow("Single non-pawn piece:", g_nullMoveStats.matSinglePiece);
-    PrintNullBucketRow(">=2 non-pawn pieces:", g_nullMoveStats.matMultiPiece);
-
-    std::cout << "\n[By Static Margin (staticEval - beta)]\n";
-    PrintNullBucketRow("Margin 0 to 49:", g_nullMoveStats.margin0To49);
-    PrintNullBucketRow("Margin 50 to 149:", g_nullMoveStats.margin50To149);
-    PrintNullBucketRow("Margin 150 to 299:", g_nullMoveStats.margin150To299);
-    PrintNullBucketRow("Margin 300+:", g_nullMoveStats.margin300Plus);
-}
-
-PVSSearch::MoveOrderingQualityStats& PVSSearch::GetMoveOrderingQualityStatsForTesting()
-{
-    return g_orderingQualityStats;
-}
-
-void PVSSearch::ResetMoveOrderingQualityStatsForTesting()
-{
-    g_orderingQualityStats.reset();
-}
-
-int PVSSearch::DiagnosticCombinedHistory(int side, const Move &prevMove, const Move &move)
-{
-    return CombinedHistoryScore(side, prevMove, move);
-}
-
-int PVSSearch::DiagnosticMainHistory(int side, const Move &move)
-{
-    return HistoryScore(side, move);
-}
-
-int PVSSearch::DiagnosticContinuationHistory(const Move &prevMove, const Move &move)
-{
-    (void)prevMove;
-    (void)move;
-    return 0;
-}
-
-int PVSSearch::DiagnosticUnifiedOrderingScore(int turn, const Move &prevMove, int depthGone, const Move *m)
-{
-    const bool isQuiet = IsQuietMove(*m);
-    if (!isQuiet)
-    {
-        if (m->value >= 0)
-            return 1000000 + BasePvsOrderingScore(m);
-        else
-            return BasePvsOrderingScore(m);
-    }
-
-    if (depthGone >= 0 && depthGone < PVSSearch::MaxKillerPly)
-    {
-        if (PVSSearch::killers[depthGone][0] == *m)
-            return 500000 + (m->givesCheck ? CheckOrderingBonus : 0);
-        if (PVSSearch::killers[depthGone][1] == *m)
-            return 400000 + (m->givesCheck ? CheckOrderingBonus : 0);
-    }
-
-    return 100000 + CombinedHistoryScore(turn, prevMove, *m) + BasePvsOrderingScore(m);
-}
-#endif
 
 namespace
 {
@@ -1809,8 +1253,8 @@ private:
 
 int CapturedEndgameValue(const Move& move)
 {
-    static const int values[7] = {0, Option::PawnValue, Option::KnightValue,
-        Option::BishopValue, Option::RookValue, Option::QueenValue, 0};
+    static const int values[7] = {0, EngineInitializer::PawnValue, EngineInitializer::KnightValue,
+        EngineInitializer::BishopValue, EngineInitializer::RookValue, EngineInitializer::QueenValue, 0};
     return values[std::clamp(move.endPiece % 8, 0, 6)];
 }
 
@@ -1851,7 +1295,7 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
     const int side=b.sideToMove?1:0;
     const bool inCheck=BoardLogic::UnderAttack(b,PositionCorePieceListsView{b.positionCore}[side*8+6].front(),!b.sideToMove);
     if (ply >= SearchStackSize - 1)
-        return {inCheck ? 0 : StructuredNNUE::Evaluate(b), {}};
+        return {inCheck ? 0 : NNUE::Evaluate(b), {}};
     TargetSearchFrameGuard targetFrameGuard;
     TriedMoveStorage& triedMoves = targetFrameGuard.Get();
     SearchStackFrame& ss=StackFrame(ply);
@@ -1898,12 +1342,12 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
     }
     int tablebaseMaxValue=200000;
     const bool tablebaseEligible = ss.excludedMove==0 && ply>0 &&
-        Option::SyzygyProbeLimit>0 && Tablebase::IsAvailable() &&
-        Tablebase::PieceCount(b)<=Option::SyzygyProbeLimit &&
+        Tablebase::ProbeLimit>0 && Tablebase::IsAvailable() &&
+        Tablebase::PieceCount(b)<=Tablebase::ProbeLimit &&
         Tablebase::PieceCount(b)<=Tablebase::MaxPieces() &&
         Tablebase::IsPositionStateSupported(b);
     if(tablebaseEligible) {
-        const std::optional<Tablebase::Wdl> wdl=Tablebase::ProbeWdl(b,Option::SyzygyProbeLimit);
+        const std::optional<Tablebase::Wdl> wdl=Tablebase::ProbeWdl(b,Tablebase::ProbeLimit);
         if(wdl.has_value()){
             Search::tablebaseHits.fetch_add(1,std::memory_order_relaxed);
             const int tbValue=Tablebase::Score(*wdl);
@@ -1925,7 +1369,7 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
             rawStaticEval=ss.staticEval;
         else if(hit&&tt.staticEval!=TT_NO_STATIC_EVAL) rawStaticEval=tt.staticEval;
         else {
-            rawStaticEval=StructuredNNUE::Evaluate(b)-
+            rawStaticEval=NNUE::Evaluate(b)-
                 ss.statScore/SearchParameters::StaticEvaluation::StatScoreDivisor;
             if(ss.excludedMove==0)
                 TranspositionTable::Store(key,0,-128,TT_EVAL_ONLY,0,rawStaticEval,pv);
@@ -1941,15 +1385,15 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
         if(depth<SearchParameters::Razoring::MaxDepth&&
            eval<=alpha-SearchParameters::Razoring::Margin){std::unique_ptr<MovePrintValue>q(QSearcher::QSearch(false,alpha,beta,prev,ply,0,false,0,m1,m2,m3,b,false,ply,true));if(q->value<=alpha)return {q->value,q->printString,q->provenance,q->selective};}
         if(depth<SearchParameters::ReverseFutility::MaxDepth&&
-           eval-SearchParameters::Runtime().reverseFutilityDepthMargin*(depth-int(improving))>=beta&&
+           eval-SearchParameters::ReverseFutility::DepthMargin*(depth-int(improving))>=beta&&
            eval<MateScore::Threshold)return {eval,{}};
     }
     const bool suppressed=nullSuppressedSide==side&&ply<=nullSuppressedUntilPly;
     if(!pv&&!inCheck&&nullAllowed&&!suppressed&&ss.excludedMove==0&&prev.promotionPiece!=-1&&
-       ss.statScore<SearchParameters::Runtime().nullMoveStatScoreLimit&&NullMoveMaterialEligible(b,side)&&eval>=beta&&eval>=rawStaticEval&&
+       ss.statScore<SearchParameters::NullMove::StatScoreLimit&&NullMoveMaterialEligible(b,side)&&eval>=beta&&eval>=rawStaticEval&&
        rawStaticEval>=beta-SearchParameters::NullMove::StaticEvalDepthSlope*depth+
            SearchParameters::NullMove::StaticEvalBase-int(improving)*SearchParameters::NullMove::ImprovingMargin){
-        int R=(SearchParameters::Runtime().nullMoveBase+SearchParameters::Runtime().nullMoveDepthSlope*depth)/
+        int R=(SearchParameters::NullMove::Base+SearchParameters::NullMove::DepthSlope*depth)/
             SearchParameters::NullMove::Divisor+
             std::min((eval-beta)/SearchParameters::NullMove::EvalDivisor,
                      SearchParameters::NullMove::MaxEvalBonus); R=std::clamp(R,1,depth);
@@ -1958,7 +1402,7 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
         StackFrame(ply+1).staticEval=-rawStaticEval+2*TempoForPosition(b);
         TargetResult nr=TargetSearch(false,-beta,-beta+1,depth-R,n,m2,m3,prev,b,false,ply+1,!cutNode);
         int score=-nr.value; GameLogic::UndoMove(b,n,u);
-        if(score>=beta){if(MateScore::IsMate(score))score=beta;if(depth<SearchParameters::Runtime().nullMoveVerificationDepth)return {score,{},nr.provenance,nr.selective};
+        if(score>=beta){if(MateScore::IsMate(score))score=beta;if(depth<SearchParameters::NullMove::VerificationDepth)return {score,{},nr.provenance,nr.selective};
             int os=nullSuppressedSide,ou=nullSuppressedUntilPly;nullSuppressedSide=side;nullSuppressedUntilPly=ply+
                 SearchParameters::NullMove::SuppressionNumerator*(depth-R)/
                 SearchParameters::NullMove::SuppressionDenominator;
@@ -1966,8 +1410,8 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
             nullSuppressedSide=os;nullSuppressedUntilPly=ou;if(vr.value>=beta)return {score,{},vr.provenance,vr.selective};}
     }
     if(ss.excludedMove==0&&depth>=5&&!pv&&!inCheck&&std::abs(beta)<MateScore::Threshold){
-        const int raised=beta+SearchParameters::Runtime().probCutBetaMargin-
-            SearchParameters::Runtime().probCutImprovingMargin*int(improving);
+        const int raised=beta+SearchParameters::ProbCut::BetaMargin-
+            SearchParameters::ProbCut::ImprovingMargin*int(improving);
         ProbCutPicker probCutPicker(b,depth,ply,hit?tt.bestMove:0,
                                     raised-rawStaticEval);
         int tried=0;
@@ -2041,13 +1485,13 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
         int lmrDepth=childDepth;
         if(lmr){
             int r=Reduction(improving,depth,ss.moveCount);
-            if(ttPv)r-=SearchParameters::Runtime().lmrTtPvAdjustment;
+            if(ttPv)r-=SearchParameters::LMR::TtPvAdjustment;
             if(ttHitAverage > SearchParameters::LMR::TtHitHighThreshold * TtHitAverageResolution)--r;
-            if(StackFrame(ply-1).moveCount>SearchParameters::Runtime().lmrPreviousMoveCountThreshold)--r;
-            if(singularLMR)r-=SearchParameters::Runtime().lmrSingularAdjustment;
+            if(StackFrame(ply-1).moveCount>SearchParameters::LMR::PreviousMoveCountThreshold)--r;
+            if(singularLMR)r-=SearchParameters::LMR::SingularAdjustment;
             if(quiet){
                 if(ttCapture)r+=SearchParameters::LMR::TtCaptureAdjustment;
-                if(cutNode)r+=SearchParameters::Runtime().lmrCutNodeAdjustment;
+                if(cutNode)r+=SearchParameters::LMR::CutNodeAdjustment;
                 else if(movingPiece%8!=6 || std::abs(move->endPlace-move->beginPlace)!=2){
                     Move reverse=*move;std::swap(reverse.beginPlace,reverse.endPlace);
                     reverse.PublicFlag=0;reverse.promotionPiece=0;
@@ -2057,7 +1501,7 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
                    previousStat<SearchParameters::LMR::BadPreviousStatScore)--r;
                 else if(previousStat>=SearchParameters::LMR::GoodPreviousStatScore&&
                         currentStat<SearchParameters::LMR::BadStatScore)++r;
-                r-=currentStat/SearchParameters::Runtime().lmrStatScoreDivisor;
+                r-=currentStat/SearchParameters::LMR::StatScoreDivisor;
             } else if(depth<SearchParameters::LMR::ShallowCaptureDepth&&
                       ss.moveCount>SearchParameters::LMR::LateCaptureMoveCount) ++r;
             r=std::clamp(r,0,std::max(0,childDepth-1));lmrDepth=childDepth-r;
@@ -2071,14 +1515,14 @@ TargetResult TargetSearch(bool pv,int alpha,int beta,int depth,Move& prev,
                    quietHistory.c1<SearchParameters::CounterMovePruning::ContinuationThreshold&&
                    quietHistory.c2<SearchParameters::CounterMovePruning::ContinuationThreshold)continue;
                 if(lmrDepth<SearchParameters::ParentFutility::MaxReducedDepth&&!inCheck&&
-                   rawStaticEval+SearchParameters::Runtime().parentFutilityBaseMargin+
-                   SearchParameters::Runtime().parentFutilityDepthMargin*lmrDepth<=alpha&&
+                   rawStaticEval+SearchParameters::ParentFutility::BaseMargin+
+                   SearchParameters::ParentFutility::DepthMargin*lmrDepth<=alpha&&
                    combined<SearchParameters::History::ParentFutilityLimit)continue;
-                const int see=-(SearchParameters::Runtime().seeQuietBase-
+                const int see=-(SearchParameters::SEE::QuietBase-
                     std::min(lmrDepth,SearchParameters::SEE::QuietDepthCap))*lmrDepth*lmrDepth;
                 if(!MoveLogic::SEE_GE(b,*move,see))continue;
             } else if(!MoveLogic::SEE_GE(b,*move,
-                       -SearchParameters::Runtime().seeTacticalDepthMargin*depth))continue;
+                       -SearchParameters::SEE::TacticalDepthMargin*depth))continue;
         }
         MissingInfoAboutPrevStateFromMove u(b,*move);GameLogic::DoMove(b,*move,prev,depth,ply,&u);
         if(BoardLogic::UnderAttack(b,PositionCorePieceListsView{b.positionCore}[side*8+6].front(),b.sideToMove)){GameLogic::UndoMove(b,*move,u);--ss.moveCount;continue;}
@@ -2134,7 +1578,6 @@ double PVSSearch::NullMoveReduction(bool isPVNode, int alpha, int beta, int dept
     Move nullMove = Move();
     nullMove.promotionPiece = -1;
 
-    Board *boardCopy = UCI::IsRelease ? nullptr : board4.MakeCopy();
     MissingInfoAboutPrevStateFromMove missingInfoAboutPrevStateFromMove(board4);
     GameLogic::DoMove(board4, nullMove, prevMove, depthGone, depthGone);
     double valueReduced;
@@ -2155,11 +1598,5 @@ double PVSSearch::NullMoveReduction(bool isPVNode, int alpha, int beta, int dept
         valueReduced = -childResult->value;
     }
     GameLogic::UndoMove(board4, nullMove, missingInfoAboutPrevStateFromMove);
-    if (UCI::IsTest())
-    {
-        Board::AreBoardsEqual(board4, *boardCopy);
-        delete boardCopy;
-        boardCopy = nullptr;
-    }
     return valueReduced;
 }

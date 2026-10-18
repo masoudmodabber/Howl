@@ -3,7 +3,7 @@
 #include "Board.h"
 #include "Move.h"
 #include "MissingInfoAboutPrevStateFromMove.h"
-#include "Option.h"
+#include "EngineInitializer.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -40,7 +40,7 @@ void SynchronizeSquare(PositionCore& core, const Board& board, int square)
     if (square < 0 || square >= 64)
         return;
 
-    const Bitboard squareBit = Option::PowerTwo[square];
+    const Bitboard squareBit = EngineInitializer::PowerTwo[square];
     const int oldPiece = core.pieceAt[square];
     const int oldType = PieceTypeIndex(oldPiece);
     if (oldType >= 0)
@@ -77,7 +77,7 @@ void SynchronizeScalars(PositionCore& core, const Board& board)
 
 void SetPiece(PositionCore& core, int square, int piece)
 {
-    const Bitboard bit = Option::PowerTwo[square];
+    const Bitboard bit = EngineInitializer::PowerTwo[square];
     const int oldPiece = core.pieceAt[square];
     const int oldType = PieceTypeIndex(oldPiece);
     if (oldType >= 0)
@@ -102,7 +102,7 @@ void SetPiece(PositionCore& core, int square, int piece)
 
 int CapturedSquare(const Move& move, bool movingWhite)
 {
-    return (move.PublicFlag & Option::PowerTwo[6]) != 0
+    return (move.PublicFlag & EngineInitializer::PowerTwo[6]) != 0
         ? move.endPlace + (movingWhite ? -8 : 8)
         : move.endPlace;
 }
@@ -118,7 +118,7 @@ void UpdateMoveSquares(PositionCore& core, const Move& move, bool movingWhite,
     {
         const int movingPiece = core.pieceAt[move.beginPlace];
         SetPiece(core, move.beginPlace, 0);
-        if ((move.PublicFlag & Option::PowerTwo[6]) != 0)
+        if ((move.PublicFlag & EngineInitializer::PowerTwo[6]) != 0)
             SetPiece(core, capturedSquare, 0);
         const int promotedPiece = move.promotionPiece > 0
             ? move.promotionPiece : movingPiece;
@@ -131,7 +131,7 @@ void UpdateMoveSquares(PositionCore& core, const Move& move, bool movingWhite,
             ? (movingWhite ? 1 : 9) : currentPiece;
         SetPiece(core, move.endPlace, 0);
         SetPiece(core, move.beginPlace, movingPiece);
-        if ((move.PublicFlag & Option::PowerTwo[6]) != 0)
+        if ((move.PublicFlag & EngineInitializer::PowerTwo[6]) != 0)
             SetPiece(core, capturedSquare, movingWhite ? 9 : 1);
         else if (move.endPiece > 0)
             SetPiece(core, move.endPlace, move.endPiece);
@@ -139,12 +139,12 @@ void UpdateMoveSquares(PositionCore& core, const Move& move, bool movingWhite,
 
     int rookFrom = -1;
     int rookTo = -1;
-    if ((move.CastleFlag & (Option::PowerTwo[3] | Option::PowerTwo[1])) != 0)
+    if ((move.CastleFlag & (EngineInitializer::PowerTwo[3] | EngineInitializer::PowerTwo[1])) != 0)
     {
         rookFrom = move.beginPlace + 3;
         rookTo = move.beginPlace + 1;
     }
-    else if ((move.CastleFlag & (Option::PowerTwo[2] | Option::PowerTwo[0])) != 0)
+    else if ((move.CastleFlag & (EngineInitializer::PowerTwo[2] | EngineInitializer::PowerTwo[0])) != 0)
     {
         rookFrom = move.beginPlace - 4;
         rookTo = move.beginPlace - 1;
@@ -221,8 +221,8 @@ void PositionCoreLogic::Verify(const Board& board, const Move* move,
         const int type = PieceTypeIndex(piece);
         if (type >= 0)
         {
-            expectedColours[PieceColour(piece)] |= Option::PowerTwo[square];
-            expectedPieces[type] |= Option::PowerTwo[square];
+            expectedColours[PieceColour(piece)] |= EngineInitializer::PowerTwo[square];
+            expectedPieces[type] |= EngineInitializer::PowerTwo[square];
             if (type == 5)
                 expectedKings[PieceColour(piece)] = static_cast<std::uint8_t>(square);
         }

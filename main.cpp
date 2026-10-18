@@ -3,16 +3,14 @@
 //#include <malloc.h>
 
 #include <iostream>
-#include <filesystem>
 #include "UCI.h"
 #include "AttackPlaces.h"
 #include "BoardInitializer.h"
 #include "PieceMoves.h"
 #include "MoveLogic.h"
 #include "KingSetup.h"
-#include "Option.h"
+#include "EngineInitializer.h"
 #include "PassedPawnSetup.h"
-#include "StructuredNNUEEvaluator.h"
 
 int main(int argc, char* argv[])
 {
@@ -25,7 +23,7 @@ int main(int argc, char* argv[])
     // This should enable file/line tracking
 #endif
 
-    Option::Initialize();
+    EngineInitializer::Initialize();
     AttackPlaces::Initialize();
     BoardInitializer::Initialize();
     PieceMoves::Initialize();
@@ -44,8 +42,6 @@ int main(int argc, char* argv[])
 
     // belt-and-braces (some libcs ignore unitbuf when piped):
     setvbuf(stdout, nullptr, _IONBF, 0);    // fully unbuffer stdout
-    const auto defaultWeights = (std::filesystem::path(argv[0]).parent_path().parent_path() / "nnue.weights").lexically_normal().string();
-    StructuredNNUE::SetWeightsPath(defaultWeights);
     UCI uci;
     uci.MainAsync();
     return 0;

@@ -18,10 +18,6 @@ constexpr std::uint64_t ExchangeValidBit = std::uint64_t{1} << 63;
 constexpr std::uint64_t ExchangeMixMultiplier = 0x9e3779b97f4a7c15ULL;
 }
 
-#if HOWL_CORRECTNESS_TESTING
-std::size_t ExchangeChessCache::allocationFailureThreshold = 0;
-#endif
-
 ExchangeChessCache::ExchangeChessCache(std::size_t capacityBytes)
 {
     if (!resize(capacityBytes))
@@ -58,12 +54,6 @@ bool ExchangeChessCache::resize(std::size_t capacityBytes)
     occupiedEntries = 0;
     resetStatistics();
 
-#if HOWL_CORRECTNESS_TESTING
-    if (allocationFailureThreshold != 0 && capacityBytes >= allocationFailureThreshold)
-    {
-        return false;
-    }
-#endif
 
     try
     {
@@ -236,11 +226,3 @@ void ExchangeChessCache::resetStatistics()
     cacheStatistics = {};
 #endif
 }
-
-#if HOWL_CORRECTNESS_TESTING
-void ExchangeChessCache::SetAllocationFailureThresholdForTesting(
-    std::size_t capacityBytes)
-{
-    allocationFailureThreshold = capacityBytes;
-}
-#endif

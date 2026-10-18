@@ -169,18 +169,3 @@ std::uint64_t HashMemoryBudget::LastConfigurationPeakTableBytes()
 {
     return lastConfigurationPeakTableBytes;
 }
-
-#if HOWL_CORRECTNESS_TESTING
-void HashMemoryBudget::ResetForTesting()
-{
-    TranspositionTable::Resize(0);
-    MoveLogic::ResizeExchangeCache(0);
-    MoveLogic::ResizeExchangeWithoutBeginPieceCache(0);
-    TranspositionTable::SetAllocationFailureThresholdForTesting(0);
-    MoveLogic::SetExchangeCacheAllocationFailureThresholdForTesting(0);
-    configured = false;
-    searchStarted = false;
-    accounting = {};
-    lastConfigurationPeakTableBytes = 0;
-}
-#endif

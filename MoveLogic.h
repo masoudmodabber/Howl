@@ -145,27 +145,15 @@ public:
     static bool ResizeExchangeWithoutBeginPieceCache(std::size_t capacityBytes);
     static std::size_t ExchangeCacheCapacityBytes();
     static std::size_t ExchangeWithoutBeginPieceCacheCapacityBytes();
-#if HOWL_CORRECTNESS_TESTING
-    static void SetExchangeCacheAllocationFailureThresholdForTesting(
-        std::size_t capacityBytes);
-#endif
 
 private:
-    static void LegacyMoveGeneratorInto(Board &thisBoard, int depth, int depthGone,
-                                        bool onlyCapturesAndChecks, bool scoreAndSort,
-                                        const AttackerState& whiteAttacker,
-                                        const AttackerState& blackAttacker,
-                                        MoveList& moveList, bool includeQuietChecks);
     static void PositionCoreMoveGeneratorInto(Board &thisBoard, int depth, int depthGone,
                                               bool onlyCapturesAndChecks, bool scoreAndSort,
                                               const AttackerState& whiteAttacker,
                                               const AttackerState& blackAttacker,
                                               MoveList& moveList, bool includeQuietChecks);
-    static AttackerState LegacySetWhiteAttacker(Board& thisBoard);
-    static AttackerState LegacySetBlackAttacker(Board& thisBoard);
     static AttackerState PositionCoreSetWhiteAttacker(Board& thisBoard);
     static AttackerState PositionCoreSetBlackAttacker(Board& thisBoard);
-    static bool LegacySEE_GE(Board& thisBoard, Move& move, int threshold);
     static bool PositionCoreSEE_GE(Board& thisBoard, Move& move, int threshold);
     static double pieceValue[15];
     static int pieceMoveStack[15];

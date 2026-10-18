@@ -4,7 +4,7 @@
 #include <vector>
 #include <random>
 #include "Board.h"
-#include "Option.h"
+#include "EngineInitializer.h"
 
 class BoardInitializer
 {

@@ -1,63 +1,39 @@
-# Howl Chess Engine
+# Howl
 
-Howl is a chess engine written in C++. It features an alpha-beta search (PVS, iterative deepening, aspiration windows, late move reductions, null move pruning, history heuristics) combined with a learned NNUE evaluator.
+Howl is a UCI chess engine written in C++ featuring NNUE evaluation and Syzygy endgame tablebase support.
 
-## Requirements
-
-- C++17 compatible compiler (e.g., GCC 9+, Clang 10+)
-- CMake 3.10 or newer
-
-## Building
+## Build
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
-The resulting executable is `build/howl`.
-
-## Running
-
-Howl communicates via the Universal Chess Interface (UCI) protocol:
+## Run
 
 ```bash
 ./build/howl
 ```
 
-Example UCI session:
+## NNUE
 
-```text
-uci
-isready
-position startpos
-go depth 12
-quit
-```
+Howl loads `nnue.weights` located in the parent directory of the executable; the retained `nnue.weights` is the production network.
 
-### NNUE Evaluation
+## UCI Options
 
-Howl loads `./nnue.weights` from the repository root by default. No manual configuration is required for normal operation.
+- `MultiPV`: Number of principal variations to calculate (default: 1, min: 1, max: 99).
+- `Hash`: Transposition table memory size in megabytes (default: 40, min: 8, max: 1024).
+- `SyzygyPath`: Path to the Syzygy tablebase directory.
+- `SyzygyProbeLimit`: Maximum piece count for Syzygy tablebase probing (default: 5, min: 0, max: 7).
 
-An alternate weights file can be loaded via the `StructuredNNUEWeights` UCI option:
+## Syzygy
 
-```text
-setoption name StructuredNNUEWeights value /path/to/custom.weights
-```
-
-### Syzygy Tablebases
-
-Howl supports 3-4-5 piece Syzygy tablebases via Fathom:
-
-```text
-setoption name SyzygyPath value /path/to/syzygy
-setoption name SyzygyProbeLimit value 5
-```
+The `SyzygyPath` option points to the directory containing Syzygy tablebase files (e.g. `setoption name SyzygyPath value /path/to/syzygy`).
 
 ## NNUE Training
 
-The tools required to prepare datasets, train a compatible NNUE network, and export weights are located in `nnue-training/`. See [`nnue-training/README.md`](file:///home/masoud/Code/Howl/nnue-training/README.md) for instructions.
+The `nnue-training/` directory contains the retained compatible training and export pipeline.
 
-## Acknowledgements
+## Attribution
 
-- [Lichess](https://huggingface.co/datasets/Lichess/chess-position-evaluations): Position evaluation dataset used to train Howl's NNUE network.
-- [Fathom](https://github.com/jdart1/Fathom): Syzygy tablebase probing library (vendored under `third_party/fathom`).
+Tablebase probing is powered by [Fathom](https://github.com/jdart1/Fathom) (vendored in `third_party/fathom`).

@@ -28,6 +28,8 @@ public:
     static std::string emergencyMove;
     static bool finiteSearch;
 
+    static int MultiPV;
+    static constexpr int nullWindowSize = 1;
     static int maxDepth;
     static int64_t maxNodes;
     static bool strictNodeLimit;
@@ -47,11 +49,7 @@ public:
     static std::string Parse(std::string p, int place);
     static int PrintKBest(std::vector<MovePrintValue*>& movesPrintValue, int KBest, bool finiteSearch);
     static void PrintBestMove();
-#if HOWL_CORRECTNESS_TESTING
-    static std::vector<std::pair<int, int>> AspirationWindowsForTesting(
-        int previousScore, const std::vector<int>& searchScores);
-#endif
-    
+
 private:
     static void deleteMovesPrintValue(std::vector<MovePrintValue*>& movesPrintValue);
 };

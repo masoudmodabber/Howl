@@ -3,7 +3,7 @@
 #include <crtdbg.h>
 #endif
 #include "PassedPawnSetup.h"
-#include "Option.h"
+#include "EngineInitializer.h"
 
 // Initialize static members
 long long PassedPawnSetup::WhitePassedMask[64] = {0};
@@ -27,41 +27,41 @@ void PassedPawnSetup::setPassedPawnMask()
         {
             for (int counter = pawnPlace / 8 + 1; counter < 8; counter++)
             {
-                WhitePassedMask[pawnPlace] += Option::PowerTwo[counter * 8];
-                WhitePassedMask[pawnPlace] += Option::PowerTwo[counter * 8 + 1];
+                WhitePassedMask[pawnPlace] += EngineInitializer::PowerTwo[counter * 8];
+                WhitePassedMask[pawnPlace] += EngineInitializer::PowerTwo[counter * 8 + 1];
             }
             for (int counter = 0; counter < pawnPlace / 8; counter++)
             {
-                BlackPassedMask[pawnPlace] += Option::PowerTwo[counter * 8];
-                BlackPassedMask[pawnPlace] += Option::PowerTwo[counter * 8 + 1];
+                BlackPassedMask[pawnPlace] += EngineInitializer::PowerTwo[counter * 8];
+                BlackPassedMask[pawnPlace] += EngineInitializer::PowerTwo[counter * 8 + 1];
             }
         }
         else if (pawnPlace % 8 == 7)
         {
             for (int counter = pawnPlace / 8 + 1; counter < 8; counter++)
             {
-                WhitePassedMask[pawnPlace] += Option::PowerTwo[counter * 8 + 7];
-                WhitePassedMask[pawnPlace] += Option::PowerTwo[counter * 8 + 6];
+                WhitePassedMask[pawnPlace] += EngineInitializer::PowerTwo[counter * 8 + 7];
+                WhitePassedMask[pawnPlace] += EngineInitializer::PowerTwo[counter * 8 + 6];
             }
             for (int counter = 0; counter < pawnPlace / 8; counter++)
             {
-                BlackPassedMask[pawnPlace] += Option::PowerTwo[counter * 8 + 7];
-                BlackPassedMask[pawnPlace] += Option::PowerTwo[counter * 8 + 6];
+                BlackPassedMask[pawnPlace] += EngineInitializer::PowerTwo[counter * 8 + 7];
+                BlackPassedMask[pawnPlace] += EngineInitializer::PowerTwo[counter * 8 + 6];
             }
         }
         else
         {
             for (int counter = pawnPlace / 8 + 1; counter < 8; counter++)
             {
-                WhitePassedMask[pawnPlace] += Option::PowerTwo[counter * 8 + pawnPlace % 8];
-                WhitePassedMask[pawnPlace] += Option::PowerTwo[counter * 8 + pawnPlace % 8 + 1];
-                WhitePassedMask[pawnPlace] += Option::PowerTwo[counter * 8 + pawnPlace % 8 - 1];
+                WhitePassedMask[pawnPlace] += EngineInitializer::PowerTwo[counter * 8 + pawnPlace % 8];
+                WhitePassedMask[pawnPlace] += EngineInitializer::PowerTwo[counter * 8 + pawnPlace % 8 + 1];
+                WhitePassedMask[pawnPlace] += EngineInitializer::PowerTwo[counter * 8 + pawnPlace % 8 - 1];
             }
             for (int counter = 0; counter < pawnPlace / 8; counter++)
             {
-                BlackPassedMask[pawnPlace] += Option::PowerTwo[counter * 8 + pawnPlace % 8];
-                BlackPassedMask[pawnPlace] += Option::PowerTwo[counter * 8 + pawnPlace % 8 + 1];
-                BlackPassedMask[pawnPlace] += Option::PowerTwo[counter * 8 + pawnPlace % 8 - 1];
+                BlackPassedMask[pawnPlace] += EngineInitializer::PowerTwo[counter * 8 + pawnPlace % 8];
+                BlackPassedMask[pawnPlace] += EngineInitializer::PowerTwo[counter * 8 + pawnPlace % 8 + 1];
+                BlackPassedMask[pawnPlace] += EngineInitializer::PowerTwo[counter * 8 + pawnPlace % 8 - 1];
             }
         }
     }

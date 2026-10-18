@@ -2,97 +2,91 @@
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
 #endif
-#include "Option.h"
-#include "MobilityV2.h"
-#include "PassedPawnV2.h"
+#include "EngineInitializer.h"
+#include "Mobility.h"
+#include "PassedPawn.h"
 #include "PieceSquareModel.h"
 
-char Option::charPowerTwo[8] = {};
-char Option::charPowerTwoC[8] = {};
-int Option::MultiPV = 1;
-std::string Option::SyzygyPath;
-int Option::SyzygyProbeLimit = 5;
-int Option::nullWindowSize = 1;
-int Option::checkExtension = 4;
-int Option::SafetyMargin = 100;
-int Option::PawnValue = 120;
-int Option::KnightValue = 320;
-int Option::BishopValue = 375;
-int Option::RookValue = 545;
-int Option::QueenValue = 1135;
-int Option::KingValue = 1200;
-int Option::EndPawnValue = -20;
-int Option::DoubledPawnValue = -20;
-int Option::IsolatedPawnMiddleGame = -10;
-int Option::IsolatedPawnEndGame = -8;
-int Option::RookOpenFileMiddleGame = 12;
-int Option::RookOpenFileEndGame = 2;
-int Option::RookSemiOpenFileMiddleGame = -4;
-int Option::RookSemiOpenFileEndGame = -26;
-int Option::KnightOutpostMiddleGame = 18;
-int Option::KnightOutpostEndGame = -3;
-int Option::KnightSupportedOutpostMiddleGame = 44;
-int Option::KnightSupportedOutpostEndGame = 48;
-int Option::RookBehindPassedPawnMiddleGame = 4;
-int Option::RookBehindPassedPawnEndGame = 12;
-int Option::BishopPairValue = 132;
-int Option::BishopOpenFilePawnScale = 2;
-int Option::TempoMiddleGame = 16;
-int Option::TempoEndGame = 41;
-int Option::OppositeColorBishopMiddleGameScalePermille = 940;
-int Option::OppositeColorBishopEndGameScalePermille = 794;
-int Option::EndgamePawnAdvancementRankMultiplier = 2;
-int Option::PieceAttackScalePercent = 135;
-int Option::LoneKingBase = 36;
-int Option::LoneKingEdgeWeight = -72;
-int Option::LoneKingCornerWeight = 22;
-int Option::LoneKingConfinementWeight = -10;
-int Option::LoneKingRestrictedNeighbourWeight = -26;
-int Option::KingAttackerPawnWeight = 0;
-int Option::KingAttackerMinorWeight = 9;
-int Option::KingAttackerRookWeight = 8;
-int Option::KingAttackerQueenWeight = 8;
-int Option::KingDefenderPawnWeight = 12;
-int Option::KingDefenderMinorWeight = 108;
-int Option::KingDefenderRookWeight = 6;
-int Option::KingDefenderQueenWeight = 135;
-int Option::KingShelterSecondRankDanger = 1;
-int Option::KingShelterAdvancedPawnDanger = 20;
-int Option::KingShelterMissingPawnDanger = 2;
-int Option::KingShelterOpenFileDanger = 0;
-int Option::KingUndefendedZoneDanger = 4;
-int Option::KingAdditionalZoneAttackerDanger = 55;
-int Option::KingSemiOpenLineDanger = 36;
-int Option::KingOpenLineDanger = 26;
-int Option::KingDiagonalLineDanger = 9;
-int Option::KingControlledEscapeDanger = 22;
-int Option::KingBlockedEscapeDanger = 0;
-int Option::KingTrappedEscapeDanger = 0;
-int Option::KingHeavyBatteryDanger = 0;
-int Option::KingPinnedShelterPawnWeight = 0;
-int Option::KingInfiltratedQueenWeight = 19;
-int Option::pieceMovement[2][7][120] = {};
+char EngineInitializer::charPowerTwo[8] = {};
+char EngineInitializer::charPowerTwoC[8] = {};
+int EngineInitializer::PawnValue = 120;
+int EngineInitializer::KnightValue = 320;
+int EngineInitializer::BishopValue = 375;
+int EngineInitializer::RookValue = 545;
+int EngineInitializer::QueenValue = 1135;
+int EngineInitializer::KingValue = 1200;
+int EngineInitializer::EndPawnValue = -20;
+int EngineInitializer::DoubledPawnValue = -20;
+int EngineInitializer::IsolatedPawnMiddleGame = -10;
+int EngineInitializer::IsolatedPawnEndGame = -8;
+int EngineInitializer::RookOpenFileMiddleGame = 12;
+int EngineInitializer::RookOpenFileEndGame = 2;
+int EngineInitializer::RookSemiOpenFileMiddleGame = -4;
+int EngineInitializer::RookSemiOpenFileEndGame = -26;
+int EngineInitializer::KnightOutpostMiddleGame = 18;
+int EngineInitializer::KnightOutpostEndGame = -3;
+int EngineInitializer::KnightSupportedOutpostMiddleGame = 44;
+int EngineInitializer::KnightSupportedOutpostEndGame = 48;
+int EngineInitializer::RookBehindPassedPawnMiddleGame = 4;
+int EngineInitializer::RookBehindPassedPawnEndGame = 12;
+int EngineInitializer::BishopPairValue = 132;
+int EngineInitializer::BishopOpenFilePawnScale = 2;
+int EngineInitializer::TempoMiddleGame = 16;
+int EngineInitializer::TempoEndGame = 41;
+int EngineInitializer::OppositeColorBishopMiddleGameScalePermille = 940;
+int EngineInitializer::OppositeColorBishopEndGameScalePermille = 794;
+int EngineInitializer::EndgamePawnAdvancementRankMultiplier = 2;
+int EngineInitializer::PieceAttackScalePercent = 135;
+int EngineInitializer::LoneKingBase = 36;
+int EngineInitializer::LoneKingEdgeWeight = -72;
+int EngineInitializer::LoneKingCornerWeight = 22;
+int EngineInitializer::LoneKingConfinementWeight = -10;
+int EngineInitializer::LoneKingRestrictedNeighbourWeight = -26;
+int EngineInitializer::KingAttackerPawnWeight = 0;
+int EngineInitializer::KingAttackerMinorWeight = 9;
+int EngineInitializer::KingAttackerRookWeight = 8;
+int EngineInitializer::KingAttackerQueenWeight = 8;
+int EngineInitializer::KingDefenderPawnWeight = 12;
+int EngineInitializer::KingDefenderMinorWeight = 108;
+int EngineInitializer::KingDefenderRookWeight = 6;
+int EngineInitializer::KingDefenderQueenWeight = 135;
+int EngineInitializer::KingShelterSecondRankDanger = 1;
+int EngineInitializer::KingShelterAdvancedPawnDanger = 20;
+int EngineInitializer::KingShelterMissingPawnDanger = 2;
+int EngineInitializer::KingShelterOpenFileDanger = 0;
+int EngineInitializer::KingUndefendedZoneDanger = 4;
+int EngineInitializer::KingAdditionalZoneAttackerDanger = 55;
+int EngineInitializer::KingSemiOpenLineDanger = 36;
+int EngineInitializer::KingOpenLineDanger = 26;
+int EngineInitializer::KingDiagonalLineDanger = 9;
+int EngineInitializer::KingControlledEscapeDanger = 22;
+int EngineInitializer::KingBlockedEscapeDanger = 0;
+int EngineInitializer::KingTrappedEscapeDanger = 0;
+int EngineInitializer::KingHeavyBatteryDanger = 0;
+int EngineInitializer::KingPinnedShelterPawnWeight = 0;
+int EngineInitializer::KingInfiltratedQueenWeight = 19;
+int EngineInitializer::pieceMovement[2][7][120] = {};
 
-int Option::PassedPawnMiddleGameParameters[] = {9, 2, 3, 2, 3, 2};
-int Option::PassedPawnEndGameParameters[] = {15, 10, 15, 20, 35, 55};
-int Option::PassedPawnMiddleGameFileAmplitude = 7;
-int Option::WhitePassedPawnValueMiddleGam[64] = {};
+int EngineInitializer::PassedPawnMiddleGameParameters[] = {9, 2, 3, 2, 3, 2};
+int EngineInitializer::PassedPawnEndGameParameters[] = {15, 10, 15, 20, 35, 55};
+int EngineInitializer::PassedPawnMiddleGameFileAmplitude = 7;
+int EngineInitializer::WhitePassedPawnValueMiddleGam[64] = {};
 
-int Option::PawnPieceSquareMiddleGameParameters[] = {-52, 6, 0, 14, -28, 6, 0};
-int Option::KnightPieceSquareMiddleGameParameters[] = {-2, 0, 0, 0, -5, -3, -2, 4, 4, -14, 29};
-int Option::BishopPieceSquareMiddleGameParameters[] = {-49, -8, -5, -1, -12, -77, 0, -2, 12, 24, 29};
-int Option::RookPieceSquareMiddleGameParameters[] = {-108, 6, 0, 10, 10, 2};
-int Option::QueenPieceSquareMiddleGameParameters[] = {18, 0, 0, -6, 14, -19};
-int Option::KingPieceSquareMiddleGameParameters[] = {18, 38, 16, 28, 2, -30, -26};
+int EngineInitializer::PawnPieceSquareMiddleGameParameters[] = {-52, 6, 0, 14, -28, 6, 0};
+int EngineInitializer::KnightPieceSquareMiddleGameParameters[] = {-2, 0, 0, 0, -5, -3, -2, 4, 4, -14, 29};
+int EngineInitializer::BishopPieceSquareMiddleGameParameters[] = {-49, -8, -5, -1, -12, -77, 0, -2, 12, 24, 29};
+int EngineInitializer::RookPieceSquareMiddleGameParameters[] = {-108, 6, 0, 10, 10, 2};
+int EngineInitializer::QueenPieceSquareMiddleGameParameters[] = {18, 0, 0, -6, 14, -19};
+int EngineInitializer::KingPieceSquareMiddleGameParameters[] = {18, 38, 16, 28, 2, -30, -26};
 
-int Option::PawnInValueWhiteMiddleGame[64] = {};
-int Option::KnightInValueWhiteMiddleGame[64] = {};
-int Option::BishopInValueWhiteMiddleGame[64] = {};
-int Option::RookInValueWhiteMiddleGame[64] = {};
-int Option::QueenInValueWhiteMiddleGame[64] = {};
-int Option::KingInValueWhiteMiddleGame[64] = {};
+int EngineInitializer::PawnInValueWhiteMiddleGame[64] = {};
+int EngineInitializer::KnightInValueWhiteMiddleGame[64] = {};
+int EngineInitializer::BishopInValueWhiteMiddleGame[64] = {};
+int EngineInitializer::RookInValueWhiteMiddleGame[64] = {};
+int EngineInitializer::QueenInValueWhiteMiddleGame[64] = {};
+int EngineInitializer::KingInValueWhiteMiddleGame[64] = {};
 
-int Option::PawnMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::PawnMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 1, 0, 0, 0, 0, 0,
                                                       0, 0, 3, 7, 7, 1, 0, 0,
@@ -101,7 +95,7 @@ int Option::PawnMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KnightMoveOrderingValueWhiteMiddleGame[] = {-6, -5, -4, -3, -3, -4, -5, -6,
+int EngineInitializer::KnightMoveOrderingValueWhiteMiddleGame[] = {-6, -5, -4, -3, -3, -4, -5, -6,
                                                         -4, -3, -2, -1, -1, -2, -3, -4,
                                                         0, 0, 2, 0, 0, 2, 0, 0,
                                                         0, 0, 3, 7, 7, 3, 0, 0,
@@ -110,7 +104,7 @@ int Option::KnightMoveOrderingValueWhiteMiddleGame[] = {-6, -5, -4, -3, -3, -4, 
                                                         0, 5, 10, 15, 15, 10, 5, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::BishopMoveOrderingValueWhiteMiddleGame[] = {-5, -4, -3, -2, -2, -3, -4, -5,
+int EngineInitializer::BishopMoveOrderingValueWhiteMiddleGame[] = {-5, -4, -3, -2, -2, -3, -4, -5,
                                                         0, 1, 0, 0, 0, 0, 1, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
@@ -119,7 +113,7 @@ int Option::BishopMoveOrderingValueWhiteMiddleGame[] = {-5, -4, -3, -2, -2, -3, 
                                                         0, 8, 10, 12, 12, 10, 8, 0,
                                                         0, 4, 8, 10, 10, 8, 4, 0};
 
-int Option::RookMoveOrderingValueWhiteMiddleGame[] = {0, -8, 1, 0, 0, 1, -8, 0,
+int EngineInitializer::RookMoveOrderingValueWhiteMiddleGame[] = {0, -8, 1, 0, 0, 1, -8, 0,
                                                       -8, -8, -8, -8, -8, -8, -8, -8,
                                                       -8, -8, -8, -8, -8, -8, -8, -8,
                                                       -8, -8, -8, -8, -8, -8, -8, -8,
@@ -128,7 +122,7 @@ int Option::RookMoveOrderingValueWhiteMiddleGame[] = {0, -8, 1, 0, 0, 1, -8, 0,
                                                       25, 25, 25, 25, 25, 25, 25, 25,
                                                       5, 5, 5, 5, 5, 5, 5, 5};
 
-int Option::QueenMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::QueenMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0,
@@ -137,7 +131,7 @@ int Option::QueenMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                        5, 5, 5, 5, 5, 5, 5, 5,
                                                        0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KingMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::KingMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
@@ -148,7 +142,7 @@ int Option::KingMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
 
 // till820
 /*
-int Option::PawnMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::PawnMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
@@ -157,7 +151,7 @@ int Option::PawnMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KnightMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::KnightMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
@@ -166,7 +160,7 @@ int Option::KnightMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::BishopMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::BishopMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
@@ -175,7 +169,7 @@ int Option::BishopMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::RookMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::RookMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
@@ -184,7 +178,7 @@ int Option::RookMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::QueenMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::QueenMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0,
@@ -193,7 +187,7 @@ int Option::QueenMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KingMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::KingMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
@@ -202,7 +196,7 @@ int Option::KingMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::PawnMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::PawnMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
@@ -211,7 +205,7 @@ int Option::PawnMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KnightMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::KnightMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
@@ -220,7 +214,7 @@ int Option::KnightMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::BishopMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::BishopMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
@@ -229,7 +223,7 @@ int Option::BishopMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::RookMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::RookMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
@@ -238,7 +232,7 @@ int Option::RookMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::QueenMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::QueenMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0,
@@ -247,7 +241,7 @@ int Option::QueenMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KingMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::KingMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
@@ -256,7 +250,7 @@ int Option::KingMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::PawnMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::PawnMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
@@ -265,7 +259,7 @@ int Option::PawnMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KnightMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::KnightMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
@@ -274,7 +268,7 @@ int Option::KnightMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::BishopMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::BishopMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
@@ -283,7 +277,7 @@ int Option::BishopMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0,
                                                         0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::RookMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::RookMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
@@ -292,7 +286,7 @@ int Option::RookMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::QueenMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::QueenMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0,
@@ -301,7 +295,7 @@ int Option::QueenMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0,
                                                        0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KingMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::KingMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
@@ -310,7 +304,7 @@ int Option::KingMoveOrderingValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0,
                                                       0, 0, 0, 0, 0, 0, 0, 0};
 */
-int Option::PawnMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::PawnMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                               0, 0, 0, 0, 0, 0, 0, 0,
                                               0, 0, 0, 0, 0, 0, 0, 0,
                                               0, 0, 0, 0, 0, 0, 0, 0,
@@ -319,7 +313,7 @@ int Option::PawnMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                               0, 0, 0, 0, 0, 0, 0, 0,
                                               0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KnightMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::KnightMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                 0, 0, 0, 0, 0, 0, 0, 0,
                                                 0, 0, 0, 0, 0, 0, 0, 0,
                                                 0, 0, 0, 0, 0, 0, 0, 0,
@@ -328,7 +322,7 @@ int Option::KnightMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                 0, 0, 0, 0, 0, 0, 0, 0,
                                                 0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::BishopMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::BishopMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                 0, 0, 0, 0, 0, 0, 0, 0,
                                                 0, 0, 0, 0, 0, 0, 0, 0,
                                                 0, 0, 0, 0, 0, 0, 0, 0,
@@ -337,7 +331,7 @@ int Option::BishopMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                 0, 0, 0, 0, 0, 0, 0, 0,
                                                 0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::RookMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::RookMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                               0, 0, 0, 0, 0, 0, 0, 0,
                                               0, 0, 0, 0, 0, 0, 0, 0,
                                               0, 0, 0, 0, 0, 0, 0, 0,
@@ -346,7 +340,7 @@ int Option::RookMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                               0, 0, 0, 0, 0, 0, 0, 0,
                                               0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::QueenMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::QueenMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                0, 0, 0, 0, 0, 0, 0, 0,
                                                0, 0, 0, 0, 0, 0, 0, 0,
                                                0, 0, 0, 0, 0, 0, 0, 0,
@@ -355,7 +349,7 @@ int Option::QueenMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                0, 0, 0, 0, 0, 0, 0, 0,
                                                0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KingMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::KingMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                               0, 0, 0, 0, 0, 0, 0, 0,
                                               0, 0, 0, 0, 0, 0, 0, 0,
                                               0, 0, 0, 0, 0, 0, 0, 0,
@@ -364,159 +358,159 @@ int Option::KingMoveValueWhiteMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                               0, 0, 0, 0, 0, 0, 0, 0,
                                               0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::PawnMoveValueWhite[3][64] = {};
-int Option::KnightMoveValueWhite[3][64] = {};
-int Option::BishopMoveValueWhite[3][64] = {};
-int Option::RookMoveValueWhite[3][64] = {};
-int Option::QueenMoveValueWhite[3][64] = {};
-int Option::KingMoveValueWhite[3][64] = {};
+int EngineInitializer::PawnMoveValueWhite[3][64] = {};
+int EngineInitializer::KnightMoveValueWhite[3][64] = {};
+int EngineInitializer::BishopMoveValueWhite[3][64] = {};
+int EngineInitializer::RookMoveValueWhite[3][64] = {};
+int EngineInitializer::QueenMoveValueWhite[3][64] = {};
+int EngineInitializer::KingMoveValueWhite[3][64] = {};
 
-int Option::BlackPassedPawnValueMiddleGam[64] = {};
-int Option::PawnInValueBlackMiddleGame[64] = {};
-int Option::KnightInValueBlackMiddleGame[64] = {};
-int Option::BishopInValueBlackMiddleGame[64] = {};
-int Option::RookInValueBlackMiddleGame[64] = {};
-int Option::QueenInValueBlackMiddleGame[64] = {};
-int Option::KingInValueBlackMiddleGame[64] = {};
+int EngineInitializer::BlackPassedPawnValueMiddleGam[64] = {};
+int EngineInitializer::PawnInValueBlackMiddleGame[64] = {};
+int EngineInitializer::KnightInValueBlackMiddleGame[64] = {};
+int EngineInitializer::BishopInValueBlackMiddleGame[64] = {};
+int EngineInitializer::RookInValueBlackMiddleGame[64] = {};
+int EngineInitializer::QueenInValueBlackMiddleGame[64] = {};
+int EngineInitializer::KingInValueBlackMiddleGame[64] = {};
 
-int Option::PawnMoveOrderingValueBlackMiddleGame[64] = {};
-int Option::KnightMoveOrderingValueBlackMiddleGame[64] = {};
-int Option::BishopMoveOrderingValueBlackMiddleGame[64] = {};
-int Option::RookMoveOrderingValueBlackMiddleGame[64] = {};
-int Option::QueenMoveOrderingValueBlackMiddleGame[64] = {};
-int Option::KingMoveOrderingValueBlackMiddleGame[64] = {};
+int EngineInitializer::PawnMoveOrderingValueBlackMiddleGame[64] = {};
+int EngineInitializer::KnightMoveOrderingValueBlackMiddleGame[64] = {};
+int EngineInitializer::BishopMoveOrderingValueBlackMiddleGame[64] = {};
+int EngineInitializer::RookMoveOrderingValueBlackMiddleGame[64] = {};
+int EngineInitializer::QueenMoveOrderingValueBlackMiddleGame[64] = {};
+int EngineInitializer::KingMoveOrderingValueBlackMiddleGame[64] = {};
 
-int Option::PawnMoveValueBlackMiddleGame[64] = {};
-int Option::KnightMoveValueBlackMiddleGame[64] = {};
-int Option::BishopMoveValueBlackMiddleGame[64] = {};
-int Option::RookMoveValueBlackMiddleGame[64] = {};
-int Option::QueenMoveValueBlackMiddleGame[64] = {};
-int Option::KingMoveValueBlackMiddleGame[64] = {};
+int EngineInitializer::PawnMoveValueBlackMiddleGame[64] = {};
+int EngineInitializer::KnightMoveValueBlackMiddleGame[64] = {};
+int EngineInitializer::BishopMoveValueBlackMiddleGame[64] = {};
+int EngineInitializer::RookMoveValueBlackMiddleGame[64] = {};
+int EngineInitializer::QueenMoveValueBlackMiddleGame[64] = {};
+int EngineInitializer::KingMoveValueBlackMiddleGame[64] = {};
 
-int Option::PawnMoveCountValueMiddleGame[3] = {0, 0, 0};
-int Option::PawnMoveCountValue[3][3] = {};
+int EngineInitializer::PawnMoveCountValueMiddleGame[3] = {0, 0, 0};
+int EngineInitializer::PawnMoveCountValue[3][3] = {};
 
-int Option::KnightMobilityMiddleGameParameters[] = {-46, 26, 10, 8};
-int Option::KnightMobilityEndGameParameters[] = {21, 24, 20, 0};
-int Option::KnightMoveCountValueMiddleGame[9] = {};
-int Option::KnightMoveCountValue[3][9] = {};
-int Option::BishopMobilityMiddleGameParameters[] = {-60, 28, 14, -1, 37};
-int Option::BishopMobilityEndGameParameters[] = {-25, 61, 12, 25, 3};
-int Option::BishopMoveCountValueMiddleGame[14] = {};
-int Option::BishopMoveCountValue[3][14] = {};
-int Option::RookMobilityMiddleGameParameters[] = {-30, 14, 25, 8, -1};
-int Option::RookMobilityEndGameParameters[] = {13, 62, 30, 34, 3};
-int Option::RookMoveCountValueMiddleGame[15] = {};
-int Option::RookMoveCountValue[3][15] = {};
-int Option::QueenMobilityMiddleGameParameters[] = {-6, 3, 15, 4, 4};
-int Option::QueenMobilityEndGameParameters[] = {10, 30, 33, 31, 27};
-int Option::QueenMoveCountValueMiddleGame[28] = {};
-int Option::QueenMoveCountValue[3][28] = {};
-int Option::KingMoveCountValueMiddleGame[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-int Option::KingMoveCountValue[3][9] = {};
-bool Option::UseExperimentalAttackModel = true;
-int Option::AttackEndgameMultiplierPercent = 140;
-bool Option::UseExperimentalPieceSquareModel = true;
-bool Option::UseExperimentalQueenMobilityModel = true;
-bool Option::UseExperimentalKingSafetyModel = true;
-bool Option::UseExperimentalEndgameWeightsModel = true;
-bool Option::UseExperimentalInlineModel = true;
+int EngineInitializer::KnightMobilityMiddleGameParameters[] = {-46, 26, 10, 8};
+int EngineInitializer::KnightMobilityEndGameParameters[] = {21, 24, 20, 0};
+int EngineInitializer::KnightMoveCountValueMiddleGame[9] = {};
+int EngineInitializer::KnightMoveCountValue[3][9] = {};
+int EngineInitializer::BishopMobilityMiddleGameParameters[] = {-60, 28, 14, -1, 37};
+int EngineInitializer::BishopMobilityEndGameParameters[] = {-25, 61, 12, 25, 3};
+int EngineInitializer::BishopMoveCountValueMiddleGame[14] = {};
+int EngineInitializer::BishopMoveCountValue[3][14] = {};
+int EngineInitializer::RookMobilityMiddleGameParameters[] = {-30, 14, 25, 8, -1};
+int EngineInitializer::RookMobilityEndGameParameters[] = {13, 62, 30, 34, 3};
+int EngineInitializer::RookMoveCountValueMiddleGame[15] = {};
+int EngineInitializer::RookMoveCountValue[3][15] = {};
+int EngineInitializer::QueenMobilityMiddleGameParameters[] = {-6, 3, 15, 4, 4};
+int EngineInitializer::QueenMobilityEndGameParameters[] = {10, 30, 33, 31, 27};
+int EngineInitializer::QueenMoveCountValueMiddleGame[28] = {};
+int EngineInitializer::QueenMoveCountValue[3][28] = {};
+int EngineInitializer::KingMoveCountValueMiddleGame[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+int EngineInitializer::KingMoveCountValue[3][9] = {};
+bool EngineInitializer::UseAttackModel = true;
+int EngineInitializer::AttackEndgameMultiplierPercent = 140;
+bool EngineInitializer::UsePieceSquareModel = true;
+bool EngineInitializer::UseQueenMobilityModel = true;
+bool EngineInitializer::UseKingSafetyModel = true;
+bool EngineInitializer::UseEndgameWeightsModel = true;
+bool EngineInitializer::UseInlineModel = true;
 
-int Option::CandLoneKingPushWeight = 22;
-int Option::CandLoneKingConfinementWeight = -10;
-int Option::CandLoneKingRestrictedNeighbourWeight = -26;
+int EngineInitializer::CandLoneKingPushWeight = 22;
+int EngineInitializer::CandLoneKingConfinementWeight = -10;
+int EngineInitializer::CandLoneKingRestrictedNeighbourWeight = -26;
 
-int Option::CandBishopOpenFilePawnScale = 2;
-int Option::CandTempoMiddleGame = 16;
-int Option::CandTempoEndGame = 41;
-int Option::CandOppositeColorBishopMiddleGameScalePermille = 940;
-int Option::CandOppositeColorBishopEndGameScalePermille = 794;
-int Option::CandEndgamePawnAdvancementRankMultiplier = 2;
-int Option::CandPieceAttackScalePercent = 135;
+int EngineInitializer::CandBishopOpenFilePawnScale = 2;
+int EngineInitializer::CandTempoMiddleGame = 16;
+int EngineInitializer::CandTempoEndGame = 41;
+int EngineInitializer::CandOppositeColorBishopMiddleGameScalePermille = 940;
+int EngineInitializer::CandOppositeColorBishopEndGameScalePermille = 794;
+int EngineInitializer::CandEndgamePawnAdvancementRankMultiplier = 2;
+int EngineInitializer::CandPieceAttackScalePercent = 135;
 
-bool Option::UseExperimentalRookFileModel = true;
-int Option::CandRookOpenFileMiddleGame = 12;
-int Option::CandRookOpenFileEndGame = 2;
-int Option::CandRookSemiOpenFileMiddleGame = -4;
-int Option::CandRookSemiOpenFileEndGame = -26;
+bool EngineInitializer::UseRookFileModel = true;
+int EngineInitializer::CandRookOpenFileMiddleGame = 12;
+int EngineInitializer::CandRookOpenFileEndGame = 2;
+int EngineInitializer::CandRookSemiOpenFileMiddleGame = -4;
+int EngineInitializer::CandRookSemiOpenFileEndGame = -26;
 
-int Option::CandKingAttackerMinorWeight = 9;
-int Option::CandKingAttackerRookWeight = 8;
-int Option::CandKingAttackerQueenWeight = 8;
-int Option::CandKingDefenderPawnWeight = 12;
-int Option::CandKingDefenderMinorWeight = 108;
-int Option::CandKingDefenderRookWeight = 6;
-int Option::CandKingDefenderQueenWeight = 135;
-int Option::CandKingShelterSecondRankDanger = 1;
-int Option::CandKingShelterAdvancedPawnDanger = 20;
-int Option::CandKingShelterMissingPawnDanger = 2;
-int Option::CandKingUndefendedZoneDanger = 4;
-int Option::CandKingAdditionalZoneAttackerDanger = 55;
-int Option::CandKingSemiOpenLineDanger = 36;
-int Option::CandKingOpenLineDanger = 26;
-int Option::CandKingDiagonalLineDanger = 9;
-int Option::CandKingControlledEscapeDanger = 22;
-int Option::CandKingInfiltratedQueenWeight = 19;
+int EngineInitializer::CandKingAttackerMinorWeight = 9;
+int EngineInitializer::CandKingAttackerRookWeight = 8;
+int EngineInitializer::CandKingAttackerQueenWeight = 8;
+int EngineInitializer::CandKingDefenderPawnWeight = 12;
+int EngineInitializer::CandKingDefenderMinorWeight = 108;
+int EngineInitializer::CandKingDefenderRookWeight = 6;
+int EngineInitializer::CandKingDefenderQueenWeight = 135;
+int EngineInitializer::CandKingShelterSecondRankDanger = 1;
+int EngineInitializer::CandKingShelterAdvancedPawnDanger = 20;
+int EngineInitializer::CandKingShelterMissingPawnDanger = 2;
+int EngineInitializer::CandKingUndefendedZoneDanger = 4;
+int EngineInitializer::CandKingAdditionalZoneAttackerDanger = 55;
+int EngineInitializer::CandKingSemiOpenLineDanger = 36;
+int EngineInitializer::CandKingOpenLineDanger = 26;
+int EngineInitializer::CandKingDiagonalLineDanger = 9;
+int EngineInitializer::CandKingControlledEscapeDanger = 22;
+int EngineInitializer::CandKingInfiltratedQueenWeight = 19;
 
-int Option::CandQueenMobilityMiddleGameParameters[] = {-6, 3, 15, 4};
-int Option::CandQueenMobilityEndGameParameters[] = {10, 30, 33, 31};
+int EngineInitializer::CandQueenMobilityMiddleGameParameters[] = {-6, 3, 15, 4};
+int EngineInitializer::CandQueenMobilityEndGameParameters[] = {10, 30, 33, 31};
 
-int Option::CandPawnPieceSquareMiddleGameParameters[] = {-52, 6, 14, -28, 6};
-int Option::CandKnightPieceSquareMiddleGameParameters[] = {-2, 0, 0, -5, -3, -2, 4, 4, -14, 29};
-int Option::CandBishopPieceSquareMiddleGameParameters[] = {-49, -8, -5, -1, -12, -77, 0, -2, 12, 24, 29};
-int Option::CandRookPieceSquareMiddleGameParameters[] = {-108, 6, 10, 10, 2};
-int Option::CandQueenPieceSquareMiddleGameParameters[] = {18, 0, -6, 14, -19};
+int EngineInitializer::CandPawnPieceSquareMiddleGameParameters[] = {-52, 6, 14, -28, 6};
+int EngineInitializer::CandKnightPieceSquareMiddleGameParameters[] = {-2, 0, 0, -5, -3, -2, 4, 4, -14, 29};
+int EngineInitializer::CandBishopPieceSquareMiddleGameParameters[] = {-49, -8, -5, -1, -12, -77, 0, -2, 12, 24, 29};
+int EngineInitializer::CandRookPieceSquareMiddleGameParameters[] = {-108, 6, 10, 10, 2};
+int EngineInitializer::CandQueenPieceSquareMiddleGameParameters[] = {18, 0, -6, 14, -19};
 
-int Option::CandPawnPieceSquareEndGameParameters[] = {40, 6, -16, -18, 20};
-int Option::CandKnightPieceSquareEndGameParameters[] = {58, 14, 4, -2, 9, 12, 24, 12, 20, -24};
-int Option::CandBishopPieceSquareEndGameParameters[] = {83, 4, 9, -1, 18, 93, 10, 2, 12, 10, -33};
-int Option::CandRookPieceSquareEndGameParameters[] = {126, 10, -6, 32, -8};
-int Option::CandQueenPieceSquareEndGameParameters[] = {26, 8, 28, -58, 12};
+int EngineInitializer::CandPawnPieceSquareEndGameParameters[] = {40, 6, -16, -18, 20};
+int EngineInitializer::CandKnightPieceSquareEndGameParameters[] = {58, 14, 4, -2, 9, 12, 24, 12, 20, -24};
+int EngineInitializer::CandBishopPieceSquareEndGameParameters[] = {83, 4, 9, -1, 18, 93, 10, 2, 12, 10, -33};
+int EngineInitializer::CandRookPieceSquareEndGameParameters[] = {126, 10, -6, 32, -8};
+int EngineInitializer::CandQueenPieceSquareEndGameParameters[] = {26, 8, 28, -58, 12};
 
-int Option::PawnAttackValueMiddleGame[] = {0, 0, 20, 20, 76, 86, 0, 0, 0, 0, 20, 20, 76, 86, 0, 0};
-int Option::PawnAttackValue[3][16] = {};
-int Option::KnightAttackValueMiddleGame[] = {0, 7, 0, 24, 41, 41, 0, 0, 0, 7, 0, 24, 41, 41, 0, 0};
-int Option::KnightAttackValue[3][16] = {};
-int Option::BishopAttackValueMiddleGame[] = {0, 7, 24, 0, 41, 41, 0, 0, 0, 7, 24, 0, 41, 41, 0, 0};
-int Option::BishopAttackValue[3][16] = {};
-int Option::RookAttackValueMiddleGame[] = {0, -1, 15, 15, 0, 24, 0, 0, 0, -1, 15, 15, 0, 24, 0, 0};
-int Option::RookAttackValue[3][16] = {};
-int Option::QueenAttackValueMiddleGame[] = {0, 3, 8, 8, 16, 0, 0, 0, 0, 3, 8, 8, 16, 0, 0, 0};
-int Option::QueenAttackValue[3][16] = {};
-int Option::KingAttackValueMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-int Option::KingAttackValue[3][16] = {};
+int EngineInitializer::PawnAttackValueMiddleGame[] = {0, 0, 20, 20, 76, 86, 0, 0, 0, 0, 20, 20, 76, 86, 0, 0};
+int EngineInitializer::PawnAttackValue[3][16] = {};
+int EngineInitializer::KnightAttackValueMiddleGame[] = {0, 7, 0, 24, 41, 41, 0, 0, 0, 7, 0, 24, 41, 41, 0, 0};
+int EngineInitializer::KnightAttackValue[3][16] = {};
+int EngineInitializer::BishopAttackValueMiddleGame[] = {0, 7, 24, 0, 41, 41, 0, 0, 0, 7, 24, 0, 41, 41, 0, 0};
+int EngineInitializer::BishopAttackValue[3][16] = {};
+int EngineInitializer::RookAttackValueMiddleGame[] = {0, -1, 15, 15, 0, 24, 0, 0, 0, -1, 15, 15, 0, 24, 0, 0};
+int EngineInitializer::RookAttackValue[3][16] = {};
+int EngineInitializer::QueenAttackValueMiddleGame[] = {0, 3, 8, 8, 16, 0, 0, 0, 0, 3, 8, 8, 16, 0, 0, 0};
+int EngineInitializer::QueenAttackValue[3][16] = {};
+int EngineInitializer::KingAttackValueMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int EngineInitializer::KingAttackValue[3][16] = {};
 
-int Option::WhitePawnAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 35, 10, 10, 20, 40, 0, 0};
-int Option::WhiteKnightAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 15, 50, 50, 10, 20, 0, 0};
-int Option::WhiteBishopAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 15, 50, 50, 10, 20, 0, 0};
-int Option::WhiteRookAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 25, 35, 50, 150, 0, 0};
-int Option::WhiteQueenAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 20, 35, 50, 10, 0, 0};
-int Option::WhiteKingAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int EngineInitializer::WhitePawnAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 35, 10, 10, 20, 40, 0, 0};
+int EngineInitializer::WhiteKnightAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 15, 50, 50, 10, 20, 0, 0};
+int EngineInitializer::WhiteBishopAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 15, 50, 50, 10, 20, 0, 0};
+int EngineInitializer::WhiteRookAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 25, 35, 50, 150, 0, 0};
+int EngineInitializer::WhiteQueenAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 20, 35, 50, 10, 0, 0};
+int EngineInitializer::WhiteKingAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::BlackPawnAttackValueMovement[16] = {0, 35, 10, 10, 20, 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-int Option::BlackKnightAttackValueMovement[16] = {0, 15, 50, 50, 10, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-int Option::BlackBishopAttackValueMovement[16] = {0, 15, 50, 50, 10, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-int Option::BlackRookAttackValueMovement[16] = {0, 10, 25, 35, 50, 150, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-int Option::BlackQueenAttackValueMovement[16] = {0, 5, 20, 35, 50, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-int Option::BlackKingAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int EngineInitializer::BlackPawnAttackValueMovement[16] = {0, 35, 10, 10, 20, 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int EngineInitializer::BlackKnightAttackValueMovement[16] = {0, 15, 50, 50, 10, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int EngineInitializer::BlackBishopAttackValueMovement[16] = {0, 15, 50, 50, 10, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int EngineInitializer::BlackRookAttackValueMovement[16] = {0, 10, 25, 35, 50, 150, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int EngineInitializer::BlackQueenAttackValueMovement[16] = {0, 5, 20, 35, 50, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int EngineInitializer::BlackKingAttackValueMovement[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::WhitePassedPawnValueEndGame[64] = {};
+int EngineInitializer::WhitePassedPawnValueEndGame[64] = {};
 
-int Option::PawnPieceSquareEndGameParameters[] = {40, 6, 0, -16, -18, 20, 0};
-int Option::KnightPieceSquareEndGameParameters[] = {58, 14, 4, 0, -2, 9, 12, 24, 12, 20, -24};
-int Option::BishopPieceSquareEndGameParameters[] = {83, 4, 9, -1, 18, 93, 10, 2, 12, 10, -33};
-int Option::RookPieceSquareEndGameParameters[] = {126, 10, 0, -6, 32, -8};
-int Option::QueenPieceSquareEndGameParameters[] = {26, 8, 0, 28, -58, 12};
-int Option::KingPieceSquareEndGameParameters[] = {1, 42, 46, 62, 48, 64, 96};
+int EngineInitializer::PawnPieceSquareEndGameParameters[] = {40, 6, 0, -16, -18, 20, 0};
+int EngineInitializer::KnightPieceSquareEndGameParameters[] = {58, 14, 4, 0, -2, 9, 12, 24, 12, 20, -24};
+int EngineInitializer::BishopPieceSquareEndGameParameters[] = {83, 4, 9, -1, 18, 93, 10, 2, 12, 10, -33};
+int EngineInitializer::RookPieceSquareEndGameParameters[] = {126, 10, 0, -6, 32, -8};
+int EngineInitializer::QueenPieceSquareEndGameParameters[] = {26, 8, 0, 28, -58, 12};
+int EngineInitializer::KingPieceSquareEndGameParameters[] = {1, 42, 46, 62, 48, 64, 96};
 
-int Option::PawnInValueWhiteEndGame[64] = {};
-int Option::KnightInValueWhiteEndGame[64] = {};
-int Option::BishopInValueWhiteEndGame[64] = {};
-int Option::RookInValueWhiteEndGame[64] = {};
-int Option::QueenInValueWhiteEndGame[64] = {};
-int Option::KingInValueWhiteEndGame[64] = {};
+int EngineInitializer::PawnInValueWhiteEndGame[64] = {};
+int EngineInitializer::KnightInValueWhiteEndGame[64] = {};
+int EngineInitializer::BishopInValueWhiteEndGame[64] = {};
+int EngineInitializer::RookInValueWhiteEndGame[64] = {};
+int EngineInitializer::QueenInValueWhiteEndGame[64] = {};
+int EngineInitializer::KingInValueWhiteEndGame[64] = {};
 
-int Option::PawnMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::PawnMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                    -20, 0, 0, 0, 0, 0, 0, -20,
                                                    -20, 0, 0, 0, 0, 0, 0, -20,
                                                    -20, 0, 0, 0, 0, 0, 0, -20,
@@ -525,7 +519,7 @@ int Option::PawnMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                    -20, 0, 0, 0, 0, 0, 0, -20,
                                                    0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KnightMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::KnightMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                      0, 0, 0, 0, 0, 0, 0, 0,
                                                      0, 0, 0, 0, 0, 0, 0, 0,
                                                      0, 0, 4, 8, 8, 4, 0, 0,
@@ -534,7 +528,7 @@ int Option::KnightMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                      0, 4, 17, 17, 17, 17, 4, 0,
                                                      0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::BishopMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::BishopMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                      0, 0, 0, 0, 0, 0, 0, 0,
                                                      0, 0, 0, 0, 0, 0, 0, 0,
                                                      0, 0, 5, 5, 5, 5, 0, 0,
@@ -543,7 +537,7 @@ int Option::BishopMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                      0, 5, 8, 8, 8, 8, 5, 0,
                                                      0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::RookMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::RookMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                    0, 0, 0, 0, 0, 0, 0, 0,
                                                    0, 0, 0, 0, 0, 0, 0, 0,
                                                    0, 0, 0, 0, 0, 0, 0, 0,
@@ -552,7 +546,7 @@ int Option::RookMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                    47, 47, 47, 47, 47, 47, 47, 47,
                                                    0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::QueenMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::QueenMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                     0, 0, 0, 0, 0, 0, 0, 0,
                                                     0, 0, 0, 0, 0, 0, 0, 0,
                                                     0, 0, 0, 0, 0, 0, 0, 0,
@@ -561,7 +555,7 @@ int Option::QueenMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                     27, 27, 27, 27, 27, 27, 27, 27,
                                                     0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KingMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::KingMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                    0, 0, 0, 0, 0, 0, 0, 0,
                                                    0, 0, 0, 0, 0, 0, 0, 0,
                                                    0, 0, 0, 0, 0, 0, 0, 0,
@@ -570,7 +564,7 @@ int Option::KingMoveOrderingValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                    0, 0, 0, 0, 0, 0, 0, 0,
                                                    0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::PawnMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::PawnMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0,
@@ -579,7 +573,7 @@ int Option::PawnMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KnightMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::KnightMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                              0, 0, 0, 0, 0, 0, 0, 0,
                                              0, 0, 0, 0, 0, 0, 0, 0,
                                              0, 0, 0, 0, 0, 0, 0, 0,
@@ -588,7 +582,7 @@ int Option::KnightMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                              0, 0, 0, 0, 0, 0, 0, 0,
                                              0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::BishopMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::BishopMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                              0, 0, 0, 0, 0, 0, 0, 0,
                                              0, 0, 0, 0, 0, 0, 0, 0,
                                              0, 0, 0, 0, 0, 0, 0, 0,
@@ -597,7 +591,7 @@ int Option::BishopMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                              0, 0, 0, 0, 0, 0, 0, 0,
                                              0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::RookMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::RookMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0,
@@ -606,7 +600,7 @@ int Option::RookMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::QueenMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::QueenMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0,
@@ -615,7 +609,7 @@ int Option::QueenMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KingMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::KingMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0,
@@ -624,7 +618,7 @@ int Option::KingMoveValueWhiteEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::PawnInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::PawnInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                         0, 0, 0, 0, 0, 0, 0, 0,
                                         0, 0, 0, 0, 0, 0, 0, 0,
                                         0, 0, 10, 15, 15, 10, 0, 0,
@@ -633,28 +627,28 @@ int Option::PawnInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                         0, 0, 0, 0, 0, 0, 0, 0,
                                         0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::PawnInValueWhite[3][64] = {{0}};
-int Option::KnightInValueWhite[3][64] = {{0}};
-int Option::BishopInValueWhite[3][64] = {{0}};
-int Option::RookInValueWhite[3][64] = {{0}};
-int Option::QueenInValueWhite[3][64] = {{0}};
-int Option::KingInValueWhite[3][64] = {{0}};
+int EngineInitializer::PawnInValueWhite[3][64] = {{0}};
+int EngineInitializer::KnightInValueWhite[3][64] = {{0}};
+int EngineInitializer::BishopInValueWhite[3][64] = {{0}};
+int EngineInitializer::RookInValueWhite[3][64] = {{0}};
+int EngineInitializer::QueenInValueWhite[3][64] = {{0}};
+int EngineInitializer::KingInValueWhite[3][64] = {{0}};
 
-int Option::PawnMoveCenterValueBlack[64] = {0};
-unsigned long long Option::MoveCenterNonzero[2][7] = {};
-int Option::PawnInCenterValueBlack[64] = {0};
-int Option::KnightMoveCenterValueBlack[64] = {0};
-int Option::KnightInCenterValueBlack[64] = {0};
-int Option::BishopMoveCenterValueBlack[64] = {0};
-int Option::BishopInCenterValueBlack[64] = {0};
-int Option::RookMoveCenterValueBlack[64] = {0};
-int Option::RookInCenterValueBlack[64] = {0};
-int Option::QueenMoveCenterValueBlack[64] = {0};
-int Option::QueenInCenterValueBlack[64] = {0};
-int Option::KingMoveCenterValueBlack[64] = {0};
-int Option::KingInCenterValueBlack[64] = {0};
+int EngineInitializer::PawnMoveCenterValueBlack[64] = {0};
+unsigned long long EngineInitializer::MoveCenterNonzero[2][7] = {};
+int EngineInitializer::PawnInCenterValueBlack[64] = {0};
+int EngineInitializer::KnightMoveCenterValueBlack[64] = {0};
+int EngineInitializer::KnightInCenterValueBlack[64] = {0};
+int EngineInitializer::BishopMoveCenterValueBlack[64] = {0};
+int EngineInitializer::BishopInCenterValueBlack[64] = {0};
+int EngineInitializer::RookMoveCenterValueBlack[64] = {0};
+int EngineInitializer::RookInCenterValueBlack[64] = {0};
+int EngineInitializer::QueenMoveCenterValueBlack[64] = {0};
+int EngineInitializer::QueenInCenterValueBlack[64] = {0};
+int EngineInitializer::KingMoveCenterValueBlack[64] = {0};
+int EngineInitializer::KingInCenterValueBlack[64] = {0};
 
-int Option::PawnMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::PawnMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 2, 4, 4, 2, 0, 0,
@@ -663,7 +657,7 @@ int Option::PawnMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KnightInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::KnightInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 2, 2, 2, 2, 0, 0,
                                           0, 0, 2, 4, 4, 2, 0, 0,
@@ -672,7 +666,7 @@ int Option::KnightInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KnightMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::KnightMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 2, 2, 2, 2, 0, 0,
                                             0, 0, 2, 4, 4, 2, 0, 0,
@@ -681,7 +675,7 @@ int Option::KnightMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::BishopInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::BishopInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 2, 2, 2, 2, 0, 0,
                                           0, 0, 2, 3, 3, 2, 0, 0,
@@ -690,7 +684,7 @@ int Option::BishopInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::BishopMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::BishopMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 2, 2, 2, 2, 0, 0,
                                             0, 0, 2, 3, 3, 2, 0, 0,
@@ -699,7 +693,7 @@ int Option::BishopMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::RookInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::RookInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                         0, 0, 0, 0, 0, 0, 0, 0,
                                         0, 0, 1, 1, 1, 1, 0, 0,
                                         0, 0, 1, 2, 2, 1, 0, 0,
@@ -708,7 +702,7 @@ int Option::RookInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                         0, 0, 0, 0, 0, 0, 0, 0,
                                         0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::RookMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::RookMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 1, 1, 1, 1, 0, 0,
                                           0, 0, 1, 2, 2, 1, 0, 0,
@@ -716,7 +710,7 @@ int Option::RookMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 1, 1, 1, 1, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0};
-int Option::QueenInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::QueenInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                          0, 0, 0, 0, 0, 0, 0, 0,
                                          0, 0, 1, 1, 1, 1, 0, 0,
                                          0, 0, 1, 2, 2, 1, 0, 0,
@@ -725,7 +719,7 @@ int Option::QueenInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                          0, 0, 0, 0, 0, 0, 0, 0,
                                          0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::QueenMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::QueenMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 1, 1, 1, 1, 0, 0,
                                            0, 0, 1, 2, 2, 1, 0, 0,
@@ -734,7 +728,7 @@ int Option::QueenMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KingInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::KingInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                         0, 0, 0, 0, 0, 0, 0, 0,
                                         0, 0, 0, 0, 0, 0, 0, 0,
                                         0, 0, 0, 0, 0, 0, 0, 0,
@@ -743,7 +737,7 @@ int Option::KingInCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                         0, 0, 0, 0, 0, 0, 0, 0,
                                         0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::KingMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::KingMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
@@ -751,51 +745,51 @@ int Option::KingMoveCenterValueWhite[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0, 0};
-int Option::BlackPassedPawnValueEndGam[64] = {0};
+int EngineInitializer::BlackPassedPawnValueEndGam[64] = {0};
 
-int Option::PawnInValueBlackEndGame[64] = {0};
-int Option::KnightInValueBlackEndGame[64] = {0};
-int Option::BishopInValueBlackEndGame[64] = {0};
-int Option::RookInValueBlackEndGame[64] = {0};
-int Option::QueenInValueBlackEndGame[64] = {0};
-int Option::KingInValueBlackEndGame[64] = {0};
+int EngineInitializer::PawnInValueBlackEndGame[64] = {0};
+int EngineInitializer::KnightInValueBlackEndGame[64] = {0};
+int EngineInitializer::BishopInValueBlackEndGame[64] = {0};
+int EngineInitializer::RookInValueBlackEndGame[64] = {0};
+int EngineInitializer::QueenInValueBlackEndGame[64] = {0};
+int EngineInitializer::KingInValueBlackEndGame[64] = {0};
 
-int Option::PawnMoveOrderingValueBlackEndGame[64] = {0};
-int Option::KnightMoveOrderingValueBlackEndGame[64] = {0};
-int Option::BishopMoveOrderingValueBlackEndGame[64] = {0};
-int Option::RookMoveOrderingValueBlackEndGame[64] = {0};
-int Option::QueenMoveOrderingValueBlackEndGame[64] = {0};
-int Option::KingMoveOrderingValueBlackEndGame[64] = {0};
+int EngineInitializer::PawnMoveOrderingValueBlackEndGame[64] = {0};
+int EngineInitializer::KnightMoveOrderingValueBlackEndGame[64] = {0};
+int EngineInitializer::BishopMoveOrderingValueBlackEndGame[64] = {0};
+int EngineInitializer::RookMoveOrderingValueBlackEndGame[64] = {0};
+int EngineInitializer::QueenMoveOrderingValueBlackEndGame[64] = {0};
+int EngineInitializer::KingMoveOrderingValueBlackEndGame[64] = {0};
 
-int Option::PawnMoveValueBlackEndGame[64] = {0};
-int Option::KnightMoveValueBlackEndGame[64] = {0};
-int Option::BishopMoveValueBlackEndGame[64] = {0};
-int Option::RookMoveValueBlackEndGame[64] = {0};
-int Option::QueenMoveValueBlackEndGame[64] = {0};
-int Option::KingMoveValueBlackEndGame[64] = {0};
+int EngineInitializer::PawnMoveValueBlackEndGame[64] = {0};
+int EngineInitializer::KnightMoveValueBlackEndGame[64] = {0};
+int EngineInitializer::BishopMoveValueBlackEndGame[64] = {0};
+int EngineInitializer::RookMoveValueBlackEndGame[64] = {0};
+int EngineInitializer::QueenMoveValueBlackEndGame[64] = {0};
+int EngineInitializer::KingMoveValueBlackEndGame[64] = {0};
 
-int Option::PawnMoveCountValueEndGame[3] = {0};
-int Option::KnightMoveCountValueEndGame[9] = {};
-int Option::BishopMoveCountValueEndGame[14] = {};
-int Option::RookMoveCountValueEndGame[15] = {};
-int Option::QueenMoveCountValueEndGame[28] = {};
-int Option::KingMoveCountValueEndGame[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+int EngineInitializer::PawnMoveCountValueEndGame[3] = {0};
+int EngineInitializer::KnightMoveCountValueEndGame[9] = {};
+int EngineInitializer::BishopMoveCountValueEndGame[14] = {};
+int EngineInitializer::RookMoveCountValueEndGame[15] = {};
+int EngineInitializer::QueenMoveCountValueEndGame[28] = {};
+int EngineInitializer::KingMoveCountValueEndGame[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::PawnAttackValueEndGame[] = {0, 0, 20, 20, 99, 118, 0, 0, 0, 0, 20, 20, 99, 118, 0, 0};
-int Option::KnightAttackValueEndGame[] = {0, 10, 0, 39, 49, 49, 0, 0, 0, 10, 0, 39, 49, 49, 0, 0};
-int Option::BishopAttackValueEndGame[] = {0, 10, 39, 0, 49, 49, 0, 0, 0, 10, 39, 0, 49, 49, 0, 0};
-int Option::RookAttackValueEndGame[] = {0, 29, 49, 49, 0, 49, 0, 0, 0, 29, 49, 49, 0, 49, 0, 0};
-int Option::QueenAttackValueEndGame[] = {0, 6, 15, 15, 30, 0, 0, 0, 0, 6, 15, 15, 30, 0, 0, 0};
-int Option::KingAttackValueEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int EngineInitializer::PawnAttackValueEndGame[] = {0, 0, 20, 20, 99, 118, 0, 0, 0, 0, 20, 20, 99, 118, 0, 0};
+int EngineInitializer::KnightAttackValueEndGame[] = {0, 10, 0, 39, 49, 49, 0, 0, 0, 10, 0, 39, 49, 49, 0, 0};
+int EngineInitializer::BishopAttackValueEndGame[] = {0, 10, 39, 0, 49, 49, 0, 0, 0, 10, 39, 0, 49, 49, 0, 0};
+int EngineInitializer::RookAttackValueEndGame[] = {0, 29, 49, 49, 0, 49, 0, 0, 0, 29, 49, 49, 0, 49, 0, 0};
+int EngineInitializer::QueenAttackValueEndGame[] = {0, 6, 15, 15, 30, 0, 0, 0, 0, 6, 15, 15, 30, 0, 0, 0};
+int EngineInitializer::KingAttackValueEndGame[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-int Option::PieceArroundTheKingMiddleGame[16] = {0, 5, 10, 10, 12, 25, 0, 0, 0, 5, 10, 10, 12, 25, 0, 0};
-int Option::PieceArroundTheKing[3][16] = {{0}};
-int Option::PieceArroundTheKingEndGame[16] = {0, 5, 10, 10, 12, 25, 0, 0, 0, 5, 10, 10, 12, 25, 0, 0};
-int Option::PieceAttackArroundTheKingMiddleGame[16] = {0, 1, 3, 3, 5, 9, 0, 0, 0, 1, 3, 3, 5, 9, 0, 0};
-int Option::PieceAttackArroundTheKing[3][16] = {{0}};
-int Option::PieceAttackArroundTheKingEndGame[16] = {0, 1, 3, 3, 5, 9, 0, 0, 0, 1, 3, 3, 5, 9, 0, 0};
+int EngineInitializer::PieceArroundTheKingMiddleGame[16] = {0, 5, 10, 10, 12, 25, 0, 0, 0, 5, 10, 10, 12, 25, 0, 0};
+int EngineInitializer::PieceArroundTheKing[3][16] = {{0}};
+int EngineInitializer::PieceArroundTheKingEndGame[16] = {0, 5, 10, 10, 12, 25, 0, 0, 0, 5, 10, 10, 12, 25, 0, 0};
+int EngineInitializer::PieceAttackArroundTheKingMiddleGame[16] = {0, 1, 3, 3, 5, 9, 0, 0, 0, 1, 3, 3, 5, 9, 0, 0};
+int EngineInitializer::PieceAttackArroundTheKing[3][16] = {{0}};
+int EngineInitializer::PieceAttackArroundTheKingEndGame[16] = {0, 1, 3, 3, 5, 9, 0, 0, 0, 1, 3, 3, 5, 9, 0, 0};
 
-int Option::WhiteKingPlaceSafetyMiddleGame[] = {-4, -0, -6, -20, -15, -6, -0, -4,
+int EngineInitializer::WhiteKingPlaceSafetyMiddleGame[] = {-4, -0, -6, -20, -15, -6, -0, -4,
                                                 -8, -6, -12, -20, -20, -12, -6, -8,
                                                 -18, -18, -22, -30, -30, -22, -18, -18,
                                                 -35, -35, -35, -35, -35, -35, -35, -35,
@@ -803,7 +797,7 @@ int Option::WhiteKingPlaceSafetyMiddleGame[] = {-4, -0, -6, -20, -15, -6, -0, -4
                                                 -35, -35, -35, -35, -35, -35, -35, -35,
                                                 -35, -35, -35, -35, -35, -35, -35, -35,
                                                 -35, -35, -35, -35, -35, -35, -35, -35};
-int Option::WhiteKingPlacePawnShieldMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
+int EngineInitializer::WhiteKingPlacePawnShieldMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                     -7, -7, -11, -9, -9, -11, -7, -7,
                                                     -16, -16, -16, -16, -16, -16, -16, -16,
                                                     -16, -16, -16, -16, -16, -16, -16, -16,
@@ -812,65 +806,65 @@ int Option::WhiteKingPlacePawnShieldMiddleGame[] = {0, 0, 0, 0, 0, 0, 0, 0,
                                                     -16, -16, -16, -16, -16, -16, -16, -16,
                                                     -16, -16, -16, -16, -16, -16, -16, -16};
 
-int Option::BlackKingPlaceSafetyMiddleGame[64] = {0};
-int Option::BlackKingPlacePawnShieldMiddleGame[64] = {0};
+int EngineInitializer::BlackKingPlaceSafetyMiddleGame[64] = {0};
+int EngineInitializer::BlackKingPlacePawnShieldMiddleGame[64] = {0};
 
-int Option::ArroundTheKingDangerMiddleGame[4] = {0, 5, 3, 1};
-int Option::ArroundTheKingDangerEndGame[4] = {0, 5, 3, 1};
+int EngineInitializer::ArroundTheKingDangerMiddleGame[4] = {0, 5, 3, 1};
+int EngineInitializer::ArroundTheKingDangerEndGame[4] = {0, 5, 3, 1};
 
-int Option::MoveOrderingValueWhite[3][7][64] = {{{0}}};
-int Option::MoveOrderingValueBlack[3][7][64] = {{{0}}};
+int EngineInitializer::MoveOrderingValueWhite[3][7][64] = {{{0}}};
+int EngineInitializer::MoveOrderingValueBlack[3][7][64] = {{{0}}};
 
-int Option::AttackValueMovement[15][16] = {{0}};
+int EngineInitializer::AttackValueMovement[15][16] = {{0}};
 
-long long Option::PowerTwo[64] = {0};
-long long Option::PowerTwoComplement[64] = {0};
+long long EngineInitializer::PowerTwo[64] = {0};
+long long EngineInitializer::PowerTwoComplement[64] = {0};
 
-int Option::PawnInValueBlack[3][64] = {{0}};
-int Option::KnightInValueBlack[3][64] = {{0}};
-int Option::BishopInValueBlack[3][64] = {{0}};
-int Option::RookInValueBlack[3][64] = {{0}};
-int Option::QueenInValueBlack[3][64] = {{0}};
-int Option::KingInValueBlack[3][64] = {{0}};
+int EngineInitializer::PawnInValueBlack[3][64] = {{0}};
+int EngineInitializer::KnightInValueBlack[3][64] = {{0}};
+int EngineInitializer::BishopInValueBlack[3][64] = {{0}};
+int EngineInitializer::RookInValueBlack[3][64] = {{0}};
+int EngineInitializer::QueenInValueBlack[3][64] = {{0}};
+int EngineInitializer::KingInValueBlack[3][64] = {{0}};
 
-int Option::PawnMoveValueBlack[3][64] = {{0}};
-int Option::KnightMoveValueBlack[3][64] = {{0}};
-int Option::BishopMoveValueBlack[3][64] = {{0}};
-int Option::RookMoveValueBlack[3][64] = {{0}};
-int Option::QueenMoveValueBlack[3][64] = {{0}};
-int Option::KingMoveValueBlack[3][64] = {{0}};
+int EngineInitializer::PawnMoveValueBlack[3][64] = {{0}};
+int EngineInitializer::KnightMoveValueBlack[3][64] = {{0}};
+int EngineInitializer::BishopMoveValueBlack[3][64] = {{0}};
+int EngineInitializer::RookMoveValueBlack[3][64] = {{0}};
+int EngineInitializer::QueenMoveValueBlack[3][64] = {{0}};
+int EngineInitializer::KingMoveValueBlack[3][64] = {{0}};
 
-bool Option::initialized = false;
+bool EngineInitializer::initialized = false;
 
-void Option::Initialize()
+void EngineInitializer::Initialize()
 {
     if (!initialized)
     {
-        PassedPawnV2::Generate(PassedPawnMiddleGameParameters,
+        PassedPawn::Generate(PassedPawnMiddleGameParameters,
                                PassedPawnMiddleGameFileAmplitude,
                                PassedPawnEndGameParameters,
                                WhitePassedPawnValueMiddleGam,
                                WhitePassedPawnValueEndGame);
 
-        MobilityV2::GenerateKnight(KnightMobilityMiddleGameParameters, KnightMoveCountValueMiddleGame);
-        MobilityV2::GenerateKnight(KnightMobilityEndGameParameters, KnightMoveCountValueEndGame);
-        MobilityV2::GenerateBishop(BishopMobilityMiddleGameParameters, BishopMoveCountValueMiddleGame);
-        MobilityV2::GenerateBishop(BishopMobilityEndGameParameters, BishopMoveCountValueEndGame);
-        MobilityV2::GenerateRook(RookMobilityMiddleGameParameters, RookMoveCountValueMiddleGame);
-        MobilityV2::GenerateRook(RookMobilityEndGameParameters, RookMoveCountValueEndGame);
+        Mobility::GenerateKnight(KnightMobilityMiddleGameParameters, KnightMoveCountValueMiddleGame);
+        Mobility::GenerateKnight(KnightMobilityEndGameParameters, KnightMoveCountValueEndGame);
+        Mobility::GenerateBishop(BishopMobilityMiddleGameParameters, BishopMoveCountValueMiddleGame);
+        Mobility::GenerateBishop(BishopMobilityEndGameParameters, BishopMoveCountValueEndGame);
+        Mobility::GenerateRook(RookMobilityMiddleGameParameters, RookMoveCountValueMiddleGame);
+        Mobility::GenerateRook(RookMobilityEndGameParameters, RookMoveCountValueEndGame);
 
-        if (__builtin_expect(!UseExperimentalQueenMobilityModel, 1))
+        if (__builtin_expect(!UseQueenMobilityModel, 1))
         {
-            MobilityV2::GenerateQueenMiddleGame(QueenMobilityMiddleGameParameters, QueenMoveCountValueMiddleGame);
-            MobilityV2::GenerateQueenEndGame(QueenMobilityEndGameParameters, QueenMoveCountValueEndGame);
+            Mobility::GenerateQueenMiddleGame(QueenMobilityMiddleGameParameters, QueenMoveCountValueMiddleGame);
+            Mobility::GenerateQueenEndGame(QueenMobilityEndGameParameters, QueenMoveCountValueEndGame);
         }
         else
         {
-            MobilityV2::GenerateCandQueenMiddleGame(CandQueenMobilityMiddleGameParameters, QueenMoveCountValueMiddleGame);
-            MobilityV2::GenerateCandQueenEndGame(CandQueenMobilityEndGameParameters, QueenMoveCountValueEndGame);
+            Mobility::GenerateCandQueenMiddleGame(CandQueenMobilityMiddleGameParameters, QueenMoveCountValueMiddleGame);
+            Mobility::GenerateCandQueenEndGame(CandQueenMobilityEndGameParameters, QueenMoveCountValueEndGame);
         }
 
-        if (__builtin_expect(!UseExperimentalPieceSquareModel, 1))
+        if (__builtin_expect(!UsePieceSquareModel, 1))
         {
             PieceSquareModel::GeneratePawn(PawnPieceSquareMiddleGameParameters, PawnInValueWhiteMiddleGame);
             PieceSquareModel::GenerateMinor(KnightPieceSquareMiddleGameParameters, KnightInValueWhiteMiddleGame);

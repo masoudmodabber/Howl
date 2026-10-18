@@ -6,7 +6,7 @@
 #include "UCI.h"
 #include "MoveLogic.h"
 #include "LastFourMoves.h"
-#include "Option.h"
+#include "EngineInitializer.h"
 #include "BoardInitializer.h"
 #include "PositionCore.h"
 
@@ -261,11 +261,11 @@ Board *BoardMaker::MakeBoard(int boardArray[])
             madeBoard->ZobristHashCode ^= BoardInitializer::ZCode[boardArray[counter]][counter - firstofRow + (firstofRow - 20) / 10 * 8];
             if (boardArray[counter] < 8)
             {
-                madeBoard->whitePieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
+                madeBoard->whitePieces += EngineInitializer::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
             }
             else
             {
-                madeBoard->blackPieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
+                madeBoard->blackPieces += EngineInitializer::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
             }
         }
     }
@@ -279,11 +279,11 @@ Board *BoardMaker::MakeBoard(int boardArray[])
             madeBoard->ZobristHashCode ^= BoardInitializer::ZCode[boardArray[counter]][counter - firstofRow + (firstofRow - 20) / 10 * 8];
             if (boardArray[counter] < 8)
             {
-                madeBoard->whitePieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
+                madeBoard->whitePieces += EngineInitializer::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
             }
             else
             {
-                madeBoard->blackPieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
+                madeBoard->blackPieces += EngineInitializer::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
             }
         }
     }
@@ -297,11 +297,11 @@ Board *BoardMaker::MakeBoard(int boardArray[])
             madeBoard->ZobristHashCode ^= BoardInitializer::ZCode[boardArray[counter]][counter - firstofRow + (firstofRow - 20) / 10 * 8];
             if (boardArray[counter] < 8)
             {
-                madeBoard->whitePieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
+                madeBoard->whitePieces += EngineInitializer::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
             }
             else
             {
-                madeBoard->blackPieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
+                madeBoard->blackPieces += EngineInitializer::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
             }
         }
     }
@@ -315,11 +315,11 @@ Board *BoardMaker::MakeBoard(int boardArray[])
             madeBoard->ZobristHashCode ^= BoardInitializer::ZCode[boardArray[counter]][counter - firstofRow + (firstofRow - 20) / 10 * 8];
             if (boardArray[counter] < 8)
             {
-                madeBoard->whitePieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
+                madeBoard->whitePieces += EngineInitializer::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
             }
             else
             {
-                madeBoard->blackPieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
+                madeBoard->blackPieces += EngineInitializer::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
             }
         }
     }
@@ -333,11 +333,11 @@ Board *BoardMaker::MakeBoard(int boardArray[])
             madeBoard->ZobristHashCode ^= BoardInitializer::ZCode[boardArray[counter]][counter - firstofRow + (firstofRow - 20) / 10 * 8];
             if (boardArray[counter] < 8)
             {
-                madeBoard->whitePieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
+                madeBoard->whitePieces += EngineInitializer::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
             }
             else
             {
-                madeBoard->blackPieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
+                madeBoard->blackPieces += EngineInitializer::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
             }
         }
     }
@@ -351,11 +351,11 @@ Board *BoardMaker::MakeBoard(int boardArray[])
             madeBoard->ZobristHashCode ^= BoardInitializer::ZCode[boardArray[counter]][counter - firstofRow + (firstofRow - 20) / 10 * 8];
             if (boardArray[counter] < 8)
             {
-                madeBoard->whitePieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
+                madeBoard->whitePieces += EngineInitializer::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
             }
             else
             {
-                madeBoard->blackPieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
+                madeBoard->blackPieces += EngineInitializer::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
             }
         }
     }
@@ -369,11 +369,11 @@ Board *BoardMaker::MakeBoard(int boardArray[])
             madeBoard->ZobristHashCode ^= BoardInitializer::ZCode[boardArray[counter]][counter - firstofRow + (firstofRow - 20) / 10 * 8];
             if (boardArray[counter] < 8)
             {
-                madeBoard->whitePieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
+                madeBoard->whitePieces += EngineInitializer::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
             }
             else
             {
-                madeBoard->blackPieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
+                madeBoard->blackPieces += EngineInitializer::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
             }
         }
     }
@@ -387,11 +387,11 @@ Board *BoardMaker::MakeBoard(int boardArray[])
             madeBoard->ZobristHashCode ^= BoardInitializer::ZCode[boardArray[counter]][counter - firstofRow + (firstofRow - 20) / 10 * 8];
             if (boardArray[counter] < 8)
             {
-                madeBoard->whitePieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
+                madeBoard->whitePieces += EngineInitializer::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
             }
             else
             {
-                madeBoard->blackPieces += Option::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
+                madeBoard->blackPieces += EngineInitializer::PowerTwo[counter - firstofRow + (firstofRow - 20) / 10 * 8];
             }
         }
     }
@@ -445,11 +445,11 @@ Board *BoardMaker::MakeBoard(int boardArray[])
     madeBoard->fiftyMoveRule = boardArray[126];
     for (int whitePawnPlace : madeBoard->pieces[1])
     {
-        madeBoard->whitePawns += Option::PowerTwo[whitePawnPlace];
+        madeBoard->whitePawns += EngineInitializer::PowerTwo[whitePawnPlace];
     }
     for (int blackPawnPlace : madeBoard->pieces[9])
     {
-        madeBoard->blackPawns += Option::PowerTwo[blackPawnPlace];
+        madeBoard->blackPawns += EngineInitializer::PowerTwo[blackPawnPlace];
     }
     return madeBoard;
 }
